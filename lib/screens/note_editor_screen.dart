@@ -551,7 +551,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                       ?.copyWith(fontWeight: FontWeight.w600),
                   decoration: const InputDecoration(
                     hintText: 'Titlu',
+                    filled: false,
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 8),
                   ),
                   textInputAction: TextInputAction.next,
                   onSubmitted: (_) => _editorFocus.requestFocus(),

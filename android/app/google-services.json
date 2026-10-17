@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "326097898131",
+    "project_id": "notite-kappado",
+    "storage_bucket": "notite-kappado.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:326097898131:android:6fbd6a25c8b995eb7f5b66",
+        "android_client_info": {
+          "package_name": "com.kappado.notite"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCO3XBzL2OhCzUEZfYyw1O-gUUlY_yiz7E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

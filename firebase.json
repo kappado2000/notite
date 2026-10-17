@@ -1,5 +1,1 @@
-{
-  "firestore": {
-    "rules": "firestore.rules"
-  }
-}
+{"firestore":{"rules":"firestore.rules"},"flutter":{"platforms":{"android":{"default":{"projectId":"notite-kappado","appId":"1:326097898131:android:6fbd6a25c8b995eb7f5b66","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"notite-kappado","configurations":{"android":"1:326097898131:android:6fbd6a25c8b995eb7f5b66","ios":"1:326097898131:ios:ed618aeb795b99567f5b66","web":"1:326097898131:web:1e40d46ef8a27a187f5b66","windows":"1:326097898131:web:f847023bd04bbe6f7f5b66"}}}}}}

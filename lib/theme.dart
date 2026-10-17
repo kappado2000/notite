@@ -111,10 +111,28 @@ ThemeData buildTheme(Brightness brightness) {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      titleTextStyle: text.titleLarge?.copyWith(
+      // Mărime explicită: stilurile din bara de sus nu primesc automat
+      // dimensiunile tipografiei.
+      titleTextStyle: TextStyle(
+        fontSize: 22,
         fontWeight: FontWeight.w700,
         color: s.onSurface,
         letterSpacing: -0.3,
+      ),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (st) => st.contains(WidgetState.selected)
+              ? s.primaryContainer
+              : Colors.transparent,
+        ),
+        foregroundColor: WidgetStateProperty.resolveWith(
+          (st) => st.contains(WidgetState.selected)
+              ? s.onPrimaryContainer
+              : s.onSurface,
+        ),
+        side: WidgetStatePropertyAll(BorderSide(color: s.outlineVariant)),
       ),
     ),
     cardTheme: CardThemeData(

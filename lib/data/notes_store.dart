@@ -57,26 +57,18 @@ class NotesStore extends ChangeNotifier {
   String get _defaultNotebookSeedId => 'implicit_$uid';
 
   Future<void> init() async {
-    // Toate datele contului sunt criptate AES-256 pe dispozitiv.
-    final cipher = await EncryptionKeyService.cipherFor(uid);
-    _notesBox = await Hive.openBox<Map>('notes_$uid', encryptionCipher: cipher);
-    _notebooksBox = await Hive.openBox<Map>(
-      'notebooks_$uid',
-      encryptionCipher: cipher,
-    );
-    _attachmentsBox = await Hive.openBox<Map>(
-      'attachments_$uid',
-      encryptionCipher: cipher,
-    );
-    _blobsBox = await Hive.openBox<Uint8List>(
-      'blobs_$uid',
-      encryptionCipher: cipher,
-    );
-    _secretsBox = await Hive.openBox<Map>(
-      'secrets_$uid',
-      encryptionCipher: cipher,
-    );
     _settingsBox = Hive.box('settings');
+    try {
+      await _openBoxes();
+    } catch (e) {
+      // Datele locale nu se pot decripta (ex. cheia din seif s-a pierdut).
+      // Le abandonăm și pornim cu un spațiu local nou: totul revine din
+      // cloud prin sincronizare. Nu ștergem baza veche — pe web ștergerea
+      // IndexedDB se poate bloca; datele ei rămân oricum de necitit.
+      debugPrint('NotesStore: date locale ilizibile, se reiau din cloud ($e)');
+      await _settingsBox.put('boxGeneration_$uid', _generation + 1);
+      await _openBoxes();
+    }
     await _migrateLegacyData();
 
     for (final m in _notesBox.values) {
@@ -105,21 +97,79 @@ class NotesStore extends ChangeNotifier {
     }
   }
 
+  int get _generation => (_settingsBox.get('boxGeneration_$uid') as int?) ?? 0;
+
+  String _boxName(String base) =>
+      _generation == 0 ? '${base}_$uid' : '${base}_${uid}_g$_generation';
+
+  /// Toate datele contului sunt criptate AES-256 pe dispozitiv.
+  Future<void> _openBoxes() async {
+    final cipher = await EncryptionKeyService.cipherFor(uid);
+    Future<Box<T>> open<T>(String base) async {
+      final box = await Hive.openBox<T>(
+        _boxName(base),
+        encryptionCipher: cipher,
+      );
+      // Citirea forțează decriptarea: o cheie greșită aruncă eroare aici.
+      box.values.toList();
+      return box;
+    }
+
+    _notesBox = await open<Map>('notes');
+    _notebooksBox = await open<Map>('notebooks');
+    _attachmentsBox = await open<Map>('attachments');
+    _blobsBox = await open<Uint8List>('blobs');
+    _secretsBox = await open<Map>('secrets');
+  }
+
   /// Notițele create înainte de conturi (cutii fără uid) trec în primul
   /// cont care se autentifică pe acest dispozitiv.
   Future<void> _migrateLegacyData() async {
-    if (_notesBox.isNotEmpty || _notebooksBox.isNotEmpty) return;
-    if (!await Hive.boxExists('notebooks')) return;
-    Future<void> copy<T>(String name, Box<T> target) async {
-      final legacy = await Hive.openBox<T>(name);
-      await target.putAll(Map<dynamic, T>.from(legacy.toMap()));
-      await legacy.deleteFromDisk();
-    }
+    // O singură dată per dispozitiv. Nu folosim Hive.boxExists/deleteFromDisk:
+    // pe web lasă o conexiune IndexedDB deschisă și ștergerea se blochează.
+    if (_settingsBox.get('legacyMigrated') == true) return;
+    if (_notesBox.isEmpty && _notebooksBox.isEmpty) {
+      // Carnetul implicit vechi primește id-ul comun tuturor dispozitivelor,
+      // altfel ar apărea două „Primul meu carnet” după sincronizare.
+      String? oldDefaultId;
 
-    await copy<Map>('notebooks', _notebooksBox);
-    await copy<Map>('notes', _notesBox);
-    await copy<Map>('attachments', _attachmentsBox);
-    await copy<Uint8List>('blobs', _blobsBox);
+      final notebooks = await Hive.openBox<Map>('notebooks');
+      for (final e in notebooks.toMap().entries) {
+        var key = e.key;
+        var value = e.value;
+        if (oldDefaultId == null && value['name'] == 'Primul meu carnet') {
+          oldDefaultId = key as String;
+          key = _defaultNotebookSeedId;
+          value = {...value, 'id': _defaultNotebookSeedId};
+        }
+        await _notebooksBox.put(key, value);
+      }
+      await notebooks.clear();
+      await notebooks.close();
+
+      final notes = await Hive.openBox<Map>('notes');
+      for (final e in notes.toMap().entries) {
+        final value = e.value['notebookId'] == oldDefaultId
+            ? {...e.value, 'notebookId': _defaultNotebookSeedId}
+            : e.value;
+        await _notesBox.put(e.key, value);
+      }
+      await notes.clear();
+      await notes.close();
+
+      Future<void> copy<T>(String name, Box<T> target) async {
+        final legacy = await Hive.openBox<T>(name);
+        if (legacy.isNotEmpty) {
+          await target.putAll(Map<dynamic, T>.from(legacy.toMap()));
+          await legacy.clear();
+        }
+        await legacy.close();
+      }
+
+      await copy<Map>('attachments', _attachmentsBox);
+      await copy<Uint8List>('blobs', _blobsBox);
+    }
+    await _settingsBox.put('legacyMigrated', true);
   }
 
   bool _closed = false;
@@ -140,11 +190,18 @@ class NotesStore extends ChangeNotifier {
     _closed = true;
     sync = null;
     await EncryptionKeyService.deleteFor(uid);
-    await _notesBox.deleteFromDisk();
-    await _notebooksBox.deleteFromDisk();
-    await _attachmentsBox.deleteFromDisk();
-    await _blobsBox.deleteFromDisk();
-    await _secretsBox.deleteFromDisk();
+    // Golire + închidere, nu deleteFromDisk: pe web ștergerea bazei
+    // IndexedDB se poate bloca la nesfârșit. Datele dispar oricum.
+    for (final box in <Box>[
+      _notesBox,
+      _notebooksBox,
+      _attachmentsBox,
+      _blobsBox,
+      _secretsBox,
+    ]) {
+      await box.clear();
+      await box.close();
+    }
     await _settingsBox.delete('defaultNotebook_$uid');
   }
 

@@ -265,17 +265,14 @@ class _AccountTabState extends State<AccountTab> {
                         ButtonSegment(
                           value: ThemeMode.system,
                           label: Text('Automat'),
-                          icon: Icon(Icons.brightness_auto_outlined),
                         ),
                         ButtonSegment(
                           value: ThemeMode.light,
                           label: Text('Luminos'),
-                          icon: Icon(Icons.light_mode_outlined),
                         ),
                         ButtonSegment(
                           value: ThemeMode.dark,
                           label: Text('Întunecat'),
-                          icon: Icon(Icons.dark_mode_outlined),
                         ),
                       ],
                       selected: {settings.themeMode},
@@ -290,16 +287,8 @@ class _AccountTabState extends State<AccountTab> {
                     child: SegmentedButton<bool>(
                       showSelectedIcon: false,
                       segments: const [
-                        ButtonSegment(
-                          value: false,
-                          label: Text('Listă'),
-                          icon: Icon(Icons.view_agenda_outlined),
-                        ),
-                        ButtonSegment(
-                          value: true,
-                          label: Text('Grilă'),
-                          icon: Icon(Icons.grid_view_outlined),
-                        ),
+                        ButtonSegment(value: false, label: Text('Listă')),
+                        ButtonSegment(value: true, label: Text('Grilă')),
                       ],
                       selected: {settings.notesGrid},
                       onSelectionChanged: (s) => settings.notesGrid = s.first,
