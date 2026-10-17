@@ -108,6 +108,16 @@ class ReminderService {
     }
   }
 
+  /// La deconectare: mementourile contului nu mai trebuie să apară.
+  Future<void> cancelAll() async {
+    if (!_ready) return;
+    try {
+      await _plugin.cancelAll();
+    } catch (e) {
+      debugPrint('ReminderService.cancelAll: $e');
+    }
+  }
+
   Future<void> cancel(Note note) async {
     if (!_ready) return;
     try {

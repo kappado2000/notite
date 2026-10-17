@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// Fiecare cont are acces DOAR la propriile date, sub users/{uid}.
+// Orice altă cale este blocată.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{collection}/{docId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == uid
+        && collection in ['notes', 'notebooks', 'attachments', 'blobs'];
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

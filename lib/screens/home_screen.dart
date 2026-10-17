@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../data/app_settings.dart';
 import '../data/notes_store.dart';
 import '../models/note.dart';
+import '../widgets/account_sheet.dart';
 import '../widgets/note_tile.dart';
 import '../widgets/pickers.dart';
 import 'note_editor_screen.dart';
@@ -522,7 +524,7 @@ class _Sidebar extends StatelessWidget {
   }
 
   void _settings(BuildContext context) {
-    final store = context.read<NotesStore>();
+    final store = context.read<AppSettings>();
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
@@ -664,6 +666,13 @@ class _Sidebar extends StatelessWidget {
             Icons.delete_outline,
             'Coș',
             count: store.trashedNotes.length,
+          ),
+          ListTile(
+            dense: true,
+            shape: const StadiumBorder(),
+            leading: const Icon(Icons.account_circle_outlined),
+            title: const Text('Cont și securitate'),
+            onTap: () => showAccountSheet(context),
           ),
           ListTile(
             dense: true,

@@ -35,13 +35,15 @@ Future<String?> promptText(
   String initial = '',
   String hint = '',
   String action = 'Salvează',
+  bool obscure = false,
 }) {
   final ctrl = TextEditingController(text: initial);
   return showDialog<String>(
     context: context,
     builder: (ctx) {
       void submit() {
-        final v = ctrl.text.trim();
+        // Parolele nu se taie la capete.
+        final v = obscure ? ctrl.text : ctrl.text.trim();
         if (v.isNotEmpty) Navigator.pop(ctx, v);
       }
 
@@ -50,8 +52,11 @@ Future<String?> promptText(
         content: TextField(
           controller: ctrl,
           autofocus: true,
+          obscureText: obscure,
           decoration: InputDecoration(hintText: hint),
-          textCapitalization: TextCapitalization.sentences,
+          textCapitalization: obscure
+              ? TextCapitalization.none
+              : TextCapitalization.sentences,
           onSubmitted: (_) => submit(),
         ),
         actions: [

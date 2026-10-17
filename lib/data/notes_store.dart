@@ -7,15 +7,35 @@ import 'package:uuid/uuid.dart';
 import '../models/attachment.dart';
 import '../models/note.dart';
 import '../models/notebook.dart';
+import '../services/encryption_key_service.dart';
 import '../services/reminder_service.dart';
 
 enum NoteSort { updated, created, title }
 
-/// Sursa unică de adevăr pentru notițe, carnete și atașamente.
-/// Stocare locală Hive (merge și pe web); sincronizarea Firebase se va
-/// conecta aici, pe baza câmpurilor `updatedAt`.
+/// Primește fiecare modificare locală, ca s-o trimită în cloud.
+abstract class SyncSink {
+  void noteChanged(Note note);
+  void noteDeleted(String id);
+  void notebookChanged(Notebook notebook);
+  void notebookDeleted(String id);
+  void attachmentAdded(Attachment attachment, Uint8List bytes);
+  void attachmentChanged(Attachment attachment);
+  void attachmentDeleted(String id);
+}
+
+/// Sursa unică de adevăr pentru notițele unui cont: notițe, carnete și
+/// atașamente. Stocare locală Hive per utilizator (merge și offline);
+/// modificările sunt trimise în cloud prin [sync], iar cele venite din
+/// cloud intră prin metodele `applyRemote*` (ultima modificare câștigă).
 class NotesStore extends ChangeNotifier {
+  NotesStore(this.uid);
+
   static const _uuid = Uuid();
+
+  final String uid;
+
+  /// Conectat de sesiune după autentificare.
+  SyncSink? sync;
 
   late Box<Map> _notesBox;
   late Box<Map> _notebooksBox;
@@ -27,13 +47,28 @@ class NotesStore extends ChangeNotifier {
   final Map<String, Notebook> _notebooks = {};
   final Map<String, Attachment> _attachments = {};
 
+  /// Id fix pentru carnetul implicit — același pe toate dispozitivele,
+  /// ca să nu apară dubluri la sincronizare.
+  String get _defaultNotebookSeedId => 'implicit_$uid';
+
   Future<void> init() async {
-    await Hive.initFlutter('notite');
-    _notesBox = await Hive.openBox<Map>('notes');
-    _notebooksBox = await Hive.openBox<Map>('notebooks');
-    _attachmentsBox = await Hive.openBox<Map>('attachments');
-    _blobsBox = await Hive.openBox<Uint8List>('blobs');
-    _settingsBox = await Hive.openBox('settings');
+    // Toate datele contului sunt criptate AES-256 pe dispozitiv.
+    final cipher = await EncryptionKeyService.cipherFor(uid);
+    _notesBox = await Hive.openBox<Map>('notes_$uid', encryptionCipher: cipher);
+    _notebooksBox = await Hive.openBox<Map>(
+      'notebooks_$uid',
+      encryptionCipher: cipher,
+    );
+    _attachmentsBox = await Hive.openBox<Map>(
+      'attachments_$uid',
+      encryptionCipher: cipher,
+    );
+    _blobsBox = await Hive.openBox<Uint8List>(
+      'blobs_$uid',
+      encryptionCipher: cipher,
+    );
+    _settingsBox = Hive.box('settings');
+    await _migrateLegacyData();
 
     for (final m in _notesBox.values) {
       final n = Note.fromMap(m);
@@ -48,8 +83,7 @@ class NotesStore extends ChangeNotifier {
       _attachments[a.id] = a;
     }
     if (_notebooks.isEmpty) {
-      final nb = await createNotebook('Primul meu carnet');
-      defaultNotebookId = nb.id;
+      await createNotebook('Primul meu carnet', id: _defaultNotebookSeedId);
     }
     // Curăță automat coșul: notițele mai vechi de 30 de zile.
     final limit = DateTime.now().subtract(const Duration(days: 30));
@@ -58,14 +92,48 @@ class NotesStore extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------- setări
+  /// Notițele create înainte de conturi (cutii fără uid) trec în primul
+  /// cont care se autentifică pe acest dispozitiv.
+  Future<void> _migrateLegacyData() async {
+    if (_notesBox.isNotEmpty || _notebooksBox.isNotEmpty) return;
+    if (!await Hive.boxExists('notebooks')) return;
+    Future<void> copy<T>(String name, Box<T> target) async {
+      final legacy = await Hive.openBox<T>(name);
+      await target.putAll(Map<dynamic, T>.from(legacy.toMap()));
+      await legacy.deleteFromDisk();
+    }
 
-  ThemeMode get themeMode =>
-      ThemeMode.values[(_settingsBox.get('themeMode') as int?) ?? 0];
-  set themeMode(ThemeMode v) {
-    _settingsBox.put('themeMode', v.index);
-    notifyListeners();
+    await copy<Map>('notebooks', _notebooksBox);
+    await copy<Map>('notes', _notesBox);
+    await copy<Map>('attachments', _attachmentsBox);
+    await copy<Uint8List>('blobs', _blobsBox);
   }
+
+  bool _closed = false;
+
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    sync = null;
+    await _notesBox.close();
+    await _notebooksBox.close();
+    await _attachmentsBox.close();
+    await _blobsBox.close();
+  }
+
+  /// Șterge de pe dispozitiv toate datele acestui cont.
+  Future<void> wipeLocal() async {
+    _closed = true;
+    sync = null;
+    await EncryptionKeyService.deleteFor(uid);
+    await _notesBox.deleteFromDisk();
+    await _notebooksBox.deleteFromDisk();
+    await _attachmentsBox.deleteFromDisk();
+    await _blobsBox.deleteFromDisk();
+    await _settingsBox.delete('defaultNotebook_$uid');
+  }
+
+  // ---------------------------------------------------------------- setări
 
   NoteSort get sort => NoteSort.values[(_settingsBox.get('sort') as int?) ?? 0];
   set sort(NoteSort v) {
@@ -74,13 +142,13 @@ class NotesStore extends ChangeNotifier {
   }
 
   String get defaultNotebookId {
-    final id = _settingsBox.get('defaultNotebook') as String?;
+    final id = _settingsBox.get('defaultNotebook_$uid') as String?;
     if (id != null && _notebooks.containsKey(id)) return id;
     return notebooks.first.id;
   }
 
   set defaultNotebookId(String id) {
-    _settingsBox.put('defaultNotebook', id);
+    _settingsBox.put('defaultNotebook_$uid', id);
     notifyListeners();
   }
 
@@ -95,16 +163,17 @@ class NotesStore extends ChangeNotifier {
   int notebookCount(String id) =>
       activeNotes.where((n) => n.notebookId == id).length;
 
-  Future<Notebook> createNotebook(String name) async {
+  Future<Notebook> createNotebook(String name, {String? id}) async {
     final now = DateTime.now();
     final nb = Notebook(
-      id: _uuid.v4(),
+      id: id ?? _uuid.v4(),
       name: name.trim(),
       createdAt: now,
       updatedAt: now,
     );
     _notebooks[nb.id] = nb;
     await _notebooksBox.put(nb.id, nb.toMap());
+    sync?.notebookChanged(nb);
     notifyListeners();
     return nb;
   }
@@ -114,6 +183,7 @@ class NotesStore extends ChangeNotifier {
       ..name = name.trim()
       ..updatedAt = DateTime.now();
     await _notebooksBox.put(nb.id, nb.toMap());
+    sync?.notebookChanged(nb);
     notifyListeners();
   }
 
@@ -123,6 +193,7 @@ class NotesStore extends ChangeNotifier {
     if (_notebooks.length <= 1) return false;
     _notebooks.remove(nb.id);
     await _notebooksBox.delete(nb.id);
+    sync?.notebookDeleted(nb.id);
     final fallback = defaultNotebookId;
     for (final n in _notes.values.where((n) => n.notebookId == nb.id)) {
       n.notebookId = fallback;
@@ -248,6 +319,7 @@ class NotesStore extends ChangeNotifier {
   }
 
   Future<void> saveNote(Note note) async {
+    if (_closed) return;
     note.updatedAt = DateTime.now();
     await _persist(note);
     notifyListeners();
@@ -294,6 +366,7 @@ class NotesStore extends ChangeNotifier {
     }
     _notes.remove(note.id);
     await _notesBox.delete(note.id);
+    sync?.noteDeleted(note.id);
     notifyListeners();
   }
 
@@ -318,7 +391,11 @@ class NotesStore extends ChangeNotifier {
     }
   }
 
-  Future<void> _persist(Note n) => _notesBox.put(n.id, n.toMap());
+  Future<void> _persist(Note n) async {
+    if (_closed) return; // ex. editor închis după deconectare
+    await _notesBox.put(n.id, n.toMap());
+    sync?.noteChanged(n);
+  }
 
   // ----------------------------------------------------------- atașamente
 
@@ -356,6 +433,7 @@ class NotesStore extends ChangeNotifier {
     _attachments[a.id] = a;
     await _blobsBox.put(a.id, bytes);
     await _attachmentsBox.put(a.id, a.toMap());
+    sync?.attachmentAdded(a, bytes);
     final note = _notes[noteId];
     if (note != null) await saveNote(note);
     notifyListeners();
@@ -365,6 +443,7 @@ class NotesStore extends ChangeNotifier {
   Future<void> setOcrText(Attachment a, String text) async {
     a.ocrText = text;
     await _attachmentsBox.put(a.id, a.toMap());
+    sync?.attachmentChanged(a);
     notifyListeners();
   }
 
@@ -375,9 +454,90 @@ class NotesStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _removeAttachmentData(Attachment a) async {
+  Future<void> _removeAttachmentData(
+    Attachment a, {
+    bool remote = false,
+  }) async {
     _attachments.remove(a.id);
     await _attachmentsBox.delete(a.id);
     await _blobsBox.delete(a.id);
+    if (!remote) sync?.attachmentDeleted(a.id);
+  }
+
+  // ------------------------------------------- modificări venite din cloud
+
+  Iterable<Note> get allNotes => _notes.values;
+  Iterable<Notebook> get allNotebooks => _notebooks.values;
+  Iterable<Attachment> get allAttachments => _attachments.values;
+
+  bool hasBlob(String attachmentId) => _blobsBox.containsKey(attachmentId);
+
+  DateTime? noteUpdatedAt(String id) => _notes[id]?.updatedAt;
+  DateTime? notebookUpdatedAt(String id) => _notebooks[id]?.updatedAt;
+
+  Future<void> applyRemoteNote(Map<String, dynamic> m) async {
+    final remote = Note.fromMap(m);
+    final local = _notes[remote.id];
+    if (local != null && !remote.updatedAt.isAfter(local.updatedAt)) return;
+    _notes[remote.id] = remote;
+    await _notesBox.put(remote.id, remote.toMap());
+    await ReminderService.instance.sync(remote);
+    notifyListeners();
+  }
+
+  Future<void> applyRemoteNoteDeleted(String id) async {
+    final local = _notes.remove(id);
+    if (local == null) return;
+    await ReminderService.instance.cancel(local);
+    for (final a in attachmentsOf(id)) {
+      await _removeAttachmentData(a, remote: true);
+    }
+    await _notesBox.delete(id);
+    notifyListeners();
+  }
+
+  Future<void> applyRemoteNotebook(Map<String, dynamic> m) async {
+    final remote = Notebook.fromMap(m);
+    final local = _notebooks[remote.id];
+    if (local != null && !remote.updatedAt.isAfter(local.updatedAt)) return;
+    _notebooks[remote.id] = remote;
+    await _notebooksBox.put(remote.id, remote.toMap());
+    notifyListeners();
+  }
+
+  Future<void> applyRemoteNotebookDeleted(String id) async {
+    // Păstrăm măcar un carnet; notițele lui vin separat (deja mutate).
+    if (!_notebooks.containsKey(id) || _notebooks.length <= 1) return;
+    _notebooks.remove(id);
+    await _notebooksBox.delete(id);
+    notifyListeners();
+  }
+
+  Future<void> applyRemoteAttachment(
+    Map<String, dynamic> m,
+    Uint8List? bytes,
+  ) async {
+    final remote = Attachment.fromMap(m);
+    final local = _attachments[remote.id];
+    if (local != null) {
+      if (remote.ocrText.isNotEmpty && local.ocrText != remote.ocrText) {
+        local.ocrText = remote.ocrText;
+        await _attachmentsBox.put(local.id, local.toMap());
+        notifyListeners();
+      }
+      return;
+    }
+    if (bytes == null) return;
+    _attachments[remote.id] = remote;
+    await _blobsBox.put(remote.id, bytes);
+    await _attachmentsBox.put(remote.id, remote.toMap());
+    notifyListeners();
+  }
+
+  Future<void> applyRemoteAttachmentDeleted(String id) async {
+    final local = _attachments[id];
+    if (local == null) return;
+    await _removeAttachmentData(local, remote: true);
+    notifyListeners();
   }
 }

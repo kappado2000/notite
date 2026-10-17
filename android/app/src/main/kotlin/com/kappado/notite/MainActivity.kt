@@ -1,5 +1,6 @@
 package com.kappado.notite
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// FlutterFragmentActivity e necesar pentru deblocarea biometrică (local_auth).
+class MainActivity : FlutterFragmentActivity()
