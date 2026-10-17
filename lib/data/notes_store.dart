@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../models/attachment.dart';
 import '../models/note.dart';
 import '../models/notebook.dart';
+import '../models/secret_item.dart';
 import '../services/encryption_key_service.dart';
 import '../services/reminder_service.dart';
 
@@ -21,6 +22,8 @@ abstract class SyncSink {
   void attachmentAdded(Attachment attachment, Uint8List bytes);
   void attachmentChanged(Attachment attachment);
   void attachmentDeleted(String id);
+  void secretChanged(SecretItem item);
+  void secretDeleted(String id);
 }
 
 /// Sursa unică de adevăr pentru notițele unui cont: notițe, carnete și
@@ -41,11 +44,13 @@ class NotesStore extends ChangeNotifier {
   late Box<Map> _notebooksBox;
   late Box<Map> _attachmentsBox;
   late Box<Uint8List> _blobsBox;
+  late Box<Map> _secretsBox;
   late Box _settingsBox;
 
   final Map<String, Note> _notes = {};
   final Map<String, Notebook> _notebooks = {};
   final Map<String, Attachment> _attachments = {};
+  final Map<String, SecretItem> _secrets = {};
 
   /// Id fix pentru carnetul implicit — același pe toate dispozitivele,
   /// ca să nu apară dubluri la sincronizare.
@@ -67,6 +72,10 @@ class NotesStore extends ChangeNotifier {
       'blobs_$uid',
       encryptionCipher: cipher,
     );
+    _secretsBox = await Hive.openBox<Map>(
+      'secrets_$uid',
+      encryptionCipher: cipher,
+    );
     _settingsBox = Hive.box('settings');
     await _migrateLegacyData();
 
@@ -81,6 +90,10 @@ class NotesStore extends ChangeNotifier {
     for (final m in _attachmentsBox.values) {
       final a = Attachment.fromMap(m);
       _attachments[a.id] = a;
+    }
+    for (final m in _secretsBox.values) {
+      final i = SecretItem.fromMap(m);
+      _secrets[i.id] = i;
     }
     if (_notebooks.isEmpty) {
       await createNotebook('Primul meu carnet', id: _defaultNotebookSeedId);
@@ -119,6 +132,7 @@ class NotesStore extends ChangeNotifier {
     await _notebooksBox.close();
     await _attachmentsBox.close();
     await _blobsBox.close();
+    await _secretsBox.close();
   }
 
   /// Șterge de pe dispozitiv toate datele acestui cont.
@@ -130,6 +144,7 @@ class NotesStore extends ChangeNotifier {
     await _notebooksBox.deleteFromDisk();
     await _attachmentsBox.deleteFromDisk();
     await _blobsBox.deleteFromDisk();
+    await _secretsBox.deleteFromDisk();
     await _settingsBox.delete('defaultNotebook_$uid');
   }
 
@@ -538,6 +553,76 @@ class NotesStore extends ChangeNotifier {
     final local = _attachments[id];
     if (local == null) return;
     await _removeAttachmentData(local, remote: true);
+    notifyListeners();
+  }
+
+  // ------------------------------------------------------------- parole
+
+  List<SecretItem> get secrets => _secrets.values.toList()
+    ..sort((a, b) {
+      if (a.favorite != b.favorite) return a.favorite ? -1 : 1;
+      return a.displayTitle.toLowerCase().compareTo(
+        b.displayTitle.toLowerCase(),
+      );
+    });
+
+  Iterable<SecretItem> get allSecrets => _secrets.values;
+
+  SecretItem? secret(String id) => _secrets[id];
+
+  List<SecretItem> searchSecrets(String query, Iterable<SecretItem> scope) {
+    final words = _fold(query).split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+    if (words.isEmpty) return scope.toList();
+    return scope
+        .where((i) => words.every(_fold(i.searchText).contains))
+        .toList();
+  }
+
+  SecretItem newSecret(SecretType type) {
+    final now = DateTime.now();
+    return SecretItem(
+      id: _uuid.v4(),
+      type: type,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  Future<void> saveSecret(SecretItem item) async {
+    if (_closed) return;
+    final previous = _secrets[item.id];
+    if (previous != null && previous.password != item.password) {
+      item.passwordChangedAt = DateTime.now();
+    }
+    item.updatedAt = DateTime.now();
+    _secrets[item.id] = item;
+    await _secretsBox.put(item.id, item.toMap());
+    sync?.secretChanged(item);
+    notifyListeners();
+  }
+
+  Future<void> deleteSecret(SecretItem item) async {
+    if (_closed) return;
+    _secrets.remove(item.id);
+    await _secretsBox.delete(item.id);
+    sync?.secretDeleted(item.id);
+    notifyListeners();
+  }
+
+  DateTime? secretUpdatedAt(String id) => _secrets[id]?.updatedAt;
+
+  Future<void> applyRemoteSecret(Map<String, dynamic> m) async {
+    final remote = SecretItem.fromMap(m);
+    final local = _secrets[remote.id];
+    if (local != null && !remote.updatedAt.isAfter(local.updatedAt)) return;
+    _secrets[remote.id] = remote;
+    await _secretsBox.put(remote.id, remote.toMap());
+    notifyListeners();
+  }
+
+  Future<void> applyRemoteSecretDeleted(String id) async {
+    if (_secrets.remove(id) == null) return;
+    await _secretsBox.delete(id);
     notifyListeners();
   }
 }

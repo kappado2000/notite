@@ -8,6 +8,7 @@ import '../widgets/account_sheet.dart';
 import '../widgets/note_tile.dart';
 import '../widgets/pickers.dart';
 import 'note_editor_screen.dart';
+import 'secrets/secrets_screen.dart';
 
 /// Ce listă de notițe e afișată.
 sealed class NoteView {
@@ -619,6 +620,19 @@ class _Sidebar extends StatelessWidget {
             Icons.alarm,
             'Mementouri',
             count: store.reminderNotes.where((n) => !n.reminderDone).length,
+          ),
+          ListTile(
+            dense: true,
+            shape: const StadiumBorder(),
+            leading: const Icon(Icons.password),
+            title: const Text('Parole'),
+            trailing: const Icon(Icons.lock_outline, size: 16),
+            onTap: () {
+              if (MediaQuery.of(context).size.width < 840) {
+                Navigator.of(context).pop(); // închide meniul lateral
+              }
+              openSecrets(context);
+            },
           ),
           _header(
             context,

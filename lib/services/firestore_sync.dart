@@ -8,6 +8,7 @@ import '../data/notes_store.dart';
 import '../models/attachment.dart';
 import '../models/note.dart';
 import '../models/notebook.dart';
+import '../models/secret_item.dart';
 import 'vault.dart';
 
 enum SyncState { connecting, synced, offline, error }
@@ -54,6 +55,7 @@ class FirestoreSync implements SyncSink {
     _listen('notebooks', _onNotebook, _uploadMissingNotebooks);
     _listen('notes', _onNote, _uploadMissingNotes);
     _listen('attachments', _onAttachment, _uploadMissingAttachments);
+    _listen('secrets', _onSecret, _uploadMissingSecrets);
   }
 
   Future<void> stop() async {
@@ -163,7 +165,25 @@ class FirestoreSync implements SyncSink {
     }
   }
 
+  Future<void> _onSecret(String id, Map<String, dynamic> doc) async {
+    if (doc['deleted'] == true) {
+      final local = store.secretUpdatedAt(id);
+      if (local == null) return;
+      if (!local.isAfter(_date(doc['updatedAt']))) {
+        await store.applyRemoteSecretDeleted(id);
+      }
+      return;
+    }
+    await store.applyRemoteSecret(await _open('secrets', id, doc));
+  }
+
   // --------------------------------------------- urcare inițială (o dată)
+
+  Future<void> _uploadMissingSecrets(Set<String> remote) async {
+    for (final i in store.allSecrets.toList()) {
+      if (!remote.contains(i.id)) secretChanged(i);
+    }
+  }
 
   Future<void> _uploadMissingNotes(Set<String> remote) async {
     for (final n in store.allNotes.toList()) {
@@ -215,6 +235,12 @@ class FirestoreSync implements SyncSink {
 
   @override
   void noteDeleted(String id) => _tombstone('notes', id);
+
+  @override
+  void secretChanged(SecretItem item) => _put('secrets', item.id, item.toMap());
+
+  @override
+  void secretDeleted(String id) => _tombstone('secrets', id);
 
   @override
   void notebookChanged(Notebook notebook) =>
@@ -276,7 +302,14 @@ class FirestoreSync implements SyncSink {
   /// Șterge din cloud toate datele contului, inclusiv cheile.
   static Future<void> deleteAllRemote(String uid) async {
     final user = FirebaseFirestore.instance.collection('users').doc(uid);
-    for (final name in ['notes', 'notebooks', 'attachments', 'blobs', 'keys']) {
+    for (final name in [
+      'notes',
+      'notebooks',
+      'attachments',
+      'blobs',
+      'secrets',
+      'keys',
+    ]) {
       while (true) {
         final page = await user.collection(name).limit(200).get();
         if (page.docs.isEmpty) break;
