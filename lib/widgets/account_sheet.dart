@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/auth_service.dart';
@@ -53,6 +54,61 @@ class _AccountSheetState extends State<_AccountSheet> {
   Future<void> _toggleBiometric(Session session, bool on) async {
     if (on && !await BiometricService.authenticate()) return;
     session.biometricEnabled = on;
+  }
+
+  Future<void> _newRecoveryCode(Session session) async {
+    final ok = await confirm(
+      context,
+      'Generezi un cod de recuperare nou? Codul vechi nu va mai funcționa.',
+      action: 'Generează',
+    );
+    if (!ok || !mounted) return;
+    final String code;
+    try {
+      code = await session.regenerateRecoveryCode();
+    } catch (e) {
+      _toast('Nu am putut genera codul (ești online?): $e');
+      return;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.key_outlined, size: 36),
+        title: const Text('Noul cod de recuperare'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Notează-l într-un loc sigur. E singura cale de a-ți recupera '
+              'notițele dacă îți uiți parola.',
+            ),
+            const SizedBox(height: 16),
+            SelectableText(
+              code,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text('Copiază'),
+            onPressed: () => Clipboard.setData(ClipboardData(text: code)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Am salvat codul'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _deleteAccount(Session session, AuthService auth) async {
@@ -187,10 +243,19 @@ class _AccountSheetState extends State<_AccountSheet> {
             ),
             const ListTile(
               leading: Icon(Icons.shield_outlined),
-              title: Text('Acces în cloud doar pentru contul tău'),
+              title: Text('Criptare end-to-end în cloud'),
               subtitle: Text(
-                'Transfer criptat (HTTPS), reguli stricte de acces',
+                'Notițele pleacă de pe dispozitiv deja criptate; nimeni '
+                'altcineva nu le poate citi, nici Google',
               ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.key_outlined),
+              title: const Text('Cod de recuperare nou'),
+              subtitle: const Text(
+                'Dacă l-ai pierdut pe cel vechi — acela nu va mai funcționa',
+              ),
+              onTap: () => _newRecoveryCode(session),
             ),
             const Divider(),
             ListTile(

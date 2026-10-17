@@ -22,19 +22,41 @@ class AuthService extends ChangeNotifier {
   /// Devine adevărat după ce Firebase a spus dacă există o sesiune salvată.
   bool ready = false;
 
-  Future<void> signIn(String email, String password) => _guard(
-    () => _auth.signInWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    ),
-  );
+  /// Parola tocmai folosită la logare, ținută doar în memorie până
+  /// deblochează cheia de criptare (ca să nu fie cerută de două ori).
+  String? _pendingPassword;
+
+  String? takePendingPassword() {
+    final p = _pendingPassword;
+    _pendingPassword = null;
+    return p;
+  }
+
+  Future<void> signIn(String email, String password) => _guard(() async {
+    _pendingPassword = password;
+    try {
+      await _auth.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+    } catch (_) {
+      _pendingPassword = null;
+      rethrow;
+    }
+  });
 
   Future<void> register(String email, String password) => _guard(() async {
-    final cred = await _auth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    await cred.user?.sendEmailVerification();
+    _pendingPassword = password;
+    try {
+      final cred = await _auth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      await cred.user?.sendEmailVerification();
+    } catch (_) {
+      _pendingPassword = null;
+      rethrow;
+    }
   });
 
   Future<void> sendPasswordReset(String email) =>

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -6,12 +9,14 @@ import 'package:provider/provider.dart';
 import 'app.dart';
 import 'data/notes_store.dart';
 import 'screens/home_screen.dart';
+import 'screens/key_screen.dart';
 import 'screens/lock_screen.dart';
 import 'screens/note_editor_screen.dart';
 import 'services/auth_service.dart';
 import 'services/biometric_service.dart';
 import 'services/firestore_sync.dart';
 import 'services/reminder_service.dart';
+import 'services/vault.dart';
 
 /// Starea sesiunii unui cont logat: blocare biometrică și sincronizare.
 class Session extends ChangeNotifier {
@@ -52,16 +57,34 @@ class Session extends ChangeNotifier {
 
   Future<void> signOut(AuthService auth) async {
     await ReminderService.instance.cancelAll();
+    // Trimitem ce a mai rămas în coadă, apoi scoatem cheia de criptare de
+    // pe dispozitiv: la relogare, parola o deblochează din nou.
+    try {
+      await sync.flush().timeout(const Duration(seconds: 5));
+    } on TimeoutException {
+      // Offline: modificările rămân în coada Firestore locală.
+    }
     await sync.stop();
+    await Vault.deleteLocal(user.uid);
     await auth.signOut();
+  }
+
+  /// Cod de recuperare nou (cel vechi nu mai funcționează).
+  Future<String> regenerateRecoveryCode() async {
+    final r = await sync.vault.newRecovery();
+    await FirestoreSync.keysDoc(user.uid)
+        .set({'recovery': r.wrapped}, SetOptions(merge: true));
+    return r.code;
   }
 
   /// Șterge definitiv contul: datele din cloud, de pe dispozitiv și contul.
   Future<void> deleteAccount(AuthService auth, String password) async {
     await auth.reauthenticate(password);
     await ReminderService.instance.cancelAll();
-    await sync.deleteAllRemote();
+    await sync.stop();
+    await FirestoreSync.deleteAllRemote(user.uid);
     await store.wipeLocal();
+    await Vault.deleteLocal(user.uid);
     await _settings.delete('biometric_${user.uid}');
     await _settings.delete('biometricOffered_${user.uid}');
     await auth.deleteAccount();
@@ -82,6 +105,7 @@ class SessionApp extends StatefulWidget {
 class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
   final _navigatorKey = GlobalKey<NavigatorState>();
   Session? _session;
+  bool _needsKey = false;
   DateTime? _pausedAt;
 
   /// După cât timp în fundal se cere din nou deblocarea.
@@ -95,9 +119,19 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
   }
 
   Future<void> _open() async {
+    final vault = await Vault.loadLocal(widget.user.uid);
+    if (vault == null) {
+      // Prima deschidere pe acest dispozitiv: cheia vine din cloud.
+      if (mounted) setState(() => _needsKey = true);
+      return;
+    }
+    await _openWith(vault);
+  }
+
+  Future<void> _openWith(Vault vault) async {
     final store = NotesStore(widget.user.uid);
     await store.init();
-    final sync = FirestoreSync(store);
+    final sync = FirestoreSync(store, vault);
     store.sync = sync;
     sync.start();
     final session = Session(widget.user, store, sync);
@@ -113,7 +147,10 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
       await store.close();
       return;
     }
-    setState(() => _session = session);
+    setState(() {
+      _needsKey = false;
+      _session = session;
+    });
     if (!session.biometricEnabled && !session.biometricOffered) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _offerBiometric());
     }
@@ -182,6 +219,12 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final session = _session;
+    if (_needsKey && session == null) {
+      return notiteMaterialApp(
+        context,
+        home: KeyScreen(user: widget.user, onReady: _openWith),
+      );
+    }
     if (session == null) {
       return notiteMaterialApp(
         context,

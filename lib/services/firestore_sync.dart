@@ -8,22 +8,25 @@ import '../data/notes_store.dart';
 import '../models/attachment.dart';
 import '../models/note.dart';
 import '../models/notebook.dart';
+import 'vault.dart';
 
 enum SyncState { connecting, synced, offline, error }
 
-/// Sincronizare bidirecțională cu Firestore, sub `users/{uid}/...`.
+/// Sincronizare bidirecțională cu Firestore, sub `users/{uid}/...`,
+/// cu criptare end-to-end: în cloud ajunge doar text criptat ([Vault]).
 ///
 /// - Hive rămâne sursa locală; Firestore ține și el o copie offline și
 ///   trimite modificările când revine conexiunea.
 /// - Conflicte: câștigă versiunea cu `updatedAt` mai nou.
 /// - Ștergerile devin „pietre funerare” (`deleted: true`), ca să ajungă
 ///   și pe dispozitivele care erau offline.
-/// - Atașamentele se salvează în bucăți de max. 700 KB (`blobs`), fiindcă
-///   un document Firestore are limita de 1 MB.
+/// - Atașamentele se salvează în bucăți criptate de max. 700 KB
+///   (`blobs`), fiindcă un document Firestore are limita de 1 MB.
 class FirestoreSync implements SyncSink {
-  FirestoreSync(this.store);
+  FirestoreSync(this.store, this.vault);
 
   final NotesStore store;
+  final Vault vault;
   final state = ValueNotifier(SyncState.connecting);
 
   static const _chunkSize = 700 * 1024;
@@ -31,10 +34,21 @@ class FirestoreSync implements SyncSink {
   final _subs = <StreamSubscription>[];
   final _downloading = <String>{};
 
+  /// Scrierile rulează pe rând, în ordinea modificărilor: criptarea e
+  /// asincronă și altfel o versiune veche ar putea ajunge după una nouă.
+  Future<void> _queue = Future.value();
+
   FirebaseFirestore get _db => FirebaseFirestore.instance;
-  DocumentReference get _user => _db.collection('users').doc(store.uid);
+
+  static DocumentReference<Map<String, dynamic>> keysDoc(String uid) =>
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('keys')
+          .doc('main');
+
   CollectionReference<Map<String, dynamic>> _col(String name) =>
-      _user.collection(name);
+      _db.collection('users').doc(store.uid).collection(name);
 
   void start() {
     _listen('notebooks', _onNotebook, _uploadMissingNotebooks);
@@ -90,13 +104,19 @@ class FirestoreSync implements SyncSink {
   static DateTime _date(Object? v) =>
       DateTime.fromMillisecondsSinceEpoch((v as int?) ?? 0);
 
+  Future<Map<String, dynamic>> _open(
+    String col,
+    String id,
+    Map<String, dynamic> doc,
+  ) => vault.decryptMap(doc['enc'] as String, '$col/$id');
+
   // ------------------------------------------------------------- primire
 
-  Future<void> _onNote(String id, Map<String, dynamic> data) async {
-    if (data['deleted'] == true) {
+  Future<void> _onNote(String id, Map<String, dynamic> doc) async {
+    if (doc['deleted'] == true) {
       final local = store.noteUpdatedAt(id);
       if (local == null) return;
-      if (!local.isAfter(_date(data['updatedAt']))) {
+      if (!local.isAfter(_date(doc['updatedAt']))) {
         await store.applyRemoteNoteDeleted(id);
       } else {
         // Modificată local după ștergere: o readucem în cloud.
@@ -105,37 +125,39 @@ class FirestoreSync implements SyncSink {
       }
       return;
     }
-    await store.applyRemoteNote(data);
+    await store.applyRemoteNote(await _open('notes', id, doc));
   }
 
-  Future<void> _onNotebook(String id, Map<String, dynamic> data) async {
-    if (data['deleted'] == true) {
+  Future<void> _onNotebook(String id, Map<String, dynamic> doc) async {
+    if (doc['deleted'] == true) {
       await store.applyRemoteNotebookDeleted(id);
       return;
     }
-    await store.applyRemoteNotebook(data);
+    await store.applyRemoteNotebook(await _open('notebooks', id, doc));
   }
 
-  Future<void> _onAttachment(String id, Map<String, dynamic> data) async {
-    if (data['deleted'] == true) {
+  Future<void> _onAttachment(String id, Map<String, dynamic> doc) async {
+    if (doc['deleted'] == true) {
       await store.applyRemoteAttachmentDeleted(id);
       return;
     }
+    final meta = await _open('attachments', id, doc);
     if (store.hasBlob(id)) {
-      await store.applyRemoteAttachment(data, null);
+      await store.applyRemoteAttachment(meta, null);
       return;
     }
     if (!_downloading.add(id)) return;
     try {
-      final chunks = (data['chunks'] as int?) ?? 0;
+      final chunks = (doc['chunks'] as int?) ?? 0;
       final builder = BytesBuilder(copy: false);
       for (var i = 0; i < chunks; i++) {
-        final doc = await _col('blobs').doc('${id}_$i').get();
-        final blob = doc.data()?['data'];
+        final chunkId = '${id}_$i';
+        final snap = await _col('blobs').doc(chunkId).get();
+        final blob = snap.data()?['data'];
         if (blob is! Blob) return; // încă se încarcă de pe alt dispozitiv
-        builder.add(blob.bytes);
+        builder.add(await vault.decryptBytes(blob.bytes, 'blobs/$chunkId'));
       }
-      await store.applyRemoteAttachment(data, builder.takeBytes());
+      await store.applyRemoteAttachment(meta, builder.takeBytes());
     } finally {
       _downloading.remove(id);
     }
@@ -164,79 +186,101 @@ class FirestoreSync implements SyncSink {
 
   // -------------------------------------------------------------- trimitere
 
-  void _write(Future<void> f) => f.catchError((Object e) {
-    debugPrint('Sync write: $e');
-    state.value = SyncState.error;
-  });
+  void _enqueue(Future<void> Function() op) {
+    _queue = _queue.then((_) => op()).catchError((Object e) {
+      debugPrint('Sync write: $e');
+      state.value = SyncState.error;
+    });
+  }
 
   int get _now => DateTime.now().millisecondsSinceEpoch;
 
-  @override
-  void noteChanged(Note note) =>
-      _write(_col('notes').doc(note.id).set(note.toMap()));
+  /// Scrie documentul criptat. Copia datelor se face acum, sincron, ca
+  /// modificările ulterioare ale obiectului să nu intre în această scriere.
+  void _put(String col, String id, Map<String, dynamic> data) {
+    _enqueue(() async {
+      await _col(col)
+          .doc(id)
+          .set({'enc': await vault.encryptMap(data, '$col/$id')});
+    });
+  }
+
+  void _tombstone(String col, String id) {
+    final at = _now;
+    _enqueue(() => _col(col).doc(id).set({'deleted': true, 'updatedAt': at}));
+  }
 
   @override
-  void noteDeleted(String id) => _write(
-    _col('notes').doc(id).set({'id': id, 'deleted': true, 'updatedAt': _now}),
-  );
+  void noteChanged(Note note) => _put('notes', note.id, note.toMap());
+
+  @override
+  void noteDeleted(String id) => _tombstone('notes', id);
 
   @override
   void notebookChanged(Notebook notebook) =>
-      _write(_col('notebooks').doc(notebook.id).set(notebook.toMap()));
+      _put('notebooks', notebook.id, notebook.toMap());
 
   @override
-  void notebookDeleted(String id) => _write(
-    _col('notebooks')
-        .doc(id)
-        .set({'id': id, 'deleted': true, 'updatedAt': _now}),
-  );
+  void notebookDeleted(String id) => _tombstone('notebooks', id);
 
   @override
   void attachmentAdded(Attachment attachment, Uint8List bytes) {
-    _write(() async {
+    final meta = attachment.toMap();
+    final id = attachment.id;
+    _enqueue(() async {
       final chunks = (bytes.length / _chunkSize).ceil();
       for (var i = 0; i < chunks; i++) {
         final end = ((i + 1) * _chunkSize).clamp(0, bytes.length);
-        await _col('blobs').doc('${attachment.id}_$i').set({
-          'data': Blob(Uint8List.sublistView(bytes, i * _chunkSize, end)),
-        });
+        final chunkId = '${id}_$i';
+        final enc = await vault.encryptBytes(
+          Uint8List.sublistView(bytes, i * _chunkSize, end),
+          'blobs/$chunkId',
+        );
+        await _col('blobs').doc(chunkId).set({'data': Blob(enc)});
       }
       // Metadatele la final, ca celelalte dispozitive să găsească bucățile.
-      await _col('attachments')
-          .doc(attachment.id)
-          .set({...attachment.toMap(), 'chunks': chunks});
-    }());
+      await _col('attachments').doc(id).set({
+        'enc': await vault.encryptMap(meta, 'attachments/$id'),
+        'chunks': chunks,
+      });
+    });
   }
 
   @override
-  void attachmentChanged(Attachment attachment) => _write(
-    _col('attachments')
-        .doc(attachment.id)
-        .set(attachment.toMap(), SetOptions(merge: true)),
-  );
+  void attachmentChanged(Attachment attachment) {
+    final meta = attachment.toMap();
+    final id = attachment.id;
+    _enqueue(() async {
+      await _col('attachments').doc(id).set({
+        'enc': await vault.encryptMap(meta, 'attachments/$id'),
+      }, SetOptions(merge: true));
+    });
+  }
 
   @override
   void attachmentDeleted(String id) {
-    _write(() async {
+    final at = _now;
+    _enqueue(() async {
       final meta = await _col('attachments').doc(id).get();
       final chunks = (meta.data()?['chunks'] as int?) ?? 0;
-      await _col('attachments')
-          .doc(id)
-          .set({'id': id, 'deleted': true, 'updatedAt': _now});
+      await _col('attachments').doc(id).set({'deleted': true, 'updatedAt': at});
       for (var i = 0; i < chunks; i++) {
         await _col('blobs').doc('${id}_$i').delete();
       }
-    }());
+    });
   }
 
-  /// Șterge din cloud toate datele contului (la ștergerea contului).
-  Future<void> deleteAllRemote() async {
-    await stop();
-    for (final name in ['notes', 'notebooks', 'attachments', 'blobs']) {
+  /// Așteaptă trimiterea tuturor modificărilor din coadă.
+  Future<void> flush() => _queue;
+
+  /// Șterge din cloud toate datele contului, inclusiv cheile.
+  static Future<void> deleteAllRemote(String uid) async {
+    final user = FirebaseFirestore.instance.collection('users').doc(uid);
+    for (final name in ['notes', 'notebooks', 'attachments', 'blobs', 'keys']) {
       while (true) {
-        final page = await _col(name).limit(200).get();
+        final page = await user.collection(name).limit(200).get();
         if (page.docs.isEmpty) break;
-        final batch = _db.batch();
+        final batch = FirebaseFirestore.instance.batch();
         for (final d in page.docs) {
           batch.delete(d.reference);
         }

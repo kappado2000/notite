@@ -1,13 +1,14 @@
 rules_version = '2';
 
 // Fiecare cont are acces DOAR la propriile date, sub users/{uid}.
+// Conținutul e oricum criptat end-to-end; regulile sunt al doilea strat.
 // Orice altă cale este blocată.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{uid}/{collection}/{docId} {
       allow read, write: if request.auth != null
         && request.auth.uid == uid
-        && collection in ['notes', 'notebooks', 'attachments', 'blobs'];
+        && collection in ['notes', 'notebooks', 'attachments', 'blobs', 'keys'];
     }
     match /{document=**} {
       allow read, write: if false;
