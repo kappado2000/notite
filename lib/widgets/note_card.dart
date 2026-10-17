@@ -16,6 +16,7 @@ class NoteCard extends StatelessWidget {
     this.compact = false,
     this.showNotebook = true,
     this.leading,
+    this.showImage = true,
   });
 
   final Note note;
@@ -27,6 +28,9 @@ class NoteCard extends StatelessWidget {
   /// Ex. bifa de la mementouri.
   final Widget? leading;
 
+  /// Fals pentru rândurile cu înălțime fixă (ex. „Recente”).
+  final bool showImage;
+
   @override
   Widget build(BuildContext context) {
     final store = context.read<NotesStore>();
@@ -34,7 +38,9 @@ class NoteCard extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final nb = store.notebook(note.notebookId);
     final thumb = store.firstImageOf(note.id);
-    final thumbBytes = thumb == null ? null : store.bytesOf(thumb.id);
+    final thumbBytes = thumb == null || !showImage
+        ? null
+        : store.bytesOf(thumb.id);
     final attCount = store.attachmentsOf(note.id).length;
     final body = snippet(note.plainText, max: compact ? 120 : 180);
     final muted = text.bodySmall?.copyWith(color: scheme.onSurfaceVariant);

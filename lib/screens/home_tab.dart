@@ -32,14 +32,6 @@ class _HomeTabState extends State<HomeTab> {
     super.dispose();
   }
 
-  String get _greeting {
-    final h = DateTime.now().hour;
-    if (h < 5) return 'Noapte bună';
-    if (h < 12) return 'Bună dimineața';
-    if (h < 18) return 'Bună ziua';
-    return 'Bună seara';
-  }
-
   @override
   Widget build(BuildContext context) {
     final store = context.watch<NotesStore>();
@@ -75,19 +67,16 @@ class _HomeTabState extends State<HomeTab> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _greeting,
+                            _capitalize(
+                              DateFormat('EEEE', 'ro').format(DateTime.now()),
+                            ),
                             style: text.headlineMedium?.copyWith(
                               color: scheme.onSurface,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _capitalize(
-                              DateFormat(
-                                'EEEE, d MMMM',
-                                'ro',
-                              ).format(DateTime.now()),
-                            ),
+                            DateFormat('d MMMM y', 'ro').format(DateTime.now()),
                             style: text.bodyMedium?.copyWith(
                               color: scheme.onSurfaceVariant,
                             ),
@@ -186,7 +175,7 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                   SliverToBoxAdapter(
                     child: SizedBox(
-                      height: 196,
+                      height: 172,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         clipBehavior: Clip.none,
@@ -199,6 +188,7 @@ class _HomeTabState extends State<HomeTab> {
                             child: NoteCard(
                               note: recent[i],
                               compact: true,
+                              showImage: false,
                               onTap: () => openNote(context, recent[i]),
                               onLongPress: () =>
                                   showNoteActions(context, recent[i]),
