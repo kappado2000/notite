@@ -8,6 +8,7 @@ import '../../services/firestore_sync.dart';
 import '../../services/password_tools.dart';
 import '../../services/vault.dart';
 import '../../session.dart';
+import '../shell.dart';
 import 'password_health_screen.dart';
 import 'secret_detail_screen.dart';
 import 'secret_edit_screen.dart';
@@ -70,8 +71,7 @@ class _SecretsScreenState extends State<SecretsScreen>
   /// Închide detaliile deschise și blochează din nou secțiunea.
   void _relock() {
     if (!mounted || !_unlocked) return;
-    Navigator.of(context)
-        .popUntil((r) => r.settings.name == secretsRouteName || r.isFirst);
+    Navigator.of(context).popUntil((r) => r.isFirst);
     setState(() {
       _unlocked = false;
       _password.clear();
@@ -105,7 +105,16 @@ class _SecretsScreenState extends State<SecretsScreen>
       _busy = true;
       _error = null;
     });
-    final uid = context.read<Session>().user.uid;
+    final session = context.read<Session>();
+    final uid = session.uid;
+    if (session.preview) {
+      // Previzualizare fără cloud: nu există chei de verificat.
+      setState(() {
+        _unlocked = true;
+        _busy = false;
+      });
+      return;
+    }
     try {
       final doc = (await FirestoreSync.keysDoc(uid).get()).data();
       final ok =
@@ -163,13 +172,16 @@ class _SecretsScreenState extends State<SecretsScreen>
             ),
         ],
       ),
-      floatingActionButton: _unlocked
-          ? FloatingActionButton.extended(
-              onPressed: _add,
-              icon: const Icon(Icons.add),
-              label: const Text('Adaugă'),
-            )
-          : null,
+      floatingActionButton: aboveNavBar(
+        context,
+        _unlocked
+            ? FloatingActionButton.extended(
+                onPressed: _add,
+                icon: const Icon(Icons.add),
+                label: const Text('Adaugă'),
+              )
+            : null,
+      ),
       body: _unlocked ? _list() : _lockView(),
     );
   }
@@ -329,7 +341,7 @@ class _SecretsScreenState extends State<SecretsScreen>
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 96),
+                  padding: EdgeInsets.only(bottom: bottomSpace(context)),
                   itemCount: items.length,
                   itemBuilder: (_, i) => SecretTile(item: items[i]),
                 ),

@@ -19,9 +19,18 @@ import '../widgets/attachment_image_embed.dart';
 import '../widgets/pickers.dart';
 
 class NoteEditorScreen extends StatefulWidget {
-  const NoteEditorScreen({super.key, required this.noteId});
+  const NoteEditorScreen({
+    super.key,
+    required this.noteId,
+    this.startWithChecklist = false,
+    this.startWithScan = false,
+  });
 
   final String noteId;
+
+  /// Acțiuni rapide de pe „Acasă”: listă de bifat sau scanare directă.
+  final bool startWithChecklist;
+  final bool startWithScan;
 
   @override
   State<NoteEditorScreen> createState() => _NoteEditorScreenState();
@@ -66,6 +75,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _title.addListener(() {
       if (_title.text != _note.title) _changed();
     });
+    if (widget.startWithChecklist) {
+      _controller.formatSelection(Attribute.unchecked);
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _editorFocus.requestFocus(),
+      );
+    } else if (widget.startWithScan) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scan());
+    }
   }
 
   void _changed() {

@@ -14,6 +14,13 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Notițele afișate în grilă (true) sau în listă.
+  bool get notesGrid => (_box.get('notesGrid') as bool?) ?? false;
+  set notesGrid(bool v) {
+    _box.put('notesGrid', v);
+    notifyListeners();
+  }
+
   /// Ultimul email folosit la logare, precompletat data viitoare.
   String get lastEmail => (_box.get('lastEmail') as String?) ?? '';
   set lastEmail(String v) => _box.put('lastEmail', v);

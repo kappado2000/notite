@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../data/notes_store.dart';
 import '../models/note.dart';
 import '../utils/format.dart';
+import 'notebook_editor.dart';
 
 Future<bool> confirm(
   BuildContext context,
@@ -95,24 +96,17 @@ Future<String?> pickNotebook(BuildContext context, {String? current}) {
             ),
             for (final nb in store.notebooks)
               ListTile(
-                leading: const Icon(Icons.book_outlined),
+                leading: NotebookBadge(notebook: nb, size: 34),
                 title: Text(nb.name),
                 trailing: nb.id == current ? const Icon(Icons.check) : null,
                 onTap: () => Navigator.pop(ctx, nb.id),
               ),
             ListTile(
-              leading: const Icon(Icons.add),
+              leading: const SizedBox(width: 34, child: Icon(Icons.add)),
               title: const Text('Carnet nou'),
               onTap: () async {
-                final name = await promptText(
-                  ctx,
-                  title: 'Carnet nou',
-                  hint: 'Nume carnet',
-                  action: 'Creează',
-                );
-                if (name == null) return;
-                final nb = await store.createNotebook(name);
-                if (ctx.mounted) Navigator.pop(ctx, nb.id);
+                final nb = await editNotebook(ctx);
+                if (nb != null && ctx.mounted) Navigator.pop(ctx, nb.id);
               },
             ),
           ],

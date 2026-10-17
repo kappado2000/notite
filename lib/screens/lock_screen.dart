@@ -85,7 +85,7 @@ class _LockScreenState extends State<LockScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    session.user.email ?? '',
+                    session.email,
                     textAlign: TextAlign.center,
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),

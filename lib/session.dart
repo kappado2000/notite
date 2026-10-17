@@ -8,7 +8,7 @@ import 'package:provider/provider.dart';
 
 import 'app.dart';
 import 'data/notes_store.dart';
-import 'screens/home_screen.dart';
+import 'screens/shell.dart';
 import 'screens/key_screen.dart';
 import 'screens/lock_screen.dart';
 import 'screens/note_editor_screen.dart';
@@ -20,29 +20,41 @@ import 'services/vault.dart';
 
 /// Starea sesiunii unui cont logat: blocare biometrică și sincronizare.
 class Session extends ChangeNotifier {
-  Session(this.user, this.store, this.sync);
+  Session({
+    required this.uid,
+    required this.email,
+    required this.store,
+    this.sync,
+    this.preview = false,
+  });
 
-  final User user;
+  final String uid;
+  final String email;
   final NotesStore store;
-  final FirestoreSync sync;
+
+  /// Lipsește doar în modul de previzualizare (fără cloud).
+  final FirestoreSync? sync;
+
+  /// Mod de previzualizare a interfeței (`lib/preview_main.dart`):
+  /// date locale, fără cont, fără cloud. Nu e folosit în aplicația reală.
+  final bool preview;
 
   final _settings = Hive.box('settings');
 
   bool locked = false;
 
   bool get biometricEnabled =>
-      (_settings.get('biometric_${user.uid}') as bool?) ?? false;
+      (_settings.get('biometric_$uid') as bool?) ?? false;
 
   set biometricEnabled(bool v) {
-    _settings.put('biometric_${user.uid}', v);
+    _settings.put('biometric_$uid', v);
     notifyListeners();
   }
 
   /// Am întrebat deja dacă vrea deblocare biometrică (o singură dată).
   bool get biometricOffered =>
-      (_settings.get('biometricOffered_${user.uid}') as bool?) ?? false;
-  set biometricOffered(bool v) =>
-      _settings.put('biometricOffered_${user.uid}', v);
+      (_settings.get('biometricOffered_$uid') as bool?) ?? false;
+  set biometricOffered(bool v) => _settings.put('biometricOffered_$uid', v);
 
   void lock() {
     if (!biometricEnabled || locked) return;
@@ -60,19 +72,19 @@ class Session extends ChangeNotifier {
     // Trimitem ce a mai rămas în coadă, apoi scoatem cheia de criptare de
     // pe dispozitiv: la relogare, parola o deblochează din nou.
     try {
-      await sync.flush().timeout(const Duration(seconds: 5));
+      await sync?.flush().timeout(const Duration(seconds: 5));
     } on TimeoutException {
       // Offline: modificările rămân în coada Firestore locală.
     }
-    await sync.stop();
-    await Vault.deleteLocal(user.uid);
+    await sync?.stop();
+    await Vault.deleteLocal(uid);
     await auth.signOut();
   }
 
   /// Cod de recuperare nou (cel vechi nu mai funcționează).
   Future<String> regenerateRecoveryCode() async {
-    final r = await sync.vault.newRecovery();
-    await FirestoreSync.keysDoc(user.uid)
+    final r = await sync!.vault.newRecovery();
+    await FirestoreSync.keysDoc(uid)
         .set({'recovery': r.wrapped}, SetOptions(merge: true));
     return r.code;
   }
@@ -81,12 +93,12 @@ class Session extends ChangeNotifier {
   Future<void> deleteAccount(AuthService auth, String password) async {
     await auth.reauthenticate(password);
     await ReminderService.instance.cancelAll();
-    await sync.stop();
-    await FirestoreSync.deleteAllRemote(user.uid);
+    await sync?.stop();
+    await FirestoreSync.deleteAllRemote(uid);
     await store.wipeLocal();
-    await Vault.deleteLocal(user.uid);
-    await _settings.delete('biometric_${user.uid}');
-    await _settings.delete('biometricOffered_${user.uid}');
+    await Vault.deleteLocal(uid);
+    await _settings.delete('biometric_$uid');
+    await _settings.delete('biometricOffered_$uid');
     await auth.deleteAccount();
   }
 }
@@ -134,7 +146,12 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
     final sync = FirestoreSync(store, vault);
     store.sync = sync;
     sync.start();
-    final session = Session(widget.user, store, sync);
+    final session = Session(
+      uid: widget.user.uid,
+      email: widget.user.email ?? '',
+      store: store,
+      sync: sync,
+    );
     session.locked = session.biometricEnabled;
     ReminderService.instance.onOpenNote = (id) {
       if (store.note(id) == null) return;
@@ -210,7 +227,7 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     final s = _session;
     if (s != null) {
-      s.sync.stop();
+      s.sync?.stop();
       s.store.close();
     }
     super.dispose();
@@ -239,7 +256,7 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
       child: notiteMaterialApp(
         context,
         navigatorKey: _navigatorKey,
-        home: const HomeScreen(),
+        home: const AppShell(),
         // Ecranul de blocare acoperă tot, inclusiv notițele deschise.
         builder: (context, child) => Consumer<Session>(
           builder: (context, s, _) => Stack(

@@ -178,13 +178,20 @@ class NotesStore extends ChangeNotifier {
   int notebookCount(String id) =>
       activeNotes.where((n) => n.notebookId == id).length;
 
-  Future<Notebook> createNotebook(String name, {String? id}) async {
+  Future<Notebook> createNotebook(
+    String name, {
+    String? id,
+    String emoji = '📒',
+    int color = 0,
+  }) async {
     final now = DateTime.now();
     final nb = Notebook(
       id: id ?? _uuid.v4(),
       name: name.trim(),
       createdAt: now,
       updatedAt: now,
+      emoji: emoji,
+      color: color,
     );
     _notebooks[nb.id] = nb;
     await _notebooksBox.put(nb.id, nb.toMap());
@@ -193,9 +200,16 @@ class NotesStore extends ChangeNotifier {
     return nb;
   }
 
-  Future<void> renameNotebook(Notebook nb, String name) async {
+  Future<void> updateNotebook(
+    Notebook nb, {
+    required String name,
+    required String emoji,
+    required int color,
+  }) async {
     nb
       ..name = name.trim()
+      ..emoji = emoji
+      ..color = color
       ..updatedAt = DateTime.now();
     await _notebooksBox.put(nb.id, nb.toMap());
     sync?.notebookChanged(nb);

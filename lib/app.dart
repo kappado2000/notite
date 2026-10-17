@@ -4,20 +4,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:provider/provider.dart';
 
 import 'data/app_settings.dart';
-
-const _seed = Color(0xFF00A82D);
-
-ThemeData _theme(Brightness b) {
-  final scheme = ColorScheme.fromSeed(seedColor: _seed, brightness: b);
-  return ThemeData(
-    colorScheme: scheme,
-    useMaterial3: true,
-    appBarTheme: AppBarTheme(
-      backgroundColor: scheme.surface,
-      surfaceTintColor: Colors.transparent,
-    ),
-  );
-}
+import 'theme.dart';
 
 /// Configurația comună a aplicației (temă, limbă română).
 MaterialApp notiteMaterialApp(
@@ -31,8 +18,8 @@ MaterialApp notiteMaterialApp(
     title: 'Notițe',
     navigatorKey: navigatorKey,
     debugShowCheckedModeBanner: false,
-    theme: _theme(Brightness.light),
-    darkTheme: _theme(Brightness.dark),
+    theme: buildTheme(Brightness.light),
+    darkTheme: buildTheme(Brightness.dark),
     themeMode: themeMode,
     locale: const Locale('ro'),
     supportedLocales: const [Locale('ro'), Locale('en')],
