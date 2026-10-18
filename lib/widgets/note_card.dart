@@ -294,7 +294,7 @@ class NoteRow extends StatelessWidget {
                     ),
                   ),
                   if (body.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       body,
                       maxLines: 3,
@@ -308,7 +308,7 @@ class NoteRow extends StatelessWidget {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 26),
                   Row(
                     children: [
                       Text(formatShortDate(note.updatedAt), style: small),

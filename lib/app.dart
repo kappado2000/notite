@@ -29,7 +29,15 @@ MaterialApp notiteMaterialApp(
       GlobalCupertinoLocalizations.delegate,
       FlutterQuillLocalizations.delegate,
     ],
-    builder: builder,
+    // Ignorăm „Text aldin” din setările de accesibilitate iOS: altfel tot
+    // textul devine îngroșat, iar lista nu mai arată ca în Evernote (cerință
+    // explicită). Mărimea textului din setări rămâne respectată.
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context).copyWith(boldText: false),
+      child: builder == null
+          ? child ?? const SizedBox.shrink()
+          : builder(context, child),
+    ),
     home: home,
   );
 }
