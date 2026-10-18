@@ -294,6 +294,83 @@ class _AccountTabState extends State<AccountTab> {
                       onSelectionChanged: (s) => settings.notesGrid = s.first,
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Text îngroșat (aldin)'),
+                    subtitle: const Text(
+                      'Oprit: scris normal, chiar dacă telefonul are „Text aldin”',
+                    ),
+                    value: settings.boldText,
+                    onChanged: (v) => settings.boldText = v,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text('Mărimea textului', style: text.labelLarge),
+                      ),
+                      Text(
+                        '${(settings.textScale * 100).round()}%',
+                        style: text.labelLarge?.copyWith(color: scheme.primary),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      const Text('A', style: TextStyle(fontSize: 13)),
+                      Expanded(
+                        child: Slider(
+                          value: settings.textScale,
+                          min: 0.85,
+                          max: 1.3,
+                          divisions: 9,
+                          label: '${(settings.textScale * 100).round()}%',
+                          onChanged: (v) => settings.textScale = v,
+                        ),
+                      ),
+                      const Text('A', style: TextStyle(fontSize: 22)),
+                    ],
+                  ),
+                  // Mostră: arată pe loc cum va arăta lista de notițe.
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Titlul notiței',
+                          style: TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Așa va arăta textul notițelor în listă.',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: scheme.onSurface.withValues(alpha: 0.74),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (settings.textScale != 1.0)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => settings.textScale = 1.0,
+                        child: const Text('Revino la 100%'),
+                      ),
+                    ),
                 ],
               ),
             ),

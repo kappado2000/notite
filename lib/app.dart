@@ -29,15 +29,23 @@ MaterialApp notiteMaterialApp(
       GlobalCupertinoLocalizations.delegate,
       FlutterQuillLocalizations.delegate,
     ],
-    // Ignorăm „Text aldin” din setările de accesibilitate iOS: altfel tot
-    // textul devine îngroșat, iar lista nu mai arată ca în Evernote (cerință
-    // explicită). Mărimea textului din setări rămâne respectată.
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context).copyWith(boldText: false),
-      child: builder == null
-          ? child ?? const SizedBox.shrink()
-          : builder(context, child),
-    ),
+    // Textul aldin și mărimea textului se aleg din Cont → Aspect. Implicit
+    // scrisul e normal (ca în Evernote), chiar dacă telefonul are „Text aldin”.
+    builder: (context, child) {
+      final settings = context.watch<AppSettings>();
+      final mq = MediaQuery.of(context);
+      // Mărimea din aplicație se aplică peste cea din setările telefonului.
+      final systemFactor = mq.textScaler.scale(14) / 14;
+      return MediaQuery(
+        data: mq.copyWith(
+          boldText: settings.boldText,
+          textScaler: TextScaler.linear(systemFactor * settings.textScale),
+        ),
+        child: builder == null
+            ? child ?? const SizedBox.shrink()
+            : builder(context, child),
+      );
+    },
     home: home,
   );
 }

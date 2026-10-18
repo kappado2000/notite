@@ -21,6 +21,23 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Text îngroșat în aplicație. Implicit oprit (scris normal, ca în
+  /// Evernote), indiferent de „Text aldin” din setările telefonului.
+  bool get boldText => (_box.get('boldText') as bool?) ?? false;
+  set boldText(bool v) {
+    _box.put('boldText', v);
+    notifyListeners();
+  }
+
+  /// Mărimea textului în aplicație, peste cea din setările telefonului
+  /// (1.0 = 100%).
+  double get textScale => (_box.get('textScale') as double?) ?? 1.0;
+  set textScale(double v) {
+    v = (v * 20).round() / 20; // pași de 5%, fără zecimale „murdare”
+    _box.put('textScale', v);
+    notifyListeners();
+  }
+
   /// Ultimul email folosit la logare, precompletat data viitoare.
   String get lastEmail => (_box.get('lastEmail') as String?) ?? '';
   set lastEmail(String v) => _box.put('lastEmail', v);
