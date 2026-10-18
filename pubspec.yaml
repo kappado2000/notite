@@ -131,3 +131,9 @@ flutter_launcher_icons:
     image_path: "assets/icon/app_icon.png"
     background_color: "#3F8F6B"
     theme_color: "#3F8F6B"
+
+# flutter_quill cu o corectură locală pentru dictarea pe iOS
+# (vezi packages/flutter_quill/NOTITE_PATCH.md).
+dependency_overrides:
+  flutter_quill:
+    path: packages/flutter_quill

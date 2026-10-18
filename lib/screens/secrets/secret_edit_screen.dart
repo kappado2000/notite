@@ -105,11 +105,13 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
     bool obscure = false,
     int maxLines = 1,
     String? hint,
+    TextCapitalization caps = TextCapitalization.none,
   }) => Padding(
     padding: const EdgeInsets.only(bottom: 14),
     child: TextFormField(
       controller: _c[key],
       keyboardType: keyboard,
+      textCapitalization: caps,
       obscureText: obscure,
       maxLines: obscure ? 1 : maxLines,
       validator: validator,
@@ -195,6 +197,7 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
               'title',
               'Nume (opțional)',
               icon: Icons.label_outline,
+              caps: TextCapitalization.sentences,
               hint: switch (_i.type) {
                 SecretType.login => 'ex. Gmail, Banca, eMAG',
                 SecretType.card => 'ex. Card salariu',
@@ -228,7 +231,12 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
                 ),
               ],
               SecretType.card => [
-                _text('cardHolder', 'Titular', icon: Icons.person_outline),
+                _text(
+                  'cardHolder',
+                  'Titular',
+                  icon: Icons.person_outline,
+                  caps: TextCapitalization.characters,
+                ),
                 _text(
                   'cardNumber',
                   'Număr card',
@@ -331,6 +339,7 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
               'notes',
               'Notițe',
               icon: Icons.notes,
+              caps: TextCapitalization.sentences,
               maxLines: 4,
               keyboard: TextInputType.multiline,
             ),
@@ -351,6 +360,7 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
             flex: 2,
             child: TextField(
               controller: label,
+              textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 labelText: 'Nume câmp',
                 hintText: 'ex. IBAN',

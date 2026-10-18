@@ -43,6 +43,7 @@ class _SecretsScreenState extends State<SecretsScreen>
   final _password = TextEditingController();
   final _search = TextEditingController();
   String _query = '';
+  bool _searchOpen = false;
   _Filter _filter = _Filter.all;
 
   @override
@@ -166,6 +167,18 @@ class _SecretsScreenState extends State<SecretsScreen>
         actions: [
           if (_unlocked)
             IconButton(
+              tooltip: _searchOpen ? 'Închide căutarea' : 'Caută',
+              icon: Icon(_searchOpen ? Icons.search_off : Icons.search),
+              onPressed: () => setState(() {
+                _searchOpen = !_searchOpen;
+                if (!_searchOpen) {
+                  _search.clear();
+                  _query = '';
+                }
+              }),
+            ),
+          if (_unlocked)
+            IconButton(
               tooltip: 'Blochează',
               icon: const Icon(Icons.lock_outline),
               onPressed: _relock,
@@ -276,16 +289,18 @@ class _SecretsScreenState extends State<SecretsScreen>
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-          child: SearchBar(
-            controller: _search,
-            hintText: 'Caută site, utilizator, card…',
-            leading: const Icon(Icons.search),
-            elevation: const WidgetStatePropertyAll(0),
-            onChanged: (v) => setState(() => _query = v),
+        if (_searchOpen)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+            child: SearchBar(
+              controller: _search,
+              hintText: 'Caută site, utilizator, card…',
+              leading: const Icon(Icons.search),
+              elevation: const WidgetStatePropertyAll(0),
+              autoFocus: true,
+              onChanged: (v) => setState(() => _query = v),
+            ),
           ),
-        ),
         SizedBox(
           height: 48,
           child: ListView(

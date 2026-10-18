@@ -58,6 +58,7 @@ class _NotesTabState extends State<NotesTab> {
   NoteView _view = const AllNotesView();
   final _search = TextEditingController();
   String _query = '';
+  bool _searching = false;
   ShellController? _shell;
 
   @override
@@ -90,6 +91,7 @@ class _NotesTabState extends State<NotesTab> {
     _view = v;
     _search.clear();
     _query = '';
+    _searching = false;
   });
 
   String _title(NotesStore store) => switch (_view) {
@@ -177,67 +179,124 @@ class _NotesTabState extends State<NotesTab> {
           ),
         ),
         actions: [
-          if (_view is TrashView && store.trashedNotes.isNotEmpty)
-            TextButton(
-              onPressed: () async {
-                if (await confirm(
-                  context,
-                  'Golești coșul? Notițele vor fi șterse definitiv.',
-                  action: 'Golește',
-                )) {
-                  store.emptyTrash();
-                }
-              },
-              child: const Text('Golește'),
-            ),
           IconButton(
-            tooltip: settings.notesGrid ? 'Afișare listă' : 'Afișare grilă',
-            icon: Icon(
-              settings.notesGrid
-                  ? Icons.view_agenda_outlined
-                  : Icons.grid_view_outlined,
-            ),
-            onPressed: () => settings.notesGrid = !settings.notesGrid,
+            tooltip: 'Caută',
+            icon: Icon(_searching ? Icons.search_off : Icons.search),
+            onPressed: () => setState(() {
+              _searching = !_searching;
+              if (!_searching) {
+                _search.clear();
+                _query = '';
+              }
+            }),
           ),
-          if (_view is! RemindersView && _view is! TrashView)
-            PopupMenuButton<NoteSort>(
-              tooltip: 'Sortare',
-              icon: const Icon(Icons.swap_vert),
-              initialValue: store.sort,
-              onSelected: (s) => store.sort = s,
-              itemBuilder: (_) => const [
-                PopupMenuItem(
-                  value: NoteSort.updated,
-                  child: Text('Modificate recent'),
+          IconButton(
+            tooltip: 'Filtrează: carnete, etichete, fixate…',
+            icon: const Icon(Icons.filter_list),
+            onPressed: _openPicker,
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Mai multe',
+            icon: const Icon(Icons.more_horiz),
+            onSelected: (v) async {
+              switch (v) {
+                case 'layout':
+                  settings.notesGrid = !settings.notesGrid;
+                case 'sort-updated':
+                  store.sort = NoteSort.updated;
+                case 'sort-created':
+                  store.sort = NoteSort.created;
+                case 'sort-title':
+                  store.sort = NoteSort.title;
+                case 'notebook':
+                  showNotebookMenu(
+                    context,
+                    nbView!,
+                    onDeleted: () => _select(const AllNotesView()),
+                  );
+                case 'tag':
+                  showTagMenu(
+                    context,
+                    (_view as TagView).tag,
+                    onRenamed: (n) => _select(TagView(n)),
+                    onDeleted: () => _select(const AllNotesView()),
+                  );
+                case 'empty-trash':
+                  if (await confirm(
+                    context,
+                    'Golești coșul? Notițele vor fi șterse definitiv.',
+                    action: 'Golește',
+                  )) {
+                    store.emptyTrash();
+                  }
+              }
+            },
+            itemBuilder: (_) {
+              PopupMenuItem<String> item(
+                String value,
+                IconData icon,
+                String label, {
+                bool checked = false,
+              }) => PopupMenuItem(
+                value: value,
+                child: Row(
+                  children: [
+                    Icon(icon, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(label)),
+                    if (checked) const Icon(Icons.check, size: 18),
+                  ],
                 ),
-                PopupMenuItem(
-                  value: NoteSort.created,
-                  child: Text('Create recent'),
+              );
+              final sortable = _view is! RemindersView && _view is! TrashView;
+              return [
+                item(
+                  'layout',
+                  settings.notesGrid
+                      ? Icons.view_agenda_outlined
+                      : Icons.grid_view_outlined,
+                  settings.notesGrid ? 'Afișare listă' : 'Afișare grilă',
                 ),
-                PopupMenuItem(value: NoteSort.title, child: Text('După titlu')),
-              ],
-            ),
-          if (nbView != null)
-            IconButton(
-              tooltip: 'Opțiuni carnet',
-              icon: const Icon(Icons.more_vert),
-              onPressed: () => showNotebookMenu(
-                context,
-                nbView,
-                onDeleted: () => _select(const AllNotesView()),
-              ),
-            ),
-          if (_view is TagView)
-            IconButton(
-              tooltip: 'Opțiuni etichetă',
-              icon: const Icon(Icons.more_vert),
-              onPressed: () => showTagMenu(
-                context,
-                (_view as TagView).tag,
-                onRenamed: (n) => _select(TagView(n)),
-                onDeleted: () => _select(const AllNotesView()),
-              ),
-            ),
+                if (sortable) ...[
+                  const PopupMenuDivider(),
+                  item(
+                    'sort-updated',
+                    Icons.update,
+                    'Modificate recent',
+                    checked: store.sort == NoteSort.updated,
+                  ),
+                  item(
+                    'sort-created',
+                    Icons.schedule,
+                    'Create recent',
+                    checked: store.sort == NoteSort.created,
+                  ),
+                  item(
+                    'sort-title',
+                    Icons.sort_by_alpha,
+                    'După titlu',
+                    checked: store.sort == NoteSort.title,
+                  ),
+                ],
+                if (nbView != null) ...[
+                  const PopupMenuDivider(),
+                  item('notebook', Icons.edit_outlined, 'Redenumește carnetul'),
+                ],
+                if (_view is TagView) ...[
+                  const PopupMenuDivider(),
+                  item('tag', Icons.sell_outlined, 'Opțiuni etichetă'),
+                ],
+                if (_view is TrashView && store.trashedNotes.isNotEmpty) ...[
+                  const PopupMenuDivider(),
+                  item(
+                    'empty-trash',
+                    Icons.delete_sweep_outlined,
+                    'Golește coșul',
+                  ),
+                ],
+              ];
+            },
+          ),
           const SizedBox(width: 4),
         ],
       ),
@@ -245,82 +304,65 @@ class _NotesTabState extends State<NotesTab> {
         context,
         _view is TrashView
             ? null
-            : FloatingActionButton.extended(
+            : FloatingActionButton(
+                tooltip: 'Notiță nouă',
                 onPressed: _newNote,
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Notiță nouă'),
+                child: const Icon(Icons.edit_note, size: 28),
               ),
       ),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (_searching)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: SearchBar(
+                controller: _search,
+                autoFocus: true,
+                hintText: 'Caută în notițe, etichete, text scanat…',
+                leading: const Icon(Icons.search),
+                trailing: [
+                  if (_query.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => setState(() {
+                        _search.clear();
+                        _query = '';
+                      }),
+                    ),
+                ],
+                onChanged: (v) => setState(() => _query = v),
+              ),
+            ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: SearchBar(
-              controller: _search,
-              hintText: 'Caută în notițe, etichete, text scanat…',
-              leading: const Icon(Icons.search),
-              trailing: [
-                if (_query.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => setState(() {
-                      _search.clear();
-                      _query = '';
-                    }),
-                  ),
-              ],
-              onChanged: (v) => setState(() => _query = v),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+            child: Text(
+              notes.length == 1 ? '1 NOTIȚĂ' : '${notes.length} NOTIȚE',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.4,
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ),
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                for (final (v, label, icon) in <(NoteView, String, IconData?)>[
-                  (const AllNotesView(), 'Toate', null),
-                  (const PinnedView(), 'Fixate', Icons.push_pin_outlined),
-                  (const RemindersView(), 'Mementouri', Icons.alarm),
-                ])
-                  _chip(
-                    label,
-                    sameView(v, _view),
-                    () => _select(v),
-                    icon: icon,
-                  ),
-                for (final nb in store.notebooks)
-                  _chip(
-                    nb.name,
-                    sameView(NotebookView(nb.id), _view),
-                    () => _select(NotebookView(nb.id)),
-                    icon: Icons.book_outlined,
-                  ),
-                _chip(
-                  'Coș',
-                  _view is TrashView,
-                  () => _select(const TrashView()),
-                  icon: Icons.delete_outline,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 4),
+          const Divider(height: 1),
           Expanded(
             child: notes.isEmpty
                 ? _Empty(view: _view, searching: _query.isNotEmpty)
                 : settings.notesGrid
                 ? _grid(notes)
                 : ListView.separated(
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      8,
-                      16,
-                      bottomSpace(context),
-                    ),
+                    padding: EdgeInsets.only(bottom: bottomSpace(context)),
                     itemCount: notes.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) => _card(notes[i], scheme),
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (_, i) => NoteRow(
+                      note: notes[i],
+                      showNotebook: _view is! NotebookView,
+                      onTap: () => openNote(context, notes[i]),
+                      onLongPress: () => showNoteActions(context, notes[i]),
+                      leading: _reminderCheck(notes[i]),
+                    ),
                   ),
           ),
         ],
@@ -328,21 +370,20 @@ class _NotesTabState extends State<NotesTab> {
     );
   }
 
+  Widget? _reminderCheck(Note n) => _view is RemindersView
+      ? Checkbox(
+          value: n.reminderDone,
+          onChanged: (_) => context.read<NotesStore>().toggleReminderDone(n),
+        )
+      : null;
+
   Widget _card(Note n, ColorScheme scheme, {bool compact = false}) => NoteCard(
     note: n,
     compact: compact,
     showNotebook: _view is! NotebookView,
     onTap: () => openNote(context, n),
     onLongPress: () => showNoteActions(context, n),
-    leading: _view is RemindersView
-        ? Center(
-            child: Checkbox(
-              value: n.reminderDone,
-              onChanged: (_) =>
-                  context.read<NotesStore>().toggleReminderDone(n),
-            ),
-          )
-        : null,
+    leading: _reminderCheck(n),
   );
 
   /// Grilă „zidărie”: două (sau mai multe) coloane de înălțimi diferite.
@@ -375,23 +416,6 @@ class _NotesTabState extends State<NotesTab> {
       },
     );
   }
-
-  Widget _chip(
-    String label,
-    bool selected,
-    VoidCallback onTap, {
-    IconData? icon,
-  }) => Padding(
-    padding: const EdgeInsets.only(right: 8),
-    child: Center(
-      child: ChoiceChip(
-        avatar: icon == null ? null : Icon(icon, size: 16),
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => onTap(),
-      ),
-    ),
-  );
 }
 
 class _ViewPicker extends StatelessWidget {
@@ -404,16 +428,32 @@ class _ViewPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = context.watch<NotesStore>();
     final scheme = Theme.of(context).colorScheme;
-    Widget item(NoteView v, Widget leading, String label, int count) =>
-        ListTile(
-          selected: sameView(v, current),
-          selectedTileColor: scheme.primaryContainer,
-          selectedColor: scheme.onPrimaryContainer,
-          leading: leading,
-          title: Text(label),
-          trailing: count > 0 ? Text('$count') : null,
-          onTap: () => onSelect(v),
-        );
+    Widget item(
+      NoteView v,
+      Widget leading,
+      String label,
+      int count, {
+      VoidCallback? onEdit,
+    }) => ListTile(
+      selected: sameView(v, current),
+      selectedTileColor: scheme.primaryContainer,
+      selectedColor: scheme.onPrimaryContainer,
+      leading: leading,
+      title: Text(label),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (count > 0) Text('$count'),
+          if (onEdit != null)
+            IconButton(
+              tooltip: 'Redenumește',
+              icon: const Icon(Icons.edit_outlined, size: 20),
+              onPressed: onEdit,
+            ),
+        ],
+      ),
+      onTap: () => onSelect(v),
+    );
     Widget header(String t, {VoidCallback? onAdd}) => Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 8, 4),
       child: Row(
@@ -474,6 +514,7 @@ class _ViewPicker extends StatelessWidget {
               NotebookBadge(notebook: nb, size: 32),
               nb.name,
               store.notebookCount(nb.id),
+              onEdit: () => editNotebook(context, notebook: nb),
             ),
           if (store.allTags.isNotEmpty) ...[
             header('ETICHETE'),

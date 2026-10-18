@@ -75,6 +75,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _title.addListener(() {
       if (_title.text != _note.title) _changed();
     });
+    _editorFocus.addListener(_onEditorFocus);
     if (widget.startWithChecklist) {
       _controller.formatSelection(Attribute.unchecked);
       WidgetsBinding.instance.addPostFrameCallback(
@@ -82,6 +83,25 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
       );
     } else if (widget.startWithScan) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _scan());
+    }
+  }
+
+  /// Bara de formatare apare doar cât timp scrii în corpul notiței.
+  /// Ascunderea e amânată puțin: la apăsarea unui buton din bară focusul
+  /// poate dispărea o clipă (pe web), iar bara nu trebuie să clipească.
+  bool _toolbarVisible = false;
+  Timer? _toolbarTimer;
+
+  void _onEditorFocus() {
+    _toolbarTimer?.cancel();
+    if (_editorFocus.hasFocus) {
+      if (!_toolbarVisible) setState(() => _toolbarVisible = true);
+    } else {
+      _toolbarTimer = Timer(const Duration(milliseconds: 300), () {
+        if (mounted && !_editorFocus.hasFocus && _toolbarVisible) {
+          setState(() => _toolbarVisible = false);
+        }
+      });
     }
   }
 
@@ -139,6 +159,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   void dispose() {
     _finalize();
     _docSub?.cancel();
+    _toolbarTimer?.cancel();
+    _editorFocus.removeListener(_onEditorFocus);
     _controller.dispose();
     _title.dispose();
     _editorFocus.dispose();
@@ -512,7 +534,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   ),
                 ],
         ),
-        floatingActionButton: trashed
+        // Cât timp scrii, „+” stă în bara de formatare de jos.
+        floatingActionButton: trashed || _toolbarVisible
             ? null
             : FloatingActionButton(
                 tooltip: 'Adaugă',
@@ -546,6 +569,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                 child: TextField(
                   controller: _title,
+                  textCapitalization: TextCapitalization.sentences,
                   readOnly: trashed,
                   style: Theme.of(context).textTheme.headlineSmall
                       ?.copyWith(fontWeight: FontWeight.w600),
@@ -566,40 +590,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 onTags: trashed ? null : _editTags,
                 onReminder: trashed ? null : _editReminder,
               ),
-              if (!trashed)
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.symmetric(
-                      horizontal: BorderSide(color: scheme.outlineVariant),
-                    ),
-                  ),
-                  // Butoanele barei nu iau focusul, ca cursorul să rămână
-                  // în editor după aplicarea unei formatări.
-                  child: Listener(
-                    onPointerDown: (_) =>
-                        _editorHadFocus = _editorFocus.hasFocus,
-                    onPointerUp: (_) => _reconnectEditorOnWeb(),
-                    child: Focus(
-                      canRequestFocus: false,
-                      descendantsAreFocusable: false,
-                      child: QuillSimpleToolbar(
-                        controller: _controller,
-                        config: const QuillSimpleToolbarConfig(
-                          multiRowsDisplay: false,
-                          showFontFamily: false,
-                          showFontSize: false,
-                          showSubscript: false,
-                          showSuperscript: false,
-                          showSearchButton: false,
-                          showInlineCode: false,
-                          showCodeBlock: false,
-                          showDirection: false,
-                          showAlignmentButtons: false,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               Expanded(
                 child: QuillEditor(
                   controller: _controller,
@@ -613,6 +603,51 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   ),
                 ),
               ),
+              if (!trashed && _toolbarVisible)
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.symmetric(
+                      horizontal: BorderSide(color: scheme.outlineVariant),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Adaugă imagine, scanare, fișier…',
+                        icon: Icon(Icons.add_circle, color: scheme.primary),
+                        onPressed: _busy ? null : _showAddMenu,
+                      ),
+                      Expanded(
+                        // Butoanele barei nu iau focusul, ca cursorul să rămână
+                        // în editor după aplicarea unei formatări.
+                        child: Listener(
+                          onPointerDown: (_) =>
+                              _editorHadFocus = _editorFocus.hasFocus,
+                          onPointerUp: (_) => _reconnectEditorOnWeb(),
+                          child: Focus(
+                            canRequestFocus: false,
+                            descendantsAreFocusable: false,
+                            child: QuillSimpleToolbar(
+                              controller: _controller,
+                              config: const QuillSimpleToolbarConfig(
+                                multiRowsDisplay: false,
+                                showFontFamily: false,
+                                showFontSize: false,
+                                showSubscript: false,
+                                showSuperscript: false,
+                                showSearchButton: false,
+                                showInlineCode: false,
+                                showCodeBlock: false,
+                                showDirection: false,
+                                showAlignmentButtons: false,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               if (files.isNotEmpty)
                 _FilesBar(
                   files: files,
@@ -661,10 +696,12 @@ class _MetaRow extends StatelessWidget {
           label: Text(t),
           onPressed: onTags,
         ),
-      if (onTags != null)
+      // Adăugarea de etichete stă în meniul ⋮; aici apare doar lângă
+      // etichetele existente, ca ecranul să rămână aerisit.
+      if (onTags != null && note.tags.isNotEmpty)
         ActionChip(
           avatar: const Icon(Icons.add, size: 18),
-          label: Text(note.tags.isEmpty ? 'Etichetă' : 'Adaugă'),
+          label: const Text('Adaugă'),
           onPressed: onTags,
         ),
     ];

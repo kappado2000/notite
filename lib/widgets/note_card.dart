@@ -130,7 +130,12 @@ class NoteCard extends StatelessWidget {
                 note.displayTitle,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: text.titleMedium?.copyWith(height: 1.25),
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  height: 1.25,
+                  color: scheme.onSurface,
+                ),
               ),
             ),
             if (note.pinned)
@@ -146,9 +151,11 @@ class NoteCard extends StatelessWidget {
             body,
             maxLines: compact ? 4 : 2,
             overflow: TextOverflow.ellipsis,
-            style: text.bodyMedium?.copyWith(
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
               color: scheme.onSurfaceVariant,
-              height: 1.35,
+              height: 1.4,
             ),
           ),
         ],
@@ -222,4 +229,133 @@ class _Pill extends StatelessWidget {
     ),
     child: child,
   );
+}
+
+/// Rândul unei notițe în listă, în stilul Evernote: titlu mare și gros,
+/// 3 rânduri de text subțire, data jos, miniatura imaginii în dreapta.
+class NoteRow extends StatelessWidget {
+  const NoteRow({
+    super.key,
+    required this.note,
+    required this.onTap,
+    this.onLongPress,
+    this.showNotebook = true,
+    this.leading,
+  });
+
+  final Note note;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final bool showNotebook;
+  final Widget? leading;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.read<NotesStore>();
+    final scheme = Theme.of(context).colorScheme;
+    final thumb = store.firstImageOf(note.id);
+    final thumbBytes = thumb == null ? null : store.bytesOf(thumb.id);
+    final attCount = store.attachmentsOf(note.id).length;
+    final body = snippet(note.plainText, max: 260);
+    final nb = showNotebook ? store.notebook(note.notebookId) : null;
+    final small = TextStyle(fontSize: 13, color: scheme.onSurfaceVariant);
+
+    return InkWell(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (leading != null)
+              Padding(padding: const EdgeInsets.only(right: 8), child: leading),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    note.displayTitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w700,
+                      height: 1.25,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  if (body.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      body,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
+                        height: 1.4,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Text(formatShortDate(note.updatedAt), style: small),
+                      if (nb != null) ...[
+                        Text('  ·  ', style: small),
+                        Flexible(
+                          child: Text(
+                            nb.name,
+                            style: small,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                      if (note.pinned) ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.push_pin, size: 14, color: scheme.primary),
+                      ],
+                      if (note.hasReminder) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          note.reminderDone ? Icons.check_circle : Icons.alarm,
+                          size: 14,
+                          color: small.color,
+                        ),
+                      ],
+                      if (attCount > 0) ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.attach_file, size: 14, color: small.color),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (thumbBytes != null) ...[
+              const SizedBox(width: 14),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: scheme.outlineVariant),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: Image.memory(
+                    thumbBytes,
+                    width: 104,
+                    height: 104,
+                    fit: BoxFit.cover,
+                    cacheWidth: 312,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

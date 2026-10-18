@@ -25,6 +25,7 @@ class HomeTab extends StatefulWidget {
 class _HomeTabState extends State<HomeTab> {
   final _search = TextEditingController();
   String _query = '';
+  bool _searchOpen = false;
 
   @override
   void dispose() {
@@ -84,6 +85,18 @@ class _HomeTabState extends State<HomeTab> {
                         ],
                       ),
                     ),
+                    IconButton(
+                      tooltip: _searchOpen ? 'Închide căutarea' : 'Caută',
+                      icon: Icon(_searchOpen ? Icons.close : Icons.search),
+                      onPressed: () => setState(() {
+                        _searchOpen = !_searchOpen;
+                        if (!_searchOpen) {
+                          _search.clear();
+                          _query = '';
+                        }
+                      }),
+                    ),
+                    const SizedBox(width: 4),
                     InkWell(
                       customBorder: const CircleBorder(),
                       onTap: () => shell.go(3),
@@ -101,27 +114,29 @@ class _HomeTabState extends State<HomeTab> {
                 ),
               ),
             ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
-              sliver: SliverToBoxAdapter(
-                child: SearchBar(
-                  controller: _search,
-                  hintText: 'Caută în toate notițele…',
-                  leading: const Icon(Icons.search),
-                  trailing: [
-                    if (searching)
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => setState(() {
-                          _search.clear();
-                          _query = '';
-                        }),
-                      ),
-                  ],
-                  onChanged: (v) => setState(() => _query = v),
+            if (_searchOpen)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
+                sliver: SliverToBoxAdapter(
+                  child: SearchBar(
+                    controller: _search,
+                    autoFocus: true,
+                    hintText: 'Caută în toate notițele…',
+                    leading: const Icon(Icons.search),
+                    trailing: [
+                      if (searching)
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => setState(() {
+                            _search.clear();
+                            _query = '';
+                          }),
+                        ),
+                    ],
+                    onChanged: (v) => setState(() => _query = v),
+                  ),
                 ),
               ),
-            ),
             if (searching)
               ..._searchResults(results.cast<Note>())
             else ...[
@@ -219,6 +234,7 @@ class _HomeTabState extends State<HomeTab> {
                         count: store.notebookCount(nb.id),
                         onTap: () => shell.openNotes(NotebookView(nb.id)),
                         onLongPress: () => showNotebookMenu(context, nb),
+                        onRename: () => editNotebook(context, notebook: nb),
                       ),
                     _NewNotebookTile(onTap: () => editNotebook(context)),
                   ]),
@@ -415,12 +431,14 @@ class _NotebookTile extends StatelessWidget {
     required this.count,
     required this.onTap,
     required this.onLongPress,
+    required this.onRename,
   });
 
   final String name;
   final int count;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
+  final VoidCallback onRename;
 
   @override
   Widget build(BuildContext context) {
@@ -435,18 +453,33 @@ class _NotebookTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.book_outlined,
-                  size: 19,
-                  color: scheme.onPrimaryContainer,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: scheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.book_outlined,
+                      size: 19,
+                      color: scheme.onPrimaryContainer,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: 'Redenumește',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(
+                      Icons.edit_outlined,
+                      size: 18,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    onPressed: onRename,
+                  ),
+                ],
               ),
               const Spacer(),
               Text(

@@ -148,8 +148,8 @@ void showNotebookMenu(
           ),
           const Divider(),
           ListTile(
-            leading: const Icon(Icons.palette_outlined),
-            title: const Text('Editează (nume, culoare, emoji)'),
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('Redenumește'),
             onTap: () {
               Navigator.pop(ctx);
               editNotebook(context, notebook: nb);

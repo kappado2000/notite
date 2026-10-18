@@ -24,3 +24,6 @@ String snippet(String plain, {int max = 160}) {
   final s = plain.replaceAll('￼', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
   return s.length <= max ? s : '${s.substring(0, max)}…';
 }
+
+/// Data scurtă pentru liste: 18.10.2026.
+String formatShortDate(DateTime d) => DateFormat('dd.MM.yyyy', 'ro').format(d);
