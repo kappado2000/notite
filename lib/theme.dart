@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Paleta „Salvie & crem”: verde salvie ca accent, miere ca secundar,
@@ -85,6 +86,11 @@ ThemeData buildTheme(Brightness brightness) {
 
   final base = ThemeData(
     useMaterial3: true,
+    // Pe iPhone: fontul Apple pentru text (SF Pro Text), ca aplicațiile
+    // native — varianta implicită „Display” e mai largă și pare mai groasă.
+    fontFamily: defaultTargetPlatform == TargetPlatform.iOS
+        ? 'CupertinoSystemText'
+        : null,
     colorScheme: s,
     scaffoldBackgroundColor: s.surface,
     visualDensity: VisualDensity.standard,

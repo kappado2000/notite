@@ -258,7 +258,14 @@ class NoteRow extends StatelessWidget {
     final attCount = store.attachmentsOf(note.id).length;
     final body = snippet(note.plainText, max: 260);
     final nb = showNotebook ? store.notebook(note.notebookId) : null;
-    final small = TextStyle(fontSize: 13, color: scheme.onSurfaceVariant);
+    // Tipografie după lista Evernote: titlu semi-îngroșat, text normal gri
+    // neutru, fără spațiere suplimentară între litere.
+    final small = TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w400,
+      letterSpacing: 0,
+      color: scheme.onSurface.withValues(alpha: 0.58),
+    );
 
     return InkWell(
       onTap: onTap,
@@ -280,7 +287,8 @@ class NoteRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 19,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
                       height: 1.25,
                       color: scheme.onSurface,
                     ),
@@ -292,14 +300,15 @@ class NoteRow extends StatelessWidget {
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 16,
                         fontWeight: FontWeight.w400,
-                        height: 1.4,
-                        color: scheme.onSurfaceVariant,
+                        letterSpacing: 0,
+                        height: 1.3,
+                        color: scheme.onSurface.withValues(alpha: 0.74),
                       ),
                     ),
                   ],
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
                       Text(formatShortDate(note.updatedAt), style: small),
