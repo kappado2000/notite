@@ -119,7 +119,7 @@ flutter:
 flutter_launcher_icons:
   image_path: "assets/icon/app_icon.png"
   android: true
-  adaptive_icon_background: "#3F8F6B"
+  adaptive_icon_background: "#4DAB43"
   adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
   ios: true
   remove_alpha_ios: true
@@ -129,8 +129,8 @@ flutter_launcher_icons:
   web:
     generate: true
     image_path: "assets/icon/app_icon.png"
-    background_color: "#3F8F6B"
-    theme_color: "#3F8F6B"
+    background_color: "#4DAB43"
+    theme_color: "#4DAB43"
 
 # flutter_quill cu o corectură locală pentru dictarea pe iOS
 # (vezi packages/flutter_quill/NOTITE_PATCH.md).

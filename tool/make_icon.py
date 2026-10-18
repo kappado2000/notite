@@ -1,5 +1,5 @@
 """Generează iconița aplicației: caiet cu spirală + pix, desenate în alb
-pe fundal verde salvie. Rulare: python tool/make_icon.py"""
+pe fundal verde (nuanța Evernote). Rulare: python tool/make_icon.py"""
 
 import math
 import os
@@ -8,8 +8,9 @@ from PIL import Image, ImageChops, ImageDraw
 
 S = 4  # supraeșantionare pentru margini netede
 N = 1024 * S
-GREEN_TOP = (76, 160, 122)
-GREEN_BOTTOM = (52, 128, 94)
+# Verdele iconiței Evernote, măsurat de pe captura userului.
+GREEN_TOP = (98, 210, 86)
+GREEN_BOTTOM = (56, 136, 48)
 WHITE = (255, 255, 255, 255)
 CLEAR = (0, 0, 0, 0)
 
