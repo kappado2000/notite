@@ -13,6 +13,7 @@ import '../data/notes_store.dart';
 import '../models/attachment.dart';
 import '../models/note.dart';
 import '../services/file_opener.dart';
+import '../services/pdf_builder.dart';
 import '../services/scan_service.dart';
 import '../utils/format.dart';
 import '../widgets/attachment_image_embed.dart';
@@ -234,23 +235,120 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     setState(() => _busy = true);
     try {
       final pages = await ScanService.scan();
-      for (final p in pages) {
-        await _addImageBytes(p.name, p.bytes, ocr: p.text);
+      if (pages.isEmpty || !mounted) return;
+      final choice = await _askScanOutput(pages);
+      if (choice == null) return;
+      final text = pages
+          .map((p) => p.text.trim())
+          .where((t) => t.isNotEmpty)
+          .join('\n\n');
+      if (_title.text.trim().isEmpty) {
+        _title.text = 'Scanare ${formatShortDate(DateTime.now())}';
       }
-      if (pages.isNotEmpty) {
-        final withText = pages.where((p) => p.text.isNotEmpty).length;
-        _toast(
-          withText > 0
-              ? 'Text recunoscut în $withText din ${pages.length} pagini — '
-                    'e inclus în căutare'
-              : 'Document scanat (nu s-a găsit text)',
+      if (choice == _ScanOutput.images) {
+        for (final p in pages) {
+          await _addImageBytes(p.name, p.bytes, ocr: p.text);
+        }
+      }
+      if (choice == _ScanOutput.pdf || choice == _ScanOutput.pdfAndText) {
+        final name = '${_title.text.trim()}.pdf';
+        final pdf = await buildPdfFromImages([
+          for (final p in pages) p.bytes,
+        ], title: _title.text.trim());
+        // Textul recunoscut rămâne căutabil și pentru PDF.
+        await _store.addAttachment(
+          noteId: _note.id,
+          name: name,
+          bytes: pdf,
+          mime: 'application/pdf',
+          ocrText: text,
         );
       }
+      if (choice == _ScanOutput.text || choice == _ScanOutput.pdfAndText) {
+        if (text.isEmpty) {
+          _toast('Nu s-a găsit text în scanare');
+        } else {
+          _insertText('$text\n');
+        }
+      }
+      if (mounted) setState(() {});
+      _toast(switch (choice) {
+        _ScanOutput.pdf => 'PDF atașat (${pages.length} pagini)',
+        _ScanOutput.text => 'Text extras din ${pages.length} pagini',
+        _ScanOutput.pdfAndText => 'PDF atașat și text extras',
+        _ScanOutput.images => 'Imagini adăugate în notiță',
+      });
     } catch (e) {
       _toast('Scanarea a eșuat: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// După scanare: PDF, text, ambele sau imaginile în notiță.
+  Future<_ScanOutput?> _askScanOutput(List<ScannedPage> pages) {
+    final withText = pages.where((p) => p.text.trim().isNotEmpty).length;
+    return showModalBottomSheet<_ScanOutput>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                pages.length == 1
+                    ? 'Ce faci cu pagina scanată?'
+                    : 'Ce faci cu cele ${pages.length} pagini scanate?',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                withText > 0
+                    ? 'Text recunoscut în $withText din ${pages.length} pagini'
+                    : 'Nu s-a recunoscut text',
+              ),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf_outlined),
+              title: const Text('Salvează ca PDF'),
+              subtitle: const Text('Un fișier cu toate paginile, atașat'),
+              onTap: () => Navigator.pop(ctx, _ScanOutput.pdf),
+            ),
+            ListTile(
+              leading: const Icon(Icons.text_snippet_outlined),
+              title: const Text('Extrage doar textul'),
+              subtitle: const Text('Textul recunoscut, editabil în notiță'),
+              enabled: withText > 0,
+              onTap: () => Navigator.pop(ctx, _ScanOutput.text),
+            ),
+            ListTile(
+              leading: const Icon(Icons.library_add_outlined),
+              title: const Text('PDF + text'),
+              enabled: withText > 0,
+              onTap: () => Navigator.pop(ctx, _ScanOutput.pdfAndText),
+            ),
+            ListTile(
+              leading: const Icon(Icons.image_outlined),
+              title: const Text('Imagini în notiță'),
+              onTap: () => Navigator.pop(ctx, _ScanOutput.images),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Inserează text la poziția cursorului (sau la final).
+  void _insertText(String text) {
+    final sel = _controller.selection;
+    final len = _controller.document.length;
+    final index = sel.isValid ? sel.baseOffset.clamp(0, len - 1) : len - 1;
+    _controller.replaceText(
+      index,
+      0,
+      text,
+      TextSelection.collapsed(offset: index + text.length),
+    );
   }
 
   Future<void> _pickFiles() async {
@@ -288,7 +386,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               ListTile(
                 leading: const Icon(Icons.document_scanner_outlined),
                 title: const Text('Scanează document'),
-                subtitle: const Text('Cu recunoaștere text (OCR)'),
+                subtitle: const Text(
+                  'Din cameră sau dintr-o poză → PDF sau text',
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _scan();
@@ -665,6 +765,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     );
   }
 }
+
+enum _ScanOutput { pdf, text, pdfAndText, images }
 
 class _MetaRow extends StatelessWidget {
   const _MetaRow({required this.note, this.onTags, this.onReminder});

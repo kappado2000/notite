@@ -61,6 +61,7 @@ dependencies:
   cryptography_flutter: ^2.3.4
   crypto: ^3.0.7
   qr_flutter: ^4.1.0
+  pdf: ^3.13.1
 
 dev_dependencies:
   flutter_test:
