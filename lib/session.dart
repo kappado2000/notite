@@ -15,6 +15,7 @@ import 'screens/note_editor_screen.dart';
 import 'services/auth_service.dart';
 import 'services/biometric_service.dart';
 import 'services/firestore_sync.dart';
+import 'services/incoming_files.dart';
 import 'services/reminder_service.dart';
 import 'services/vault.dart';
 
@@ -168,6 +169,18 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
       _needsKey = false;
       _session = session;
     });
+    // Fișiere trimise din meniul de partajare (inclusiv înainte de logare).
+    IncomingFiles.instance
+      ..onNoteCreated = (note) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (_) => NoteEditorScreen(noteId: note.id),
+            ),
+          );
+        });
+      }
+      ..attach(store);
     if (!session.biometricEnabled && !session.biometricOffered) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _offerBiometric());
     }
@@ -227,6 +240,7 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     final s = _session;
     if (s != null) {
+      IncomingFiles.instance.detach();
       s.sync?.stop();
       s.store.close();
     }
