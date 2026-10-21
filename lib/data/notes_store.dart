@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -362,10 +363,14 @@ class NotesStore extends ChangeNotifier {
       final buf = StringBuffer()
         ..write(n.title)
         ..write(' ')
-        ..write(n.plainText)
-        ..write(' ')
         ..write(n.tags.join(' '));
-      for (final a in attachmentsOf(n.id)) {
+      // La notițele blocate se caută doar în titlu și etichete.
+      if (!n.locked) {
+        buf
+          ..write(' ')
+          ..write(n.plainText);
+      }
+      for (final a in n.locked ? const <Attachment>[] : attachmentsOf(n.id)) {
         buf
           ..write(' ')
           ..write(a.name)
@@ -409,6 +414,12 @@ class NotesStore extends ChangeNotifier {
     note.updatedAt = DateTime.now();
     await _persist(note);
     notifyListeners();
+  }
+
+  Future<void> setLocked(Note note, bool locked) async {
+    note.locked = locked;
+    await saveNote(note);
+    await ReminderService.instance.sync(note);
   }
 
   Future<void> togglePin(Note note) async {
@@ -625,6 +636,70 @@ class NotesStore extends ChangeNotifier {
     if (local == null) return;
     await _removeAttachmentData(local, remote: true);
     notifyListeners();
+  }
+
+  // ------------------------------------------------------- backup local
+
+  /// Datele contului pentru un fișier de backup (fără parole: fișierul nu
+  /// e criptat). Atașamentele sunt incluse, codate base64.
+  Map<String, dynamic> exportBackup() => {
+    'format': 'notite-backup',
+    'version': 1,
+    'createdAt': DateTime.now().millisecondsSinceEpoch,
+    'notebooks': [for (final nb in _notebooks.values) nb.toMap()],
+    'notes': [for (final n in _notes.values) n.toMap()],
+    'attachments': [
+      for (final a in _attachments.values)
+        if (_blobsBox.get(a.id) case final bytes?)
+          {...a.toMap(), 'data': base64Encode(bytes)},
+    ],
+  };
+
+  /// Restaurează dintr-un backup. Nu dublează nimic: elementele existente
+  /// rămân; o notiță existentă e înlocuită doar dacă cea din backup e mai
+  /// nouă. Tot ce se adaugă e și sincronizat în cloud.
+  Future<({int notebooks, int notes, int attachments})> importBackup(
+    Map<String, dynamic> data,
+  ) async {
+    if (data['format'] != 'notite-backup') {
+      throw const FormatException('Fișierul nu este un backup Notițe.');
+    }
+    var nbs = 0, notes = 0, atts = 0;
+    for (final m in (data['notebooks'] as List? ?? const [])) {
+      final nb = Notebook.fromMap(m as Map);
+      if (_notebooks.containsKey(nb.id)) continue;
+      _notebooks[nb.id] = nb;
+      await _notebooksBox.put(nb.id, nb.toMap());
+      sync?.notebookChanged(nb);
+      nbs++;
+    }
+    for (final m in (data['notes'] as List? ?? const [])) {
+      final n = Note.fromMap(m as Map);
+      final local = _notes[n.id];
+      if (local != null && !n.updatedAt.isAfter(local.updatedAt)) continue;
+      if (!_notebooks.containsKey(n.notebookId)) {
+        n.notebookId = defaultNotebookId;
+      }
+      _notes[n.id] = n;
+      await _persist(n);
+      await ReminderService.instance.sync(n);
+      notes++;
+    }
+    for (final m in (data['attachments'] as List? ?? const [])) {
+      final map = m as Map;
+      final a = Attachment.fromMap(map);
+      if (_attachments.containsKey(a.id) || !_notes.containsKey(a.noteId)) {
+        continue;
+      }
+      final bytes = base64Decode(map['data'] as String);
+      _attachments[a.id] = a;
+      await _blobsBox.put(a.id, bytes);
+      await _attachmentsBox.put(a.id, a.toMap());
+      sync?.attachmentAdded(a, bytes);
+      atts++;
+    }
+    notifyListeners();
+    return (notebooks: nbs, notes: notes, attachments: atts);
   }
 
   // ------------------------------------------------------------- parole

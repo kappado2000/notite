@@ -5,19 +5,26 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_quill/quill_delta.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/notes_store.dart';
 import '../models/attachment.dart';
 import '../models/note.dart';
 import '../services/file_opener.dart';
+import '../models/note_template.dart';
+import '../services/note_pdf.dart';
 import '../services/pdf_builder.dart';
 import '../services/scan_enhance.dart';
 import '../services/scan_service.dart';
 import '../utils/format.dart';
 import '../widgets/attachment_image_embed.dart';
+import 'qr_scan_screen.dart';
+import '../widgets/identity_check.dart';
+import '../widgets/note_links.dart';
 import '../widgets/pickers.dart';
 
 class NoteEditorScreen extends StatefulWidget {
@@ -62,6 +69,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _store = context.read<NotesStore>();
     _note = _store.note(widget.noteId)!;
     _title = TextEditingController(text: _note.title);
+    _revealed = !_note.locked;
+    if (!_revealed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _unlock());
+    }
     Document doc;
     try {
       doc = Document.fromJson(jsonDecode(_note.contentJson) as List);
@@ -107,7 +118,23 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     }
   }
 
+  /// Notița blocată se arată abia după Face ID / amprentă sau parolă.
+  late bool _revealed;
+
+  Future<void> _unlock() async {
+    final ok = await confirmIdentity(context, reason: 'Deblochează notița');
+    if (ok && mounted) setState(() => _revealed = true);
+  }
+
+  /// Notiță nouă și goală → arătăm rândul de șabloane.
+  bool get _isBlank =>
+      _title.text.trim().isEmpty &&
+      _controller.document.toPlainText().trim().isEmpty &&
+      _store.attachmentsOf(_note.id).isEmpty;
+  late bool _blank = _isBlank;
+
   void _changed() {
+    if (_isBlank != _blank) setState(() => _blank = _isBlank);
     _dirty = true;
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 700), _save);
@@ -302,6 +329,29 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     builder: (_) => _ScanOutputSheet(pages: pages),
   );
 
+  Future<void> _insertScannedCode() async {
+    final code = await scanCode(context);
+    if (code == null || !mounted) return;
+    final sel = _controller.selection;
+    final len = _controller.document.length;
+    final index = sel.isValid ? sel.baseOffset.clamp(0, len - 1) : len - 1;
+    final text = '${code.value}\n';
+    _controller.replaceText(
+      index,
+      0,
+      text,
+      TextSelection.collapsed(offset: index + text.length),
+    );
+    final url = code.url;
+    if (url != null) {
+      _controller.formatText(
+        index,
+        code.value.length,
+        LinkAttribute(url.toString()),
+      );
+    }
+  }
+
   /// Inserează text la poziția cursorului (sau la final).
   void _insertText(String text) {
     final sel = _controller.selection;
@@ -373,6 +423,15 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               onTap: () {
                 Navigator.pop(ctx);
                 _pickImages();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.qr_code_scanner),
+              title: const Text('Cod QR / de bare'),
+              subtitle: const Text('Adaugă conținutul codului în notiță'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _insertScannedCode();
               },
             ),
             ListTile(
@@ -471,6 +530,150 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     );
   }
 
+  // ------------------------------------------------------ funcții noi
+
+  /// Înlocuiește conținutul cu un șablon (se poate anula cu ↶).
+  void _applyTemplate(NoteTemplate t) {
+    final oldLength = _controller.document.length;
+    final change = Delta.fromJson(jsonDecode(t.contentJson()) as List)
+      ..delete(oldLength);
+    _controller.compose(
+      change,
+      const TextSelection.collapsed(offset: 0),
+      ChangeSource.local,
+    );
+    if (_title.text.trim().isEmpty) _title.text = t.title(DateTime.now());
+    _editorFocus.requestFocus();
+  }
+
+  /// Cuprinsul: titlurile din notiță; atingerea duce la titlul respectiv.
+  void _showToc() {
+    final headings = <({String text, int offset, int level})>[];
+    for (final node in _controller.document.root.children) {
+      final level = node.style.attributes[Attribute.header.key]?.value;
+      final text = node.toPlainText().trim();
+      if (level is int && text.isNotEmpty) {
+        headings.add((text: text, offset: node.documentOffset, level: level));
+      }
+    }
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: headings.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.fromLTRB(24, 8, 24, 32),
+                child: Text(
+                  'Notița nu are titluri. Folosește stilul „Titlu” din bara '
+                  'de formatare (meniul „Normal”) ca să apară în cuprins.',
+                ),
+              )
+            : ListView(
+                shrinkWrap: true,
+                children: [
+                  const ListTile(
+                    title: Text(
+                      'Cuprins',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  for (final h in headings)
+                    ListTile(
+                      contentPadding: EdgeInsets.only(
+                        left: 16.0 + 16 * (h.level - 1),
+                        right: 16,
+                      ),
+                      title: Text(
+                        h.text,
+                        style: TextStyle(
+                          fontWeight: h.level == 1
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _controller.updateSelection(
+                          TextSelection.collapsed(offset: h.offset),
+                          ChangeSource.local,
+                        );
+                        _editorFocus.requestFocus();
+                      },
+                    ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  /// Inserează o legătură spre altă notiță, la cursor.
+  Future<void> _insertNoteLink() async {
+    final target = await pickNoteToLink(context, exceptId: _note.id);
+    if (target == null || !mounted) return;
+    final label = target.displayTitle;
+    final sel = _controller.selection;
+    final len = _controller.document.length;
+    final index = sel.isValid ? sel.baseOffset.clamp(0, len - 1) : len - 1;
+    _controller.replaceText(
+      index,
+      0,
+      label,
+      TextSelection.collapsed(offset: index + label.length),
+    );
+    _controller.formatText(
+      index,
+      label.length,
+      LinkAttribute(noteLink(target.id)),
+    );
+  }
+
+  /// Linkurile din notiță: cele spre alte notițe se deschid în aplicație,
+  /// restul în browser.
+  void _openLink(String url) {
+    final id = noteIdFromLink(url);
+    if (id != null) {
+      if (_store.note(id) == null) {
+        _toast('Notița legată nu mai există');
+        return;
+      }
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => NoteEditorScreen(noteId: id)));
+      return;
+    }
+    final uri = Uri.tryParse(url.contains('://') ? url : 'https://$url');
+    if (uri != null) launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _toggleLock() async {
+    final lock = !_note.locked;
+    await _store.setLocked(_note, lock);
+    if (!mounted) return;
+    setState(() {});
+    _toast(
+      lock
+          ? 'Notița e blocată: se deschide doar cu Face ID / amprentă sau parolă'
+          : 'Notița nu mai e blocată',
+    );
+  }
+
+  Future<void> _exportPdf() async {
+    await _save();
+    try {
+      final bytes = await notesToPdf(
+        [_note],
+        _store,
+        title: _note.displayTitle,
+      );
+      await FileOpener.share(
+        '${_note.displayTitle}.pdf',
+        'application/pdf',
+        bytes,
+      );
+    } catch (e) {
+      _toast('Exportul a eșuat: $e');
+    }
+  }
+
   Future<void> _moveToTrash() async {
     await _save();
     await _store.trash(_note);
@@ -516,6 +719,37 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         .attachmentsOf(_note.id)
         .where((a) => !a.isImage)
         .toList();
+
+    if (!_revealed) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.lock_outline, size: 56, color: scheme.primary),
+                const SizedBox(height: 12),
+                Text(
+                  _note.displayTitle,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 6),
+                const Text('Notiță blocată', textAlign: TextAlign.center),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: _unlock,
+                  icon: const Icon(Icons.fingerprint),
+                  label: const Text('Deblochează'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return PopScope(
       onPopInvokedWithResult: (didPop, _) => _save(),
@@ -563,31 +797,76 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                           _showInfo();
                         case 'trash':
                           _moveToTrash();
+                        case 'toc':
+                          _showToc();
+                        case 'link':
+                          _insertNoteLink();
+                        case 'lock':
+                          _toggleLock();
+                        case 'pdf':
+                          _exportPdf();
                       }
                     },
-                    itemBuilder: (_) => const [
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                        value: 'toc',
+                        child: ListTile(
+                          leading: Icon(Icons.toc),
+                          title: Text('Cuprins'),
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'link',
+                        child: ListTile(
+                          leading: Icon(Icons.link),
+                          title: Text('Legătură spre altă notiță'),
+                        ),
+                      ),
                       PopupMenuItem(
+                        value: 'lock',
+                        child: ListTile(
+                          leading: Icon(
+                            _note.locked
+                                ? Icons.lock_open_outlined
+                                : Icons.lock_outline,
+                          ),
+                          title: Text(
+                            _note.locked
+                                ? 'Deblochează notița'
+                                : 'Blochează notița',
+                          ),
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'pdf',
+                        child: ListTile(
+                          leading: Icon(Icons.picture_as_pdf_outlined),
+                          title: Text('Exportă ca PDF'),
+                        ),
+                      ),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem(
                         value: 'tags',
                         child: ListTile(
                           leading: Icon(Icons.sell_outlined),
                           title: Text('Etichete'),
                         ),
                       ),
-                      PopupMenuItem(
+                      const PopupMenuItem(
                         value: 'share',
                         child: ListTile(
                           leading: Icon(Icons.share_outlined),
                           title: Text('Partajează textul'),
                         ),
                       ),
-                      PopupMenuItem(
+                      const PopupMenuItem(
                         value: 'info',
                         child: ListTile(
                           leading: Icon(Icons.info_outline),
                           title: Text('Informații'),
                         ),
                       ),
-                      PopupMenuItem(
+                      const PopupMenuItem(
                         value: 'trash',
                         child: ListTile(
                           leading: Icon(Icons.delete_outline),
@@ -649,6 +928,33 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   onSubmitted: (_) => _editorFocus.requestFocus(),
                 ),
               ),
+              if (_blank && !trashed)
+                SizedBox(
+                  height: 48,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    children: [
+                      Center(
+                        child: Text(
+                          'Șablon:  ',
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                      ),
+                      for (final t in noteTemplates)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Center(
+                            child: ActionChip(
+                              avatar: Icon(t.icon, size: 18),
+                              label: Text(t.name),
+                              onPressed: () => _applyTemplate(t),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               _MetaRow(
                 note: _note,
                 onTags: trashed ? null : _editTags,
@@ -659,11 +965,18 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   controller: _controller,
                   focusNode: _editorFocus,
                   scrollController: _editorScroll,
-                  config: const QuillEditorConfig(
+                  config: QuillEditorConfig(
                     placeholder: 'Începe să scrii…',
-                    padding: EdgeInsets.fromLTRB(16, 12, 16, 96),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
                     expands: true,
-                    embedBuilders: [AttachmentImageEmbedBuilder()],
+                    embedBuilders: const [AttachmentImageEmbedBuilder()],
+                    customLinkPrefixes: const [kNoteLinkPrefix],
+                    // Legăturile spre notițe se deschid direct, fără meniu.
+                    linkActionPickerDelegate: (ctx, link, node) =>
+                        noteIdFromLink(link) != null
+                        ? Future.value(LinkMenuAction.launch)
+                        : defaultLinkActionPickerDelegate(ctx, link, node),
+                    onLaunchUrl: _openLink,
                   ),
                 ),
               ),

@@ -19,6 +19,7 @@ class Note {
     this.trashedAt,
     this.reminderAt,
     this.reminderDone = false,
+    this.locked = false,
   }) : tags = tags ?? [];
 
   final String id;
@@ -33,6 +34,10 @@ class Note {
   DateTime? trashedAt;
   DateTime? reminderAt;
   bool reminderDone;
+
+  /// Notiță blocată: conținutul se vede doar după Face ID / amprentă sau
+  /// parola contului; în liste și căutare apare doar titlul.
+  bool locked;
 
   bool get isTrashed => trashedAt != null;
   bool get hasReminder => reminderAt != null;
@@ -57,6 +62,7 @@ class Note {
     'trashedAt': trashedAt?.millisecondsSinceEpoch,
     'reminderAt': reminderAt?.millisecondsSinceEpoch,
     'reminderDone': reminderDone,
+    'locked': locked,
   };
 
   factory Note.fromMap(Map<dynamic, dynamic> m) => Note(
@@ -72,6 +78,7 @@ class Note {
     trashedAt: _date(m['trashedAt']),
     reminderAt: _date(m['reminderAt']),
     reminderDone: (m['reminderDone'] as bool?) ?? false,
+    locked: (m['locked'] as bool?) ?? false,
   );
 }
 

@@ -63,6 +63,11 @@ dependencies:
   qr_flutter: ^4.1.0
   pdf: ^3.13.1
   image: ^4.12.0
+  printing: ^5.15.1
+  mobile_scanner: ^7.4.2
+  record: ^7.1.2
+  quick_actions: ^1.1.1
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:
@@ -86,6 +91,13 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Fonturi cu diacritice românești pentru exportul PDF.
+  assets:
+    - assets/fonts/NotoSans-Regular.ttf
+    - assets/fonts/NotoSans-Bold.ttf
+    - assets/fonts/NotoSans-Italic.ttf
+    - assets/fonts/NotoSans-BoldItalic.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

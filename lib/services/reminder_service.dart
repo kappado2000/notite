@@ -87,7 +87,10 @@ class ReminderService {
       await _plugin.zonedSchedule(
         id: _idFor(note),
         title: 'Memento: ${note.displayTitle}',
-        body: note.plainText.trim().split('\n').first,
+        // Conținutul notițelor blocate nu apare în notificare.
+        body: note.locked
+            ? 'Notiță blocată'
+            : note.plainText.trim().split('\n').first,
         scheduledDate: tz.TZDateTime.from(at, tz.local),
         payload: note.id,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,

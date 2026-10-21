@@ -6,6 +6,7 @@ import '../data/app_settings.dart';
 import '../data/notes_store.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
+import '../services/data_export.dart';
 import '../services/firestore_sync.dart';
 import '../session.dart';
 import '../widgets/pickers.dart';
@@ -373,6 +374,43 @@ class _AccountTabState extends State<AccountTab> {
                     ),
                 ],
               ),
+            ),
+          ),
+
+          // ---- date
+          const _SectionTitle('Date'),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.backup_outlined),
+                  title: const Text('Exportă backup'),
+                  subtitle: const Text(
+                    'Notițe, carnete și atașamente într-un fișier (fără '
+                    'parole). Fișierul nu e criptat — păstrează-l în siguranță.',
+                  ),
+                  onTap: () => DataExport.shareBackup(context, store),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.settings_backup_restore),
+                  title: const Text('Restaurează din backup'),
+                  subtitle: const Text(
+                    'Adaugă ce lipsește; nu dublează și nu șterge nimic',
+                  ),
+                  onTap: () => DataExport.restoreBackup(context, store),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.picture_as_pdf_outlined),
+                  title: const Text('Toate notițele ca PDF'),
+                  subtitle: const Text('Notițele blocate apar doar cu titlul'),
+                  onTap: () => DataExport.sharePdf(
+                    context,
+                    store,
+                    store.activeNotes,
+                    'Notițe ${DateTime.now().day}.${DateTime.now().month}.${DateTime.now().year}',
+                  ),
+                ),
+              ],
             ),
           ),
 

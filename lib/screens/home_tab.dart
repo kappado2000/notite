@@ -12,6 +12,7 @@ import '../widgets/note_card.dart';
 import '../widgets/notebook_editor.dart';
 import 'note_editor_screen.dart';
 import 'notes_tab.dart';
+import 'qr_scan_screen.dart';
 import 'shell.dart';
 
 /// Pagina de start: acțiuni rapide, recente, mementouri, carnete.
@@ -378,6 +379,16 @@ class _QuickActions extends StatelessWidget {
           () => shell.openNotes(const PinnedView()),
         ),
       (
+        Icons.qr_code_scanner,
+        'Cod QR',
+        neutral,
+        scheme.primary,
+        () async {
+          final note = await scanCodeFlow(context);
+          if (note != null && context.mounted) openNote(context, note);
+        },
+      ),
+      (
         Icons.key_outlined,
         'Parole',
         neutral,
@@ -388,7 +399,7 @@ class _QuickActions extends StatelessWidget {
     return Row(
       children: [
         for (var i = 0; i < actions.length; i++) ...[
-          if (i > 0) const SizedBox(width: 10),
+          if (i > 0) const SizedBox(width: 8),
           Expanded(
             child: Material(
               color: actions[i].$3,

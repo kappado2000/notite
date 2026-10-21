@@ -37,12 +37,14 @@ class NoteCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final nb = store.notebook(note.notebookId);
-    final thumb = store.firstImageOf(note.id);
+    final thumb = note.locked ? null : store.firstImageOf(note.id);
     final thumbBytes = thumb == null || !showImage
         ? null
         : store.bytesOf(thumb.id);
     final attCount = store.attachmentsOf(note.id).length;
-    final body = snippet(note.plainText, max: compact ? 120 : 180);
+    final body = note.locked
+        ? '🔒 Notiță blocată'
+        : snippet(note.plainText, max: compact ? 120 : 180);
     final muted = text.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
 
     final meta = Wrap(
@@ -253,10 +255,12 @@ class NoteRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = context.read<NotesStore>();
     final scheme = Theme.of(context).colorScheme;
-    final thumb = store.firstImageOf(note.id);
+    final thumb = note.locked ? null : store.firstImageOf(note.id);
     final thumbBytes = thumb == null ? null : store.bytesOf(thumb.id);
     final attCount = store.attachmentsOf(note.id).length;
-    final body = snippet(note.plainText, max: 260);
+    final body = note.locked
+        ? '🔒 Notiță blocată'
+        : snippet(note.plainText, max: 260);
     final nb = showNotebook ? store.notebook(note.notebookId) : null;
     // Tipografie după lista Evernote: titlu semi-îngroșat, text normal gri
     // neutru, fără spațiere suplimentară între litere.

@@ -5,6 +5,7 @@ import '../data/notes_store.dart';
 import '../models/note.dart';
 import '../models/notebook.dart';
 import '../screens/note_editor_screen.dart';
+import '../services/data_export.dart';
 import 'notebook_editor.dart';
 import 'pickers.dart';
 
@@ -153,6 +154,19 @@ void showNotebookMenu(
             onTap: () {
               Navigator.pop(ctx);
               editNotebook(context, notebook: nb);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.picture_as_pdf_outlined),
+            title: const Text('Exportă carnetul ca PDF'),
+            onTap: () {
+              Navigator.pop(ctx);
+              DataExport.sharePdf(
+                context,
+                store,
+                store.notesInNotebook(nb.id),
+                nb.name,
+              );
             },
           ),
           ListTile(
