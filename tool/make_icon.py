@@ -95,9 +95,19 @@ def symbol():
     return Image.alpha_composite(book, pen)
 
 
+def centered(sym):
+    """Mută desenul (caiet + pix) exact în centrul pânzei, după conturul
+    lui real — pixul și spirala îl făceau să pară decalat."""
+    left, top, right, bottom = sym.getchannel('A').getbbox()
+    out = Image.new('RGBA', (N, N), CLEAR)
+    out.paste(sym.crop((left, top, right, bottom)),
+              ((N - (right - left)) // 2, (N - (bottom - top)) // 2))
+    return out
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
-    sym = symbol()
+    sym = centered(symbol())
 
     # Iconița completă (iOS, web, Windows): fundal + simbol, fără transparență.
     full = Image.alpha_composite(gradient(), sym)
