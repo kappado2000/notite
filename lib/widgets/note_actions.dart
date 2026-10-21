@@ -240,3 +240,125 @@ void showTagMenu(
     ),
   );
 }
+
+/// Glisare de la dreapta la stânga pentru ștergere, cu confirmare.
+/// Fundal roșu cu iconiță; după ștergere apare „Anulează” (unde se poate).
+class SwipeToDelete extends StatelessWidget {
+  const SwipeToDelete({
+    super.key,
+    required this.id,
+    required this.label,
+    required this.question,
+    required this.onDelete,
+    required this.child,
+    this.icon = Icons.delete_outline,
+    this.doneMessage,
+    this.onUndo,
+  });
+
+  /// Notiță: în Coș (sau definitiv dacă e deja în Coș). Cu [reminderOnly],
+  /// elimină doar mementoul, notița rămâne.
+  factory SwipeToDelete.note({
+    Key? key,
+    required Note note,
+    required Widget child,
+    bool reminderOnly = false,
+  }) {
+    if (reminderOnly) {
+      final previous = note.reminderAt;
+      return SwipeToDelete(
+        key: key,
+        id: 'reminder-${note.id}',
+        label: 'Elimină',
+        icon: Icons.alarm_off,
+        question:
+            'Elimini mementoul pentru „${note.displayTitle}”? '
+            'Notița rămâne.',
+        onDelete: (store) => store.setReminder(note, null),
+        doneMessage: 'Mementoul a fost eliminat',
+        onUndo: (store) => store.setReminder(note, previous),
+        child: child,
+      );
+    }
+    if (note.isTrashed) {
+      return SwipeToDelete(
+        key: key,
+        id: 'note-${note.id}',
+        label: 'Șterge definitiv',
+        icon: Icons.delete_forever_outlined,
+        question:
+            'Ștergi definitiv „${note.displayTitle}”? '
+            'Nu mai poate fi recuperată.',
+        onDelete: (store) => store.deleteForever(note),
+        child: child,
+      );
+    }
+    return SwipeToDelete(
+      key: key,
+      id: 'note-${note.id}',
+      label: 'Șterge',
+      question: 'Ștergi notița „${note.displayTitle}”? Va fi mutată în Coș.',
+      onDelete: (store) => store.trash(note),
+      doneMessage: 'Notița a fost mutată în Coș',
+      onUndo: (store) => store.restore(note),
+      child: child,
+    );
+  }
+
+  final String id;
+  final String label;
+  final IconData icon;
+  final String question;
+  final Future<void> Function(NotesStore store) onDelete;
+  final String? doneMessage;
+  final Future<void> Function(NotesStore store)? onUndo;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Dismissible(
+      key: ValueKey('swipe-$id'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        color: scheme.error,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: scheme.onError),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: scheme.onError,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+      confirmDismiss: (_) => confirm(context, question, action: label),
+      onDismissed: (_) {
+        final store = context.read<NotesStore>();
+        final messenger = ScaffoldMessenger.of(context);
+        onDelete(store);
+        if (doneMessage != null) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(doneMessage!),
+              action: onUndo == null
+                  ? null
+                  : SnackBarAction(
+                      label: 'Anulează',
+                      onPressed: () => onUndo!(store),
+                    ),
+            ),
+          );
+        }
+      },
+      child: child,
+    );
+  }
+}

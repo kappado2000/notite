@@ -153,28 +153,33 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                   SliverToBoxAdapter(
                     child: Card(
+                      clipBehavior: Clip.antiAlias,
                       child: Column(
                         children: [
                           for (final n in upcoming)
-                            ListTile(
-                              leading: Icon(
-                                Icons.alarm,
-                                color: n.reminderAt!.isBefore(DateTime.now())
-                                    ? scheme.error
-                                    : scheme.secondary,
+                            SwipeToDelete.note(
+                              note: n,
+                              reminderOnly: true,
+                              child: ListTile(
+                                leading: Icon(
+                                  Icons.alarm,
+                                  color: n.reminderAt!.isBefore(DateTime.now())
+                                      ? scheme.error
+                                      : scheme.secondary,
+                                ),
+                                title: Text(
+                                  n.displayTitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(formatDateTime(n.reminderAt!)),
+                                trailing: IconButton(
+                                  tooltip: 'Marchează ca făcut',
+                                  icon: const Icon(Icons.check_circle_outline),
+                                  onPressed: () => store.toggleReminderDone(n),
+                                ),
+                                onTap: () => openNote(context, n),
                               ),
-                              title: Text(
-                                n.displayTitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(formatDateTime(n.reminderAt!)),
-                              trailing: IconButton(
-                                tooltip: 'Marchează ca făcut',
-                                icon: const Icon(Icons.check_circle_outline),
-                                onPressed: () => store.toggleReminderDone(n),
-                              ),
-                              onTap: () => openNote(context, n),
                             ),
                         ],
                       ),
@@ -190,7 +195,7 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                   SliverToBoxAdapter(
                     child: SizedBox(
-                      height: 172,
+                      height: 52 + MediaQuery.textScalerOf(context).scale(120),
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         clipBehavior: Clip.none,
@@ -221,9 +226,11 @@ class _HomeTabState extends State<HomeTab> {
                   onAction: () => editNotebook(context),
                 ),
                 SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  // Înălțimea crește odată cu mărimea textului (Cont → Aspect).
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 220,
-                    mainAxisExtent: 104,
+                    mainAxisExtent:
+                        62 + MediaQuery.textScalerOf(context).scale(44),
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 10,
                   ),
@@ -280,10 +287,16 @@ class _HomeTabState extends State<HomeTab> {
         sliver: SliverList.separated(
           itemCount: results.length,
           separatorBuilder: (_, _) => const SizedBox(height: 10),
-          itemBuilder: (_, i) => NoteCard(
-            note: results[i],
-            onTap: () => openNote(context, results[i]),
-            onLongPress: () => showNoteActions(context, results[i]),
+          itemBuilder: (_, i) => ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: SwipeToDelete.note(
+              note: results[i],
+              child: NoteCard(
+                note: results[i],
+                onTap: () => openNote(context, results[i]),
+                onLongPress: () => showNoteActions(context, results[i]),
+              ),
+            ),
           ),
         ),
       ),
@@ -469,15 +482,20 @@ class _NotebookTile extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    tooltip: 'Redenumește',
-                    visualDensity: VisualDensity.compact,
-                    icon: Icon(
-                      Icons.edit_outlined,
-                      size: 18,
-                      color: scheme.onSurfaceVariant,
+                  InkResponse(
+                    onTap: onRename,
+                    radius: 20,
+                    child: Tooltip(
+                      message: 'Redenumește',
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Icon(
+                          Icons.edit_outlined,
+                          size: 18,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
-                    onPressed: onRename,
                   ),
                 ],
               ),

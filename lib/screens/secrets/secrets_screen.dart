@@ -8,6 +8,7 @@ import '../../services/firestore_sync.dart';
 import '../../services/password_tools.dart';
 import '../../services/vault.dart';
 import '../../session.dart';
+import '../../widgets/note_actions.dart';
 import '../shell.dart';
 import 'password_health_screen.dart';
 import 'secret_detail_screen.dart';
@@ -358,7 +359,17 @@ class _SecretsScreenState extends State<SecretsScreen>
               : ListView.builder(
                   padding: EdgeInsets.only(bottom: bottomSpace(context)),
                   itemCount: items.length,
-                  itemBuilder: (_, i) => SecretTile(item: items[i]),
+                  itemBuilder: (_, i) => SwipeToDelete(
+                    id: 'secret-${items[i].id}',
+                    label: 'Șterge',
+                    question:
+                        'Ștergi „${items[i].displayTitle}”? Datele salvate '
+                        'vor fi șterse definitiv.',
+                    onDelete: (store) => store.deleteSecret(items[i]),
+                    doneMessage: 'Șters',
+                    onUndo: (store) => store.saveSecret(items[i].copy()),
+                    child: SecretTile(item: items[i]),
+                  ),
                 ),
         ),
       ],

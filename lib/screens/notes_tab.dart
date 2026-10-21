@@ -356,12 +356,16 @@ class _NotesTabState extends State<NotesTab> {
                     padding: EdgeInsets.only(bottom: bottomSpace(context)),
                     itemCount: notes.length,
                     separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (_, i) => NoteRow(
+                    itemBuilder: (_, i) => SwipeToDelete.note(
                       note: notes[i],
-                      showNotebook: _view is! NotebookView,
-                      onTap: () => openNote(context, notes[i]),
-                      onLongPress: () => showNoteActions(context, notes[i]),
-                      leading: _reminderCheck(notes[i]),
+                      reminderOnly: _view is RemindersView,
+                      child: NoteRow(
+                        note: notes[i],
+                        showNotebook: _view is! NotebookView,
+                        onTap: () => openNote(context, notes[i]),
+                        onLongPress: () => showNoteActions(context, notes[i]),
+                        leading: _reminderCheck(notes[i]),
+                      ),
                     ),
                   ),
           ),
