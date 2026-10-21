@@ -14,6 +14,7 @@ import '../models/attachment.dart';
 import '../models/note.dart';
 import '../services/file_opener.dart';
 import '../services/pdf_builder.dart';
+import '../services/scan_enhance.dart';
 import '../services/scan_service.dart';
 import '../utils/format.dart';
 import '../widgets/attachment_image_embed.dart';
@@ -236,8 +237,13 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     try {
       final pages = await ScanService.scan();
       if (pages.isEmpty || !mounted) return;
-      final choice = await _askScanOutput(pages);
-      if (choice == null) return;
+      final result = await _askScanOutput(pages);
+      if (result == null) return;
+      final choice = result.output;
+      // Filtrul de scaner (fundal alb, fără umbre) pentru PDF și imagini.
+      final processed = choice == _ScanOutput.text
+          ? <Uint8List>[]
+          : [for (final p in pages) await enhanceScan(p.bytes, result.filter)];
       final text = pages
           .map((p) => p.text.trim())
           .where((t) => t.isNotEmpty)
@@ -246,15 +252,17 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         _title.text = 'Scanare ${formatShortDate(DateTime.now())}';
       }
       if (choice == _ScanOutput.images) {
-        for (final p in pages) {
-          await _addImageBytes(p.name, p.bytes, ocr: p.text);
+        for (var i = 0; i < pages.length; i++) {
+          final name = pages[i].name.replaceAll(RegExp(r'\.\w+$'), '.jpg');
+          await _addImageBytes(name, processed[i], ocr: pages[i].text);
         }
       }
       if (choice == _ScanOutput.pdf || choice == _ScanOutput.pdfAndText) {
         final name = '${_title.text.trim()}.pdf';
-        final pdf = await buildPdfFromImages([
-          for (final p in pages) p.bytes,
-        ], title: _title.text.trim());
+        final pdf = await buildPdfFromImages(
+          processed,
+          title: _title.text.trim(),
+        );
         // Textul recunoscut rămâne căutabil și pentru PDF.
         await _store.addAttachment(
           noteId: _note.id,
@@ -285,58 +293,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     }
   }
 
-  /// După scanare: PDF, text, ambele sau imaginile în notiță.
-  Future<_ScanOutput?> _askScanOutput(List<ScannedPage> pages) {
-    final withText = pages.where((p) => p.text.trim().isNotEmpty).length;
-    return showModalBottomSheet<_ScanOutput>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: Text(
-                pages.length == 1
-                    ? 'Ce faci cu pagina scanată?'
-                    : 'Ce faci cu cele ${pages.length} pagini scanate?',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                withText > 0
-                    ? 'Text recunoscut în $withText din ${pages.length} pagini'
-                    : 'Nu s-a recunoscut text',
-              ),
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.picture_as_pdf_outlined),
-              title: const Text('Salvează ca PDF'),
-              subtitle: const Text('Un fișier cu toate paginile, atașat'),
-              onTap: () => Navigator.pop(ctx, _ScanOutput.pdf),
-            ),
-            ListTile(
-              leading: const Icon(Icons.text_snippet_outlined),
-              title: const Text('Extrage doar textul'),
-              subtitle: const Text('Textul recunoscut, editabil în notiță'),
-              enabled: withText > 0,
-              onTap: () => Navigator.pop(ctx, _ScanOutput.text),
-            ),
-            ListTile(
-              leading: const Icon(Icons.library_add_outlined),
-              title: const Text('PDF + text'),
-              enabled: withText > 0,
-              onTap: () => Navigator.pop(ctx, _ScanOutput.pdfAndText),
-            ),
-            ListTile(
-              leading: const Icon(Icons.image_outlined),
-              title: const Text('Imagini în notiță'),
-              onTap: () => Navigator.pop(ctx, _ScanOutput.images),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  /// După scanare: filtrul de scaner și ce se salvează (PDF, text, …).
+  Future<({_ScanOutput output, ScanFilter filter})?> _askScanOutput(
+    List<ScannedPage> pages,
+  ) => showModalBottomSheet<({_ScanOutput output, ScanFilter filter})>(
+    context: context,
+    isScrollControlled: true,
+    builder: (_) => _ScanOutputSheet(pages: pages),
+  );
 
   /// Inserează text la poziția cursorului (sau la final).
   void _insertText(String text) {
@@ -873,6 +837,121 @@ class _FilesBar extends StatelessWidget {
                   },
           );
         },
+      ),
+    );
+  }
+}
+
+/// Panoul de după scanare: alegerea filtrului (cu previzualizarea primei
+/// pagini) și a rezultatului.
+class _ScanOutputSheet extends StatefulWidget {
+  const _ScanOutputSheet({required this.pages});
+  final List<ScannedPage> pages;
+
+  @override
+  State<_ScanOutputSheet> createState() => _ScanOutputSheetState();
+}
+
+class _ScanOutputSheetState extends State<_ScanOutputSheet> {
+  ScanFilter _filter = ScanFilter.document;
+  final _previews = <ScanFilter, Uint8List>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _preview(_filter);
+  }
+
+  Future<void> _preview(ScanFilter f) async {
+    if (_previews.containsKey(f)) return;
+    final bytes = await enhanceScan(widget.pages.first.bytes, f, maxSide: 900);
+    if (mounted) setState(() => _previews[f] = bytes);
+  }
+
+  void _pick(_ScanOutput output) =>
+      Navigator.pop(context, (output: output, filter: _filter));
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = widget.pages;
+    final withText = pages.where((p) => p.text.trim().isNotEmpty).length;
+    final scheme = Theme.of(context).colorScheme;
+    final preview = _previews[_filter];
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              pages.length == 1
+                  ? 'Pagina scanată'
+                  : '${pages.length} pagini scanate',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              height: 240,
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: preview == null
+                  ? const CircularProgressIndicator()
+                  : ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(preview, fit: BoxFit.contain),
+                    ),
+            ),
+            const SizedBox(height: 12),
+            SegmentedButton<ScanFilter>(
+              showSelectedIcon: false,
+              segments: [
+                for (final f in ScanFilter.values)
+                  ButtonSegment(value: f, label: Text(f.label)),
+              ],
+              selected: {_filter},
+              onSelectionChanged: (s) {
+                setState(() => _filter = s.first);
+                _preview(s.first);
+              },
+            ),
+            const SizedBox(height: 4),
+            Text(
+              withText > 0
+                  ? 'Text recunoscut în $withText din ${pages.length} pagini'
+                  : 'Nu s-a recunoscut text',
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+            ),
+            const Divider(height: 24),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf_outlined),
+              title: const Text('Salvează ca PDF'),
+              subtitle: const Text('Un fișier cu toate paginile, atașat'),
+              onTap: () => _pick(_ScanOutput.pdf),
+            ),
+            ListTile(
+              leading: const Icon(Icons.text_snippet_outlined),
+              title: const Text('Extrage doar textul'),
+              subtitle: const Text('Textul recunoscut, editabil în notiță'),
+              enabled: withText > 0,
+              onTap: () => _pick(_ScanOutput.text),
+            ),
+            ListTile(
+              leading: const Icon(Icons.library_add_outlined),
+              title: const Text('PDF + text'),
+              enabled: withText > 0,
+              onTap: () => _pick(_ScanOutput.pdfAndText),
+            ),
+            ListTile(
+              leading: const Icon(Icons.image_outlined),
+              title: const Text('Imagini în notiță'),
+              onTap: () => _pick(_ScanOutput.images),
+            ),
+          ],
+        ),
       ),
     );
   }
