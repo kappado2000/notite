@@ -638,6 +638,18 @@ class NotesStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ------------------------------------------------- semnătura salvată
+
+  /// Semnătura desenată pentru PDF-uri, păstrată criptat doar pe acest
+  /// dispozitiv (nu se sincronizează și nu intră în backup).
+  static const _signatureKey = '_semnatura';
+
+  Uint8List? get savedSignature => _blobsBox.get(_signatureKey);
+
+  Future<void> saveSignature(Uint8List? png) => png == null
+      ? _blobsBox.delete(_signatureKey)
+      : _blobsBox.put(_signatureKey, png);
+
   // ------------------------------------------------------- backup local
 
   /// Datele contului pentru un fișier de backup (fără parole: fișierul nu

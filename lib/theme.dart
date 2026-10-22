@@ -251,6 +251,7 @@ ThemeData buildTheme(Brightness brightness) {
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: s.surface,
+      iconColor: s.primary,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     ),

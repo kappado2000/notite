@@ -1,4 +1,5 @@
 import Flutter
+import Speech
 import UIKit
 
 @main
@@ -14,6 +15,89 @@ import UIKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "IncomingFilesPlugin") {
       IncomingFilesPlugin.register(with: registrar)
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SpeechTranscriber") {
+      SpeechTranscriber.register(with: registrar)
+    }
+  }
+}
+
+/// Transcrie notițele vocale cu recunoașterea vocală Apple
+/// (canalul `notite/speech`). Pe telefon când iOS o permite pentru limbă,
+/// altfel prin serviciul Apple.
+class SpeechTranscriber: NSObject, FlutterPlugin {
+  private var task: SFSpeechRecognitionTask?
+  private var recognizer: SFSpeechRecognizer?
+
+  static func register(with registrar: FlutterPluginRegistrar) {
+    let channel = FlutterMethodChannel(
+      name: "notite/speech", binaryMessenger: registrar.messenger())
+    registrar.addMethodCallDelegate(SpeechTranscriber(), channel: channel)
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard call.method == "transcribe",
+      let args = call.arguments as? [String: Any],
+      let path = args["path"] as? String
+    else {
+      result(FlutterMethodNotImplemented)
+      return
+    }
+    let localeId = (args["locale"] as? String) ?? "ro-RO"
+    SFSpeechRecognizer.requestAuthorization { status in
+      DispatchQueue.main.async {
+        guard status == .authorized else {
+          result(
+            FlutterError(
+              code: "denied",
+              message: "Permite recunoașterea vocală din Setări → Notițe.",
+              details: nil))
+          return
+        }
+        self.run(path: path, localeId: localeId, result: result)
+      }
+    }
+  }
+
+  private func run(path: String, localeId: String, result: @escaping FlutterResult) {
+    guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: localeId)),
+      recognizer.isAvailable
+    else {
+      result(
+        FlutterError(
+          code: "unavailable",
+          message: "Recunoașterea vocală în română nu e disponibilă acum.",
+          details: nil))
+      return
+    }
+    self.recognizer = recognizer
+    let request = SFSpeechURLRecognitionRequest(url: URL(fileURLWithPath: path))
+    request.shouldReportPartialResults = false
+    let onDevice = recognizer.supportsOnDeviceRecognition
+    if onDevice { request.requiresOnDeviceRecognition = true }
+    var finished = false
+    task = recognizer.recognitionTask(with: request) { res, error in
+      DispatchQueue.main.async {
+        if finished { return }
+        if let res = res, res.isFinal {
+          finished = true
+          result(["text": res.bestTranscription.formattedString, "onDevice": onDevice])
+          self.task = nil
+        } else if let error = error {
+          finished = true
+          // Fără vorbire în înregistrare → text gol, nu eroare.
+          let nsError = error as NSError
+          if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1110 {
+            result(["text": "", "onDevice": onDevice])
+          } else {
+            result(
+              FlutterError(
+                code: "failed", message: "Transcrierea a eșuat: \(error.localizedDescription)",
+                details: nil))
+          }
+          self.task = nil
+        }
+      }
     }
   }
 }

@@ -14,10 +14,13 @@ import 'screens/lock_screen.dart';
 import 'screens/note_editor_screen.dart';
 import 'services/auth_service.dart';
 import 'services/biometric_service.dart';
+import 'screens/qr_scan_screen.dart';
 import 'services/firestore_sync.dart';
+import 'services/home_shortcuts.dart';
 import 'services/incoming_files.dart';
 import 'services/reminder_service.dart';
 import 'services/vault.dart';
+import 'widgets/note_actions.dart';
 
 /// Starea sesiunii unui cont logat: blocare biometrică și sincronizare.
 class Session extends ChangeNotifier {
@@ -181,6 +184,30 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
         });
       }
       ..attach(store);
+    // Acțiunile rapide de pe iconiță (apăsare lungă).
+    HomeShortcuts.init((shortcut) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final ctx = _navigatorKey.currentContext;
+        if (ctx == null || !ctx.mounted) return;
+        switch (shortcut) {
+          case HomeShortcut.note:
+            await createAndOpenNote(ctx);
+          case HomeShortcut.list:
+            await createAndOpenNote(ctx, checklist: true);
+          case HomeShortcut.scan:
+            final note = await store.createNote();
+            await _navigatorKey.currentState?.push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    NoteEditorScreen(noteId: note.id, startWithScan: true),
+              ),
+            );
+          case HomeShortcut.qr:
+            final note = await scanCodeFlow(ctx);
+            if (note != null && ctx.mounted) await openNote(ctx, note);
+        }
+      });
+    });
     if (!session.biometricEnabled && !session.biometricOffered) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _offerBiometric());
     }

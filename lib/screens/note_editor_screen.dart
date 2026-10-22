@@ -4,9 +4,11 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -18,10 +20,13 @@ import '../services/file_opener.dart';
 import '../models/note_template.dart';
 import '../services/note_pdf.dart';
 import '../services/pdf_builder.dart';
+import '../services/voice_service.dart';
+import '../widgets/voice_recorder_sheet.dart';
 import '../services/scan_enhance.dart';
 import '../services/scan_service.dart';
 import '../utils/format.dart';
 import '../widgets/attachment_image_embed.dart';
+import 'pdf_sign_screen.dart';
 import 'qr_scan_screen.dart';
 import '../widgets/identity_check.dart';
 import '../widgets/note_links.dart';
@@ -51,6 +56,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   late final QuillController _controller;
   late final TextEditingController _title;
   final _editorFocus = FocusNode();
+  final _editorKey = GlobalKey();
   final _editorScroll = ScrollController();
   StreamSubscription? _docSub;
   Timer? _debounce;
@@ -329,6 +335,45 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     builder: (_) => _ScanOutputSheet(pages: pages),
   );
 
+  /// Notă vocală: înregistrare → atașament → transcriere inserată în text
+  /// (și căutabilă, prin textul atașamentului).
+  Future<void> _recordVoice() async {
+    final rec = await recordVoiceNote(context);
+    if (rec == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final bytes = await XFile(rec.path).readAsBytes();
+      final stamp = DateFormat('dd.MM.yyyy HH-mm').format(DateTime.now());
+      final att = await _store.addAttachment(
+        noteId: _note.id,
+        name: 'Notă vocală $stamp.m4a',
+        bytes: bytes,
+        mime: 'audio/mp4',
+      );
+      if (mounted) setState(() {});
+      if (!VoiceService.transcriptionSupported) return;
+      _toast('Se transcrie înregistrarea…');
+      final result = await VoiceService.transcribe(rec.path);
+      if (result.text.isEmpty) {
+        _toast('Nu s-a recunoscut vorbire în înregistrare');
+        return;
+      }
+      await _store.setOcrText(att, result.text);
+      _insertText('🎤 ${result.text}\n');
+      _toast(
+        result.onDevice
+            ? 'Transcriere adăugată (făcută pe telefon)'
+            : 'Transcriere adăugată (făcută de serviciul Apple)',
+      );
+    } on PlatformException catch (e) {
+      _toast(e.message ?? 'Transcrierea a eșuat');
+    } catch (e) {
+      _toast('Nota vocală nu a putut fi salvată: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _insertScannedCode() async {
     final code = await scanCode(context);
     if (code == null || !mounted) return;
@@ -425,6 +470,20 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 _pickImages();
               },
             ),
+            if (VoiceService.recordingSupported)
+              ListTile(
+                leading: const Icon(Icons.mic_none),
+                title: const Text('Notă vocală'),
+                subtitle: Text(
+                  VoiceService.transcriptionSupported
+                      ? 'Înregistrare + transcriere automată în text'
+                      : 'Înregistrare audio atașată',
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _recordVoice();
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.qr_code_scanner),
               title: const Text('Cod QR / de bare'),
@@ -543,6 +602,13 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
       ChangeSource.local,
     );
     if (_title.text.trim().isEmpty) _title.text = t.title(DateTime.now());
+    // Cursorul la finalul primului rând (ex. după „Participanți: ”),
+    // ca scrisul să continue șablonul, nu să-l preceadă.
+    final firstLineEnd = _controller.document.toPlainText().indexOf('\n');
+    _controller.updateSelection(
+      TextSelection.collapsed(offset: firstLineEnd < 0 ? 0 : firstLineEnd),
+      ChangeSource.local,
+    );
     _editorFocus.requestFocus();
   }
 
@@ -928,8 +994,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   onSubmitted: (_) => _editorFocus.requestFocus(),
                 ),
               ),
-              if (_blank && !trashed)
-                SizedBox(
+              // Mereu prezent în arbore (doar ascuns): altfel dispariția lui
+              // ar muta pozițiile din coloană și editorul s-ar reconstrui.
+              Visibility(
+                visible: _blank && !trashed,
+                child: SizedBox(
                   height: 48,
                   child: ListView(
                     scrollDirection: Axis.horizontal,
@@ -955,6 +1024,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                     ],
                   ),
                 ),
+              ),
               _MetaRow(
                 note: _note,
                 onTags: trashed ? null : _editTags,
@@ -962,6 +1032,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               ),
               Expanded(
                 child: QuillEditor(
+                  key: _editorKey,
                   controller: _controller,
                   focusNode: _editorFocus,
                   scrollController: _editorScroll,
@@ -971,6 +1042,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                     expands: true,
                     embedBuilders: const [AttachmentImageEmbedBuilder()],
                     customLinkPrefixes: const [kNoteLinkPrefix],
+                    // Linkurile în culoarea de accent (varianta sobră).
+                    customStyles: DefaultStyles(
+                      link: TextStyle(
+                        color: scheme.primary,
+                        decoration: TextDecoration.underline,
+                        decorationColor: scheme.primary,
+                      ),
+                    ),
                     // Legăturile spre notițe se deschid direct, fără meniu.
                     linkActionPickerDelegate: (ctx, link, node) =>
                         noteIdFromLink(link) != null
@@ -1106,6 +1185,7 @@ class _FilesBar extends StatelessWidget {
 
   IconData _icon(Attachment a) {
     if (a.mime == 'application/pdf') return Icons.picture_as_pdf_outlined;
+    if (a.mime.startsWith('audio/')) return Icons.mic_none;
     if (a.mime.contains('sheet') || a.mime.contains('excel')) {
       return Icons.table_chart_outlined;
     }
@@ -1137,7 +1217,60 @@ class _FilesBar extends StatelessWidget {
             label: Text('${a.name}  ·  ${formatSize(a.size)}'),
             onPressed: () {
               final bytes = store.bytesOf(a.id);
-              if (bytes != null) FileOpener.open(a.name, a.mime, bytes);
+              if (bytes == null) return;
+              if (a.mime != 'application/pdf') {
+                FileOpener.open(a.name, a.mime, bytes);
+                return;
+              }
+              // PDF: deschidere, semnare, partajare
+              showModalBottomSheet(
+                context: context,
+                builder: (ctx) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.picture_as_pdf_outlined),
+                        title: Text(a.name),
+                        subtitle: Text(formatSize(a.size)),
+                      ),
+                      const Divider(),
+                      ListTile(
+                        leading: const Icon(Icons.open_in_new),
+                        title: const Text('Deschide'),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          FileOpener.open(a.name, a.mime, bytes);
+                        },
+                      ),
+                      if (onRemove != null)
+                        ListTile(
+                          leading: const Icon(Icons.draw_outlined),
+                          title: const Text('Semnează'),
+                          subtitle: const Text(
+                            'Se creează o copie semnată; originalul rămâne',
+                          ),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => PdfSignScreen(attachment: a),
+                              ),
+                            );
+                          },
+                        ),
+                      ListTile(
+                        leading: const Icon(Icons.ios_share),
+                        title: const Text('Partajează'),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          FileOpener.share(a.name, a.mime, bytes);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              );
             },
             onDeleted: onRemove == null
                 ? null

@@ -215,7 +215,12 @@ pw.Widget _paragraph(List<pw.InlineSpan> spans, Map attrs, int ordered) {
 pw.Widget _withMarker(pw.Widget marker, pw.Widget body) => pw.Row(
   crossAxisAlignment: pw.CrossAxisAlignment.start,
   children: [
-    pw.SizedBox(width: 18, child: marker),
+    // Align: marcajul își păstrează mărimea (altfel pătrățelul de bifat
+    // se întinde pe toată lățimea rezervată).
+    pw.SizedBox(
+      width: 18,
+      child: pw.Align(alignment: pw.Alignment.topLeft, child: marker),
+    ),
     pw.Expanded(child: body),
   ],
 );

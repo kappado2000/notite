@@ -13,6 +13,7 @@ import 'data/app_settings.dart';
 import 'data/notes_store.dart';
 import 'models/secret_item.dart';
 import 'screens/shell.dart';
+import 'services/note_pdf.dart';
 import 'session.dart';
 
 Future<void> main() async {
@@ -164,4 +165,15 @@ Future<void> _seedDemo(NotesStore store) async {
   for (final s in [gmail, bank, wifi, card]) {
     await store.saveSecret(s);
   }
+
+  // Un PDF atașat, ca să se poată încerca semnarea.
+  final meeting = store.activeNotes.firstWhere(
+    (n) => n.title.startsWith('Ședință'),
+  );
+  await store.addAttachment(
+    noteId: meeting.id,
+    name: 'Contract demo.pdf',
+    bytes: await notesToPdf([meeting], store, title: 'Contract demo'),
+    mime: 'application/pdf',
+  );
 }

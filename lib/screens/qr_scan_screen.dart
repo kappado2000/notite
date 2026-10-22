@@ -68,6 +68,9 @@ class _QrScanScreenState extends State<QrScanScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        // Stilul global al titlului are culoare închisă; pe negru, alb.
+        titleTextStyle: Theme.of(context).appBarTheme.titleTextStyle
+            ?.copyWith(color: Colors.white),
         title: const Text('Citește cod QR / de bare'),
         actions: [
           IconButton(

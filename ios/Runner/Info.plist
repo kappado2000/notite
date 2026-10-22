@@ -4,6 +4,10 @@
 <dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Face ID e folosit pentru deblocarea rapidă a notițelor.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microfonul e folosit pentru notițele vocale.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Recunoașterea vocală transformă notițele vocale în text.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera e folosită pentru fotografii și scanarea documentelor în notițe.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

@@ -21,6 +21,9 @@ class ImageViewerScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        // Stilul global al titlului are culoare închisă; pe negru, alb.
+        titleTextStyle: Theme.of(context).appBarTheme.titleTextStyle
+            ?.copyWith(color: Colors.white),
         title: Text(att?.name ?? ''),
         actions: [
           if (att != null && bytes != null)
