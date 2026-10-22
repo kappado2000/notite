@@ -12,6 +12,7 @@ import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
 import 'services/reminder_service.dart';
+import 'services/privacy_shield.dart';
 import 'session.dart';
 
 Future<void> main() async {
@@ -19,6 +20,7 @@ Future<void> main() async {
   await initializeDateFormatting('ro');
   await Hive.initFlutter('notite');
   final settings = AppSettings(await Hive.openBox('settings'));
+  await PrivacyShield.apply(settings.hideInSwitcher);
   await ReminderService.instance.init();
 
   String? firebaseError;

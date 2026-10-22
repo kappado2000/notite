@@ -5,6 +5,7 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/note.dart';
+import '../models/secret_item.dart';
 
 /// Programează notificări locale pentru mementourile notițelor.
 /// Pe platformele fără suport, eșuează silențios — mementoul rămâne
@@ -108,6 +109,72 @@ class ReminderService {
       );
     } catch (e) {
       debugPrint('ReminderService.sync: $e');
+    }
+  }
+
+  int _idForSecret(String id) => ('secret:$id').hashCode & 0x7fffffff;
+
+  /// Cu câte zile înainte de expirare vine mementoul.
+  static const secretLeadDays = 30;
+
+  /// Momentul mementoului pentru o intrare care expiră: cu 30 de zile
+  /// înainte, la 10:00; dacă a trecut deja, în ziua expirării.
+  static DateTime? secretReminderAt(SecretItem item, {DateTime? now}) {
+    final exp = item.expiresOn;
+    if (exp == null) return null;
+    final t = now ?? DateTime.now();
+    final early = DateTime(exp.year, exp.month, exp.day - secretLeadDays, 10);
+    if (early.isAfter(t)) return early;
+    final onDay = DateTime(exp.year, exp.month, exp.day, 10);
+    return onDay.isAfter(t) ? onDay : null;
+  }
+
+  /// Memento pentru expirarea cardurilor, actelor, reînnoirea abonamentelor.
+  /// Notificarea nu conține date sensibile (fără numere).
+  Future<void> syncSecret(SecretItem item) async {
+    if (!_ready) return;
+    try {
+      final id = _idForSecret(item.id);
+      await _plugin.cancel(id: id);
+      final at = secretReminderAt(item);
+      if (at == null) return;
+      final exp = item.expiresOn!;
+      final date =
+          '${exp.day.toString().padLeft(2, '0')}.'
+          '${exp.month.toString().padLeft(2, '0')}.${exp.year}';
+      final what = switch (item.type) {
+        SecretType.subscription => 'Se reînnoiește pe $date',
+        _ => 'Expiră pe $date',
+      };
+      await _requestPermissions();
+      await _plugin.zonedSchedule(
+        id: id,
+        title: item.displayTitle,
+        body: '$what — reînnoiește din timp.',
+        scheduledDate: tz.TZDateTime.from(at, tz.local),
+        payload: 'secret:${item.id}',
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'expirari',
+            'Expirări',
+            channelDescription: 'Carduri, acte și abonamente care expiră',
+          ),
+          iOS: DarwinNotificationDetails(),
+          windows: WindowsNotificationDetails(),
+        ),
+      );
+    } catch (e) {
+      debugPrint('ReminderService.syncSecret: $e');
+    }
+  }
+
+  Future<void> cancelSecret(String id) async {
+    if (!_ready) return;
+    try {
+      await _plugin.cancel(id: _idForSecret(id));
+    } catch (e) {
+      debugPrint('ReminderService.cancelSecret: $e');
     }
   }
 

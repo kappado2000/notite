@@ -95,7 +95,12 @@ class PasswordReport {
 
   static PasswordReport of(Iterable<SecretItem> items) {
     final logins = items
-        .where((i) => i.type == SecretType.login && i.password.isNotEmpty)
+        .where(
+          (i) =>
+              (i.type == SecretType.login ||
+                  i.type == SecretType.subscription) &&
+              i.password.isNotEmpty,
+        )
         .toList();
     final byPassword = <String, List<SecretItem>>{};
     for (final i in logins) {

@@ -68,6 +68,7 @@ dependencies:
   record: ^7.1.2
   quick_actions: ^1.1.1
   url_launcher: ^6.3.3
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:

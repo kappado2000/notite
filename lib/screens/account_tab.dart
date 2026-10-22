@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,7 @@ import '../data/app_settings.dart';
 import '../data/notes_store.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
+import '../services/privacy_shield.dart';
 import '../services/data_export.dart';
 import '../services/firestore_sync.dart';
 import '../session.dart';
@@ -224,6 +226,22 @@ class _AccountTabState extends State<AccountTab> {
                     leading: Icon(Icons.fingerprint),
                     title: Text('Deblocare biometrică'),
                     subtitle: Text('Indisponibilă pe acest dispozitiv'),
+                  ),
+                if (PrivacyShield.supported)
+                  SwitchListTile(
+                    secondary: const Icon(Icons.visibility_off_outlined),
+                    title: const Text('Ascunde în comutatorul de aplicații'),
+                    subtitle: Text(
+                      defaultTargetPlatform == TargetPlatform.android
+                          ? 'Previzualizare goală; blochează și capturile '
+                                'de ecran'
+                          : 'Ecranul e estompat când ieși din aplicație',
+                    ),
+                    value: settings.hideInSwitcher,
+                    onChanged: (v) {
+                      settings.hideInSwitcher = v;
+                      PrivacyShield.apply(v);
+                    },
                   ),
                 ListTile(
                   leading: const Icon(Icons.key_outlined),

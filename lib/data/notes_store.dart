@@ -662,8 +662,9 @@ class NotesStore extends ChangeNotifier {
     'notes': [for (final n in _notes.values) n.toMap()],
     'attachments': [
       for (final a in _attachments.values)
-        if (_blobsBox.get(a.id) case final bytes?)
-          {...a.toMap(), 'data': base64Encode(bytes)},
+        if (!a.noteId.startsWith('secret:'))
+          if (_blobsBox.get(a.id) case final bytes?)
+            {...a.toMap(), 'data': base64Encode(bytes)},
     ],
   };
 
@@ -751,11 +752,30 @@ class NotesStore extends ChangeNotifier {
     final previous = _secrets[item.id];
     if (previous != null && previous.password != item.password) {
       item.passwordChangedAt = DateTime.now();
+      // Istoric: parola veche intră prima în listă (max. 10).
+      if (previous.password.isNotEmpty) {
+        item.passwordHistory = [
+          PasswordVersion(previous.password, DateTime.now()),
+          ...previous.passwordHistory.where((p) => p.password != item.password),
+        ].take(10).toList();
+      }
     }
     item.updatedAt = DateTime.now();
     _secrets[item.id] = item;
     await _secretsBox.put(item.id, item.toMap());
     sync?.secretChanged(item);
+    await ReminderService.instance.syncSecret(item);
+    notifyListeners();
+  }
+
+  /// Adaugă mai multe intrări odată (import CSV).
+  Future<void> addSecrets(List<SecretItem> items) async {
+    if (_closed) return;
+    for (final item in items) {
+      _secrets[item.id] = item;
+      await _secretsBox.put(item.id, item.toMap());
+      sync?.secretChanged(item);
+    }
     notifyListeners();
   }
 
@@ -764,6 +784,10 @@ class NotesStore extends ChangeNotifier {
     _secrets.remove(item.id);
     await _secretsBox.delete(item.id);
     sync?.secretDeleted(item.id);
+    await ReminderService.instance.cancelSecret(item.id);
+    for (final a in attachmentsOf(item.attachmentOwnerId)) {
+      await _removeAttachmentData(a);
+    }
     notifyListeners();
   }
 
@@ -775,12 +799,14 @@ class NotesStore extends ChangeNotifier {
     if (local != null && !remote.updatedAt.isAfter(local.updatedAt)) return;
     _secrets[remote.id] = remote;
     await _secretsBox.put(remote.id, remote.toMap());
+    await ReminderService.instance.syncSecret(remote);
     notifyListeners();
   }
 
   Future<void> applyRemoteSecretDeleted(String id) async {
     if (_secrets.remove(id) == null) return;
     await _secretsBox.delete(id);
+    await ReminderService.instance.cancelSecret(id);
     notifyListeners();
   }
 }

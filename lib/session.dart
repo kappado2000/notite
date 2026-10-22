@@ -19,6 +19,7 @@ import 'services/firestore_sync.dart';
 import 'services/home_shortcuts.dart';
 import 'services/incoming_files.dart';
 import 'services/reminder_service.dart';
+import 'screens/secrets/secrets_screen.dart';
 import 'services/vault.dart';
 import 'widgets/note_actions.dart';
 
@@ -158,6 +159,13 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
     );
     session.locked = session.biometricEnabled;
     ReminderService.instance.onOpenNote = (id) {
+      if (id.startsWith('secret:')) {
+        // Expirare card/act/abonament: secțiunea Parole (cu deblocare).
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => const SecretsScreen()),
+        );
+        return;
+      }
       if (store.note(id) == null) return;
       _navigatorKey.currentState?.push(
         MaterialPageRoute(builder: (_) => NoteEditorScreen(noteId: id)),

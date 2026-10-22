@@ -38,6 +38,13 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Conținutul ascuns în comutatorul de aplicații (implicit pornit).
+  bool get hideInSwitcher => (_box.get('hideInSwitcher') as bool?) ?? true;
+  set hideInSwitcher(bool v) {
+    _box.put('hideInSwitcher', v);
+    notifyListeners();
+  }
+
   /// Ultimul email folosit la logare, precompletat data viitoare.
   String get lastEmail => (_box.get('lastEmail') as String?) ?? '';
   set lastEmail(String v) => _box.put('lastEmail', v);

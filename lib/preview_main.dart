@@ -162,7 +162,47 @@ Future<void> _seedDemo(NotesStore store) async {
     ..cardNumber = '4111 1111 1111 1111'
     ..cardExpiry = '08/29'
     ..cardCvv = '123';
-  for (final s in [gmail, bank, wifi, card]) {
+  final iban = store.newSecret(SecretType.bank)
+    ..title = 'Cont salariu'
+    ..holder = 'Ion Popescu'
+    ..iban = 'RO66 BTRL 0000 1202 0012 3456'
+    ..bankName = 'Banca Transilvania'
+    ..swift = 'BTRLRO22';
+  final ci = store.newSecret(SecretType.identity)
+    ..lastName = 'POPESCU'
+    ..firstName = 'ION'
+    ..docSeries = 'RX'
+    ..docNumber = '123456'
+    ..address = 'Jud.CJ Mun.Cluj-Napoca, Str.Memorandumului nr.28'
+    ..issuedBy = 'SPCLEP Cluj-Napoca'
+    ..issueDate = DateTime(2016, 11, 20)
+    ..expiryDate = DateTime.now().add(const Duration(days: 20));
+  final netflix = store.newSecret(SecretType.subscription)
+    ..title = 'Netflix'
+    ..url = 'netflix.com'
+    ..username = 'exemplu@gmail.com'
+    ..password = 'Netflix-ceai-tren47'
+    ..price = '59.99'
+    ..renewalDate = DateTime.now().add(const Duration(days: 9));
+  final spotify = store.newSecret(SecretType.subscription)
+    ..title = 'Spotify'
+    ..price = '120'
+    ..currency = 'EUR'
+    ..period = BillingPeriod.yearly;
+  final codes = store.newSecret(SecretType.note)
+    ..title = 'Coduri de rezervă Google'
+    ..notes = '1234 5678\n2345 6789\n3456 7890';
+  for (final s in [
+    gmail,
+    bank,
+    wifi,
+    card,
+    iban,
+    ci,
+    netflix,
+    spotify,
+    codes,
+  ]) {
     await store.saveSecret(s);
   }
 

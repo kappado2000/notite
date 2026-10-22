@@ -19,6 +19,74 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SpeechTranscriber") {
       SpeechTranscriber.register(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PrivacyShield") {
+      PrivacyShield.register(with: registrar)
+    }
+  }
+}
+
+/// „Ascunde în comutatorul de aplicații”: cât timp aplicația nu e în
+/// prim-plan, fereastra e acoperită de o estompare (canal `notite/privacy`).
+/// Starea e ținută și în UserDefaults, ca să se aplice înainte de Flutter.
+class PrivacyShield: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate {
+  private static let key = "notite.hideInSwitcher"
+  private static let tag = 0x4E6F_7465
+  private var enabled: Bool {
+    get { UserDefaults.standard.object(forKey: PrivacyShield.key) as? Bool ?? true }
+    set { UserDefaults.standard.set(newValue, forKey: PrivacyShield.key) }
+  }
+
+  static func register(with registrar: FlutterPluginRegistrar) {
+    let channel = FlutterMethodChannel(
+      name: "notite/privacy", binaryMessenger: registrar.messenger())
+    let instance = PrivacyShield()
+    registrar.addMethodCallDelegate(instance, channel: channel)
+    registrar.addApplicationDelegate(instance)
+    if #available(iOS 13.0, *) {
+      registrar.addSceneDelegate(instance)
+    }
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    if call.method == "setEnabled" {
+      enabled = (call.arguments as? Bool) ?? true
+      result(nil)
+    } else {
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  func sceneWillResignActive(_ scene: UIScene) {
+    guard enabled, let ws = scene as? UIWindowScene else { return }
+    for window in ws.windows { cover(window) }
+  }
+
+  func sceneDidBecomeActive(_ scene: UIScene) {
+    guard let ws = scene as? UIWindowScene else { return }
+    for window in ws.windows { uncover(window) }
+  }
+
+  // Varianta fără scene (rezervă).
+  func applicationWillResignActive(_ application: UIApplication) {
+    guard enabled else { return }
+    for window in application.windows { cover(window) }
+  }
+
+  func applicationDidBecomeActive(_ application: UIApplication) {
+    for window in application.windows { uncover(window) }
+  }
+
+  private func cover(_ window: UIWindow) {
+    if window.viewWithTag(PrivacyShield.tag) != nil { return }
+    let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+    blur.frame = window.bounds
+    blur.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    blur.tag = PrivacyShield.tag
+    window.addSubview(blur)
+  }
+
+  private func uncover(_ window: UIWindow) {
+    window.viewWithTag(PrivacyShield.tag)?.removeFromSuperview()
   }
 }
 
