@@ -388,13 +388,6 @@ class _QuickActions extends StatelessWidget {
           if (note != null && context.mounted) openNote(context, note);
         },
       ),
-      (
-        Icons.key_outlined,
-        'Parole',
-        neutral,
-        scheme.primary,
-        () => shell.go(2),
-      ),
     ];
     return Row(
       children: [
@@ -413,17 +406,23 @@ class _QuickActions extends StatelessWidget {
                 borderRadius: BorderRadius.circular(18),
                 onTap: actions[i].$5,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.fromLTRB(4, 16, 4, 16),
                   child: Column(
                     children: [
                       Icon(actions[i].$1, color: actions[i].$4, size: 26),
                       const SizedBox(height: 6),
-                      Text(
-                        actions[i].$2,
-                        style: TextStyle(
-                          color: actions[i].$4,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
+                      // Pe un rând; la text mare se micșorează, nu se taie.
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          actions[i].$2,
+                          maxLines: 1,
+                          softWrap: false,
+                          style: TextStyle(
+                            color: actions[i].$4,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
