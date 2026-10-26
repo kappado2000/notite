@@ -5,6 +5,7 @@ import 'package:notite/services/card_parser.dart';
 import 'package:notite/services/csv_import.dart';
 import 'package:notite/services/id_card_parser.dart';
 import 'package:notite/services/reminder_service.dart';
+import 'package:notite/services/ro_names.dart';
 import 'package:notite/services/secret_helpers.dart';
 
 var _n = 0;
@@ -258,6 +259,46 @@ void main() {
     expect(d.series, 'KX');
     expect(d.number, '654321');
     expect(d.expiryDate, DateTime(2030, 1, 1));
+  });
+
+  test('corectarea numelor citite greșit (K în loc de M/N)', () {
+    expect(fixNameOcr('POP KARIA'), 'POP MARIA');
+    expect(fixNameOcr('POP SIMION ADRIAK'), 'POP SIMION ADRIAN');
+    expect(fixNameOcr('SIMION-ADRIAK'), 'SIMION-ADRIAN');
+    expect(fixNameOcr('MARIAKKKK'), 'MARIA');
+    expect(fixNameOcr('Pop Karia'), 'Pop Maria');
+    // Numele corecte și cele necunoscute rămân neatinse.
+    expect(fixNameOcr('DARIA POPESCU'), 'DARIA POPESCU');
+    expect(fixNameOcr('KARINA'), 'KARINA');
+    expect(fixNameOcr('ȘTEFĂNESCU ZENOBIA'), 'ȘTEFĂNESCU ZENOBIA');
+    expect(fixNameOcr('POPESKU'), 'POPESKU'); // diferență neconfundabilă
+    // Pe card și pe buletin, corectura se aplică automat.
+    expect(
+      parseCardText('4111 1111 1111 1111\n12/29\nPOP SIMION ADRIAK').holder,
+      'POP SIMION ADRIAN',
+    );
+    expect(
+      parseRomanianId(
+        'Nume/Nom/Last name\nPOP\nPrenume/Prenom/First name\n'
+        'KARIA\n',
+      ).firstName,
+      'MARIA',
+    );
+  });
+
+  test('card: număr despărțit pe rânduri / blocuri, litere în loc de cifre', () {
+    // Așa întoarce adesea ML Kit: fiecare grup pe rândul lui.
+    final d = parseCardText(
+      'BT\nVISA\n4111\n1111\n1111\n1111\nVALID THRU\n12/29\nPOP SIMION ADRIAK',
+    );
+    expect(d.number, '4111 1111 1111 1111');
+    expect(d.expiry, '12/29');
+    expect(d.holder, 'POP SIMION ADRIAN');
+    // S citit în loc de 5, O în loc de 0; grupuri pe două rânduri.
+    expect(parseCardText('S555 5555\n5555 4444').number, '5555 5555 5555 4444');
+    expect(parseCardText('4111 1111 1111 111O').number, isEmpty); // Luhn
+    // Alte numere de pe card (telefon, cod) nu sunt luate drept număr.
+    expect(parseCardText('0800 801 228\n12/29').number, isEmpty);
   });
 
   test('card din fotografie', () {

@@ -1,3 +1,4 @@
+import 'ro_names.dart';
 import 'password_tools.dart';
 
 /// Datele citite de pe fața unui card bancar.
@@ -69,27 +70,66 @@ const _notName = {
   'GOOGLE',
 };
 
+/// Litere citite în locul cifrelor de fontul în relief.
+const _digitLike = {
+  'O': '0', 'D': '0', 'Q': '0', 'U': '0', //
+  'I': '1', 'L': '1', '|': '1', 'T': '1', //
+  'Z': '2', 'S': '5', 'G': '6', 'B': '8',
+};
+
+/// Un grup „de cifre” citit (ex. „4I11”, „S55O”): măcar jumătate cifre.
+String? _digitGroup(String token) {
+  if (token.length < 2 || token.length > 19) return null;
+  final digits = RegExp(r'\d').allMatches(token).length;
+  if (digits * 2 < token.length) return null;
+  final out = StringBuffer();
+  for (final ch in token.split('')) {
+    if (RegExp(r'\d').hasMatch(ch)) {
+      out.write(ch);
+    } else if (_digitLike[ch] case final d?) {
+      out.write(d);
+    } else {
+      return null;
+    }
+  }
+  return out.toString();
+}
+
+/// Numărul cardului: grupurile de cifre pot veni pe rânduri sau blocuri
+/// separate (așa le întoarce OCR-ul de pe telefon), deci le lipim în ordine
+/// și păstrăm prima combinație de 13–19 cifre care trece de Luhn.
+String _findCardNumber(String upper) {
+  final groups = [
+    for (final t in upper.split(RegExp(r'[\s\-–.,]+'))) ?_digitGroup(t),
+  ];
+  for (var i = 0; i < groups.length; i++) {
+    // Un număr începe cu 2–6 (Mastercard, Visa, Amex, Maestro…).
+    if (!RegExp('^[2-6]').hasMatch(groups[i])) continue;
+    var joined = '';
+    for (var j = i; j < groups.length && j < i + 5; j++) {
+      joined += groups[j];
+      if (joined.length > 19) break;
+      // Grupurile de la mijloc au 4–6 cifre; doar ultimul poate fi scurt.
+      final lastShort = groups[j].length < 4;
+      if (joined.length >= 13 && luhnValid(joined)) {
+        return [
+          for (var k = 0; k < joined.length; k += 4)
+            joined.substring(k, k + 4 > joined.length ? joined.length : k + 4),
+        ].join(' ');
+      }
+      if (lastShort) break;
+    }
+  }
+  return '';
+}
+
 /// Extrage numărul (validat Luhn), data expirării și titularul din textul
 /// recunoscut (OCR) de pe un card.
 CardData parseCardText(String text) {
   final d = CardData();
   final upper = text.toUpperCase();
 
-  // Numărul: 13–19 cifre, eventual în grupuri; OCR-ul confundă O/0, I/1.
-  final groups = RegExp(r'(?:[0-9OIL]{4}[ \-]?){3}[0-9OIL]{1,7}');
-  for (final m in groups.allMatches(upper)) {
-    final digits = m[0]!
-        .replaceAll(RegExp('[ -]'), '')
-        .replaceAll('O', '0')
-        .replaceAll(RegExp('[IL]'), '1');
-    if (digits.length >= 13 && digits.length <= 19 && luhnValid(digits)) {
-      d.number = [
-        for (var i = 0; i < digits.length; i += 4)
-          digits.substring(i, i + 4 > digits.length ? digits.length : i + 4),
-      ].join(' ');
-      break;
-    }
-  }
+  d.number = _findCardNumber(upper);
 
   // Expirarea: cea mai târzie dată LL/AA (unele carduri au și „valid from”).
   DateTime? latest;
@@ -121,7 +161,7 @@ CardData parseCardText(String text) {
       }).toList();
   // Numele e de obicei sub număr, deci ultimul candidat.
   if (candidates.isNotEmpty) {
-    d.holder = candidates.last.replaceAll(RegExp(r'\s+'), ' ');
+    d.holder = fixNameOcr(candidates.last.replaceAll(RegExp(r'\s+'), ' '));
   }
   return d;
 }

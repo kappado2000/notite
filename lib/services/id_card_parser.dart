@@ -1,3 +1,4 @@
+import 'ro_names.dart';
 import 'secret_helpers.dart';
 
 /// Datele citite de pe o carte de identitate românească.
@@ -173,6 +174,9 @@ IdCardData parseRomanianId(String text) {
     d.expiryDate =
         dateAfter(RegExp(r'data expir|date of expiry')) ?? d.expiryDate;
   }
+  d
+    ..lastName = fixNameOcr(d.lastName)
+    ..firstName = fixNameOcr(d.firstName);
   return d;
 }
 

@@ -160,9 +160,41 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
     if (mounted) Navigator.pop(context);
   }
 
-  void _toast(String m) => ScaffoldMessenger.of(context)
+  /// [ocrText]: textul recunoscut, arătat la cerere (pentru verificare).
+  void _toast(String m, {String? ocrText}) => ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(m)));
+    ..showSnackBar(
+      SnackBar(
+        content: Text(m),
+        duration: Duration(seconds: ocrText == null ? 4 : 8),
+        action: ocrText == null
+            ? null
+            : SnackBarAction(
+                label: 'Text citit',
+                onPressed: () => _showOcrText(ocrText),
+              ),
+      ),
+    );
+
+  void _showOcrText(String text) => showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Textul recunoscut'),
+      content: SingleChildScrollView(
+        child: SelectableText(text.trim().isEmpty ? '(nimic)' : text),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => copyValue(ctx, text, secret: true, what: 'Text'),
+          child: const Text('Copiază'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Închide'),
+        ),
+      ],
+    ),
+  );
 
   Future<void> _generate() async {
     final p = await showPasswordGenerator(context);
@@ -393,6 +425,7 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
         _toast(
           'Nu am putut citi datele. Folosește o imagine dreaptă, clară, '
           'fără reflexii. Documentul a fost atașat.',
+          ocrText: text,
         );
         return;
       }
@@ -401,6 +434,7 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
         '${found == 1 ? 'câmp' : 'câmpuri'}. Verifică-le — citirea '
         'automată poate greși o cifră.'
         '${isCard ? ' CVV-ul și PIN-ul nu se citesc: scrie-le tu.' : ''}',
+        ocrText: text,
       );
     } catch (e) {
       if (mounted) _toast('Nu am putut citi $what: $e');
