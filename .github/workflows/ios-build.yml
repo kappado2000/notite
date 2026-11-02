@@ -1,49 +1,14 @@
 name: iOS unsigned build (AltStore / Sideloadly)
 
+# Pașii sunt în kappado2000/ci-flutter/.github/workflows/ios-unsigned.yml (comun tuturor aplicațiilor).
 on:
   workflow_dispatch: {}
 
 jobs:
   build:
-    runs-on: macos-latest
-    # Necesar pentru crearea release-ului cu IPA-ul (ultimul pas).
     permissions:
       contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.47.0'
-          channel: 'stable'
-          cache: true
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/Library/Caches/CocoaPods
-          key: cocoapods-${{ runner.os }}-${{ hashFiles('pubspec.lock', 'ios/Podfile') }}
-          restore-keys: cocoapods-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build unsigned iOS app
-        # Numărul de build se schimbă la fiecare rulare, altfel iOS consideră
-        # IPA-ul „deja instalat” și nu înlocuiește aplicația.
-        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }}
-
-      - name: Package as unsigned IPA
-        run: |
-          mkdir -p Payload
-          cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -r Notite-unsigned.ipa Payload
-
-      # Release asset, nu artefact Actions: spațiul pentru artefacte e mic.
-      - name: Publish the IPA as a release asset
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "ios-build-${{ github.run_number }}" \
-            Notite-unsigned.ipa \
-            --title "iOS unsigned build #${{ github.run_number }}" \
-            --notes "IPA nesemnat pentru AltStore/Sideloadly, din ${{ github.sha }}."
+    uses: kappado2000/ci-flutter/.github/workflows/ios-unsigned.yml@main
+    with:
+      ipa_name: Notite
+    secrets: inherit
