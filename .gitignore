@@ -46,3 +46,25 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# --- secrete și date personale: nu intră niciodată în Git ---
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.p8
+*.p12
+*.pfx
+*.pem
+*.key
+*.mobileprovision
+key.properties
+*service-account*.json
+*service_account*.json
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.kdbx
