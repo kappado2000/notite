@@ -1,3 +1,8 @@
+// PBKDF2 cu 600.000 de iterații, în Dart pur, de mai multe ori pe test:
+// pe un calculator mai încărcat depășește limita implicită de 30 s.
+@Timeout(Duration(minutes: 3))
+library;
+
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';

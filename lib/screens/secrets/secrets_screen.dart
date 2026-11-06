@@ -10,12 +10,15 @@ import '../../services/biometric_service.dart';
 import '../../services/csv_import.dart';
 import '../../services/firestore_sync.dart';
 import '../../services/password_tools.dart';
+import '../../services/pin_lock.dart';
 import '../../services/vault.dart';
 import '../../session.dart';
 import '../../utils/format.dart';
 import '../../widgets/note_actions.dart';
+import '../../widgets/pin_pad.dart';
 import '../shell.dart';
 import 'password_health_screen.dart';
+import 'pin_setup.dart';
 import 'secret_detail_screen.dart';
 import 'secret_edit_screen.dart';
 import 'secret_widgets.dart';
@@ -54,11 +57,89 @@ class _SecretsScreenState extends State<SecretsScreen>
   SecretType? _type;
   bool _favorites = false;
 
+  /// Codul de 6 cifre (pe acest dispozitiv).
+  late final PinLock _pin = PinLock(context.read<Session>().uid);
+  bool _pinSet = false;
+
+  /// Deblocare cu parola contului în loc de cod (la cerere sau după prea
+  /// multe coduri greșite).
+  bool _usePassword = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initPin();
     _initBiometric();
+  }
+
+  Future<void> _initPin() async {
+    final set = await _pin.isSet();
+    final lockedOut = set && await _pin.isLockedOut();
+    if (!mounted) return;
+    setState(() {
+      _pinSet = set;
+      if (lockedOut) {
+        _usePassword = true;
+        _error = 'Prea multe coduri greșite. Deblochează cu parola contului.';
+      }
+    });
+  }
+
+  Future<String?> _checkPin(String pin) async {
+    switch (await _pin.verify(pin)) {
+      case PinResult.ok:
+        if (mounted) setState(() => _unlocked = true);
+        return null;
+      case PinResult.wrong:
+        final left = PinLock.maxAttempts - await _pin.failedAttempts();
+        return 'Cod greșit. ${left == 1 ? 'Mai ai o încercare.' : 'Mai ai $left încercări.'}';
+      case PinResult.lockedOut:
+        if (mounted) {
+          setState(() {
+            _usePassword = true;
+            _error =
+                'Prea multe coduri greșite. Deblochează cu parola contului.';
+          });
+        }
+        return null;
+    }
+  }
+
+  /// După deblocarea cu parola: codul e iar valabil; dacă nu există încă,
+  /// propunem unul (o singură dată).
+  Future<void> _afterPasswordUnlock() async {
+    await _pin.resetAttempts();
+    if (!mounted) return;
+    setState(() => _usePassword = false);
+    final session = context.read<Session>();
+    if (_pinSet || session.pinOffered) return;
+    session.pinOffered = true;
+    final want = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.pin_outlined),
+        title: const Text('Folosești un cod de 6 cifre?'),
+        content: const Text(
+          'Data viitoare deschizi Parolele cu un cod de 6 cifre, verificat '
+          'automat după ultima cifră, în loc de parola contului. Îl poți '
+          'schimba oricând din Cont → Securitate.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nu acum'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Setează codul'),
+          ),
+        ],
+      ),
+    );
+    if (want == true && mounted && await showPinSetup(context, _pin)) {
+      if (mounted) setState(() => _pinSet = true);
+    }
   }
 
   Future<void> _initBiometric() async {
@@ -121,7 +202,9 @@ class _SecretsScreenState extends State<SecretsScreen>
       setState(() {
         _unlocked = true;
         _busy = false;
+        _error = null;
       });
+      await _afterPasswordUnlock();
       return;
     }
     try {
@@ -133,6 +216,7 @@ class _SecretsScreenState extends State<SecretsScreen>
         _unlocked = ok;
         _error = ok ? null : 'Parolă greșită.';
       });
+      if (ok) await _afterPasswordUnlock();
     } catch (e) {
       setState(() => _error = 'Nu am putut verifica parola: $e');
     } finally {
@@ -307,6 +391,7 @@ class _SecretsScreenState extends State<SecretsScreen>
   }
 
   Widget _lockView() {
+    if (_pinSet && !_usePassword) return _pinView();
     final scheme = Theme.of(context).colorScheme;
     return Center(
       child: SingleChildScrollView(
@@ -362,6 +447,7 @@ class _SecretsScreenState extends State<SecretsScreen>
                   prefixIcon: const Icon(Icons.lock_outline),
                   border: const OutlineInputBorder(),
                   errorText: _error,
+                  errorMaxLines: 3,
                 ),
               ),
               const SizedBox(height: 12),
@@ -372,8 +458,50 @@ class _SecretsScreenState extends State<SecretsScreen>
                 onPressed: _busy ? null : _unlockPassword,
                 child: const Text('Deblochează cu parola'),
               ),
+              if (_pinSet && _error == null) ...[
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => setState(() => _usePassword = false),
+                  child: const Text('Folosește codul de 6 cifre'),
+                ),
+              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Deblocare cu codul de 6 cifre: verificat automat la ultima cifră.
+  Widget _pinView() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PinPad(
+              title: 'Introdu codul',
+              subtitle: 'Parolele sunt protejate.',
+              onCompleted: _checkPin,
+              extraKey: _bioAvailable
+                  ? IconButton(
+                      tooltip: 'Deblochează cu $_bioLabel',
+                      iconSize: 30,
+                      onPressed: _busy ? null : _unlockBiometric,
+                      icon: const Icon(Icons.fingerprint),
+                    )
+                  : null,
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => setState(() {
+                _usePassword = true;
+                _error = null;
+              }),
+              child: const Text('Am uitat codul — folosește parola contului'),
+            ),
+          ],
         ),
       ),
     );

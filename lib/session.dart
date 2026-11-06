@@ -61,6 +61,10 @@ class Session extends ChangeNotifier {
       (_settings.get('biometricOffered_$uid') as bool?) ?? false;
   set biometricOffered(bool v) => _settings.put('biometricOffered_$uid', v);
 
+  /// Am propus deja codul de 6 cifre pentru Parole (o singură dată).
+  bool get pinOffered => (_settings.get('pinOffered_$uid') as bool?) ?? false;
+  set pinOffered(bool v) => _settings.put('pinOffered_$uid', v);
+
   void lock() {
     if (!biometricEnabled || locked) return;
     locked = true;

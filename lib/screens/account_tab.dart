@@ -7,11 +7,14 @@ import '../data/app_settings.dart';
 import '../data/notes_store.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
+import '../services/pin_lock.dart';
 import '../services/privacy_shield.dart';
 import '../services/data_export.dart';
 import '../services/firestore_sync.dart';
 import '../session.dart';
+import '../widgets/identity_check.dart';
 import '../widgets/pickers.dart';
+import 'secrets/pin_setup.dart';
 import 'shell.dart';
 
 /// Contul, securitatea și aspectul aplicației.
@@ -25,10 +28,15 @@ class AccountTab extends StatefulWidget {
 class _AccountTabState extends State<AccountTab> {
   bool? _bioAvailable;
   String _bioLabel = 'amprentă';
+  late final PinLock _pin = PinLock(context.read<Session>().uid);
+  bool _pinSet = false;
 
   @override
   void initState() {
     super.initState();
+    _pin.isSet().then((v) {
+      if (mounted) setState(() => _pinSet = v);
+    });
     BiometricService.isAvailable().then((v) async {
       final label = await BiometricService.label();
       if (mounted) {
@@ -46,6 +54,53 @@ class _AccountTabState extends State<AccountTab> {
   Future<void> _toggleBiometric(Session session, bool on) async {
     if (on && !await BiometricService.authenticate()) return;
     session.biometricEnabled = on;
+  }
+
+  /// Setare, schimbare sau eliminare a codului de 6 cifre pentru Parole.
+  /// Orice modificare cere întâi confirmarea identității.
+  Future<void> _managePin() async {
+    String? action = 'set';
+    if (_pinSet) {
+      action = await showModalBottomSheet<String>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.pin_outlined),
+                title: const Text('Schimbă codul'),
+                onTap: () => Navigator.pop(ctx, 'set'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Elimină codul'),
+                subtitle: const Text('Parolele se deschid cu parola contului'),
+                onTap: () => Navigator.pop(ctx, 'clear'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (action == null || !mounted) return;
+    if (!await confirmIdentity(
+      context,
+      reason: 'Confirmă că ești tu ca să modifici codul pentru Parole.',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    if (action == 'clear') {
+      await _pin.clear();
+      if (mounted) setState(() => _pinSet = false);
+      _toast('Codul a fost eliminat');
+      return;
+    }
+    if (await showPinSetup(context, _pin) && mounted) {
+      setState(() => _pinSet = true);
+      _toast('Codul a fost salvat');
+    }
   }
 
   Future<void> _newRecoveryCode(Session session) async {
@@ -243,6 +298,17 @@ class _AccountTabState extends State<AccountTab> {
                       PrivacyShield.apply(v);
                     },
                   ),
+                ListTile(
+                  leading: const Icon(Icons.pin_outlined),
+                  title: const Text('Cod pentru Parole'),
+                  subtitle: Text(
+                    _pinSet
+                        ? '6 cifre, setat pe acest dispozitiv'
+                        : 'Deschide Parolele cu un cod de 6 cifre',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _managePin,
+                ),
                 ListTile(
                   leading: const Icon(Icons.key_outlined),
                   title: const Text('Cod de recuperare nou'),

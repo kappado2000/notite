@@ -68,3 +68,4 @@ key.properties
 *.sqlite
 *.sqlite3
 *.kdbx
+*.lnk
