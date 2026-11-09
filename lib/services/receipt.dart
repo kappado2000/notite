@@ -89,7 +89,9 @@ String formatLei(double v) {
 // ------------------------------------------------------------- citire bon
 
 final _amountAtEnd = RegExp(
-  r'(-?\d{1,3}(?:[.,\s]\d{3})*[.,]\d{2}|-?\d+[.,]\d{2})\s*(?:[A-G]|LEI|RON)?\s*$',
+  r'(-?\d{1,3}(?:[.,\s]\d{3})*[.,]\d{2}|-?\d+[.,]\d{2})\s*(?:[A-G]|LEI|RON)?'
+  // o urmă scurtă după preț (fundalul pozei, o bară a chenarului)
+  r'(?:\s+[^\d\s]{1,2})?\s*$',
   caseSensitive: false,
 );
 
@@ -97,7 +99,7 @@ final _amountAtEnd = RegExp(
 final _qtyTimesPrice = RegExp(
   r'(\d+(?:[.,]\d{1,3})?)\s*(?:BUC\.?|BUC|KG|L|BC|PCS|ST)?\s*[xX×\*]\s*'
   // fără literă lipită după preț: „6x0.5L” e ambalaj, nu 6 × 0,5 lei
-  r'(\d+(?:[.,]\d{1,2})?)(?![\d.,]*[A-Za-z%])',
+  r'(\d+(?:[.,]\d{1,2})?)(?![\d.,]*[A-Za-z%])(?![.,]?\d)',
   caseSensitive: false,
 );
 
@@ -111,7 +113,19 @@ final _notItem = RegExp(
   caseSensitive: false,
 );
 
-final _totalRow = RegExp(r'^\s*total\b', caseSensitive: false);
+final _totalRow = RegExp(r'^[^A-Za-z0-9]*total\b', caseSensitive: false);
+
+/// După produse: bacșiș, TVA, plată — aici bonul s-a terminat.
+final _endRow = RegExp(
+  r'(bac[sș]i[sș]|din care tva|total de plat)',
+  caseSensitive: false,
+);
+
+/// Titluri generice, nu numele localului.
+final _genericTitle = RegExp(
+  r'^\s*(nota de plata|notă de plată|nota|bon fiscal|bon|factura|chitanta)\s*$',
+  caseSensitive: false,
+);
 
 /// „x 4.000” / „x4” / „× 2 BUC” (cantitatea după „x”, fără preț).
 final _xQty = RegExp(
@@ -154,7 +168,13 @@ Receipt parseReceipt(List<String> rows) {
 
   // Comerciantul: primul rând cu litere, înainte de produse.
   for (final l in lines.take(6)) {
-    if (_hasLetters(l) && !_amountAtEnd.hasMatch(l)) {
+    if (_hasLetters(l) &&
+        !_amountAtEnd.hasMatch(l) &&
+        !_genericTitle.hasMatch(l) &&
+        !RegExp(
+          r'^\W*nr\b|\d{2}[./-]\d{2}[./-]\d{2}',
+          caseSensitive: false,
+        ).hasMatch(l)) {
       r.merchant = l.replaceAll(RegExp(r'\s{2,}'), ' ');
       break;
     }
@@ -176,10 +196,12 @@ Receipt parseReceipt(List<String> rows) {
   String? pendingName; // „BERE URSUS” fără preț, înaintea cantității
   for (var i = 0; i < lines.length; i++) {
     final row = lines[i];
-    if (_totalRow.hasMatch(row) &&
-        !RegExp(r'^\s*total\s*tva', caseSensitive: false).hasMatch(row)) {
+    if ((_totalRow.hasMatch(row) || _endRow.hasMatch(row)) &&
+        !RegExp(r'^\W*total\s*tva', caseSensitive: false).hasMatch(row)) {
       final a = _amountAtEnd.firstMatch(row);
-      if (a != null) r.printedTotal = parseAmount(a[1]!);
+      if (a != null && RegExp('total', caseSensitive: false).hasMatch(row)) {
+        r.printedTotal = parseAmount(a[1]!);
+      }
       break;
     }
     if (_notItem.hasMatch(row)) {

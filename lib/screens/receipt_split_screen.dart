@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -76,6 +77,20 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
         _parts.clear();
       }
       switch (source) {
+        case 'camera':
+          // camera obișnuită: atingi bonul ca să focalizeze, declanșezi
+          // tu și vezi poza înainte s-o folosești
+          final shot = await ImagePicker().pickImage(
+            source: ImageSource.camera,
+            maxWidth: 3000,
+            maxHeight: 3000,
+            imageQuality: 92,
+          );
+          if (shot != null) {
+            final b = await shot.readAsBytes();
+            images.add(b);
+            _files.add(('Bon.jpg', b, 'image/jpeg'));
+          }
         case 'scan':
           for (final p in await ScanService.scan()) {
             images.add(p.bytes);
@@ -339,8 +354,14 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
                 const Center(child: CircularProgressIndicator())
               else ...[
                 FilledButton.icon(
-                  icon: const Icon(Icons.document_scanner_outlined),
+                  icon: const Icon(Icons.photo_camera_outlined),
                   label: const Text('Fotografiază bonul'),
+                  onPressed: () => _read('camera'),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.document_scanner_outlined),
+                  label: const Text('Scanează (decupare automată)'),
                   onPressed: () => _read('scan'),
                 ),
                 const SizedBox(height: 10),
@@ -362,9 +383,11 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Bon lung? Fotografiază-l pe bucăți, de sus în jos, cu 2–3 '
-                  'rânduri comune între poze (scanerul primește mai multe '
-                  'poze odată). Le lipesc și nu dublez produsele.',
+                  'Atinge bonul pe ecran ca să focalizeze; nu e nevoie să '
+                  'decupezi poza. Bon lung? Fotografiază-l pe bucăți, de sus '
+                  'în jos, cu 2–3 rânduri comune între poze (scanerul '
+                  'primește mai multe poze odată). Le lipesc și nu dublez '
+                  'produsele.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: scheme.onSurfaceVariant,
@@ -489,7 +512,8 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
               ),
             ),
             for (final (v, icon, label) in [
-              ('scan', Icons.document_scanner_outlined, 'Fotografiază'),
+              ('camera', Icons.photo_camera_outlined, 'Fotografiază'),
+              ('scan', Icons.document_scanner_outlined, 'Scanează'),
               ('image', Icons.photo_outlined, 'Alege o poză'),
             ])
               ListTile(

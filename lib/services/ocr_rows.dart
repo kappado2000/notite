@@ -1,28 +1,47 @@
 /// Un rând de text recunoscut, cu poziția lui pe imagine (pixeli).
 class OcrLine {
-  const OcrLine(this.text, this.left, this.top, this.right, this.bottom);
+  const OcrLine(
+    this.text,
+    this.left,
+    this.top,
+    this.right,
+    this.bottom, {
+    this.slope = 0,
+  });
   final String text;
   final double left, top, right, bottom;
 
+  /// Înclinarea rândului (dy/dx), dacă cititorul o dă.
+  final double slope;
+
   double get height => bottom - top;
+  double get centerX => (left + right) / 2;
   double get centerY => (top + bottom) / 2;
 }
 
 /// Reface rândurile unui document tipărit (bon, factură) din liniile OCR.
 /// Cititorul de pe telefon întoarce adesea coloana de prețuri ca bloc
 /// separat de denumiri; aici liniile aflate la aceeași înălțime sunt
-/// lipite înapoi, de la stânga la dreapta, ca pe hârtie.
+/// lipite înapoi, de la stânga la dreapta, ca pe hârtie. Poza ținută
+/// strâmb e îndreptată: înălțimea fiecărei linii e măsurată de-a lungul
+/// înclinării bonului, ca prețul din dreapta să rămână lângă denumirea lui.
 List<String> rowsFromLines(List<OcrLine> lines) {
   if (lines.isEmpty) return const [];
-  final sorted = [...lines]..sort((a, b) => a.centerY.compareTo(b.centerY));
+  final skew = _skew(lines);
+  double y(OcrLine l) => l.centerY - skew * l.centerX;
+  final sorted = [...lines]..sort((a, b) => y(a).compareTo(y(b)));
   final rows = <List<OcrLine>>[];
   for (final l in sorted) {
     final row = rows.isEmpty ? null : rows.last;
-    if (row != null && _sameRow(row, l)) {
-      row.add(l);
-    } else {
-      rows.add([l]);
+    if (row != null) {
+      final rowY = row.map(y).reduce((a, b) => a + b) / row.length;
+      final h = row.map((e) => e.height).reduce((a, b) => a + b) / row.length;
+      if ((y(l) - rowY).abs() < (h < l.height ? h : l.height) * 0.6) {
+        row.add(l);
+        continue;
+      }
     }
+    rows.add([l]);
   }
   return [
     for (final r in rows)
@@ -31,6 +50,17 @@ List<String> rowsFromLines(List<OcrLine> lines) {
           .where((t) => t.isNotEmpty)
           .join('  '),
   ];
+}
+
+/// Înclinarea bonului: mediana înclinărilor liniilor lungi (cele scurte,
+/// de 1–2 caractere, au colțuri imprecise).
+double _skew(List<OcrLine> lines) {
+  final s = [
+    for (final l in lines)
+      if (l.right - l.left > 2 * l.height && l.slope.abs() < 0.5) l.slope,
+  ]..sort();
+  if (s.isEmpty) return 0;
+  return s[s.length ~/ 2];
 }
 
 /// Rezultatul lipirii mai multor poze ale aceluiași document.
@@ -151,14 +181,4 @@ int _distance(String a, String b) {
     prev = cur;
   }
   return prev[b.length];
-}
-
-/// Pe același rând dacă centrul vertical e în banda rândului (cu toleranță
-/// pentru poze ușor înclinate).
-bool _sameRow(List<OcrLine> row, OcrLine l) {
-  final top = row.map((e) => e.top).reduce((a, b) => a < b ? a : b);
-  final bottom = row.map((e) => e.bottom).reduce((a, b) => a > b ? a : b);
-  final h = row.map((e) => e.height).reduce((a, b) => a + b) / row.length;
-  final center = (top + bottom) / 2;
-  return (l.centerY - center).abs() < h * 0.55;
 }
