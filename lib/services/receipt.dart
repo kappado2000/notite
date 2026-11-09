@@ -96,7 +96,8 @@ final _amountAtEnd = RegExp(
 /// „2.000 BUC x 15.00”, „2 x 15,00”, „1,000 X 4.5”, „0.456 KG x 12.99”.
 final _qtyTimesPrice = RegExp(
   r'(\d+(?:[.,]\d{1,3})?)\s*(?:BUC\.?|BUC|KG|L|BC|PCS|ST)?\s*[xX×\*]\s*'
-  r'(\d+(?:[.,]\d{1,2})?)',
+  // fără literă lipită după preț: „6x0.5L” e ambalaj, nu 6 × 0,5 lei
+  r'(\d+(?:[.,]\d{1,2})?)(?![\d.,]*[A-Za-z%])',
   caseSensitive: false,
 );
 
@@ -111,6 +112,20 @@ final _notItem = RegExp(
 );
 
 final _totalRow = RegExp(r'^\s*total\b', caseSensitive: false);
+
+/// „x 4.000” / „x4” / „× 2 BUC” (cantitatea după „x”, fără preț).
+final _xQty = RegExp(
+  r'^[xX×\*]\s*(\d+(?:[.,]\d{1,3})?)\s*(?:BUC\.?|KG|L)?$',
+  caseSensitive: false,
+);
+
+/// Cantitate: „4.000” / „4,000” = 4 (casele fiscale scriu 3 zecimale);
+/// „0.456” = 0,456 kg. Întoarce null pentru 0 sau valori absurde.
+double? _qty(String s) {
+  final v = double.tryParse(s.replaceAll(',', '.'));
+  if (v == null || v <= 0 || v > 999) return null;
+  return v;
+}
 
 bool _hasLetters(String s) => RegExp(r'[A-Za-zĂÂÎȘŞȚŢăâîșşțţ]{2,}').hasMatch(s);
 
@@ -228,10 +243,59 @@ Receipt parseReceipt(List<String> rows) {
       continue;
     }
 
+    // „x 4.000   48.00” pe rândul de sub denumire (fără preț unitar).
+    if (amountMatch != null && !_hasLetters(row) && pendingName != null) {
+      final m = _xQty.firstMatch(row.substring(0, amountMatch.start).trim());
+      final total = parseAmount(amountMatch[1]!);
+      final qty = m == null ? null : _qty(m[1]!);
+      if (qty != null && total != null) {
+        r.items.add(
+          ReceiptItem(
+            name: pendingName,
+            qty: qty,
+            unitPrice: round2(total / qty),
+            total: total,
+          ),
+        );
+        pendingName = null;
+        continue;
+      }
+    }
+
     if (amountMatch != null && _hasLetters(row)) {
       final total = parseAmount(amountMatch[1]!);
       if (total == null) continue;
       final before = row.substring(0, amountMatch.start).trim();
+      // „Peroni Draft x 4.000   48.00” sau „4 x Peroni Draft   48.00”:
+      // cantitatea și valoarea totală, fără prețul unitar.
+      final nameX = RegExp(
+        // înainte de „x” nu e cifră: „Fanta 6x0.5L” rămâne denumire
+        r'^(.*?[A-Za-zĂÂÎȘŞȚŢăâîșşțţ].*?[^\d\s.,])\s*[xX×\*]\s*(\d+(?:[.,]\d{1,3})?)\s*(?:BUC\.?|KG|L)?$',
+        caseSensitive: false,
+      ).firstMatch(before);
+      final xName = RegExp(
+        r'^(\d+(?:[.,]\d{1,3})?)\s*(?:BUC\.?|KG|L)?\s*[xX×\*]\s*(.*[A-Za-zĂÂÎȘŞȚŢăâîșşțţ].*)$',
+        caseSensitive: false,
+      ).firstMatch(before);
+      final qtyFirst = xName != null;
+      final qty = nameX != null
+          ? _qty(nameX[2]!)
+          : qtyFirst
+          ? _qty(xName[1]!)
+          : null;
+      if (qty != null) {
+        final name = _cleanName(qtyFirst ? xName[2]! : nameX![1]!);
+        r.items.add(
+          ReceiptItem(
+            name: name.isEmpty ? 'Produs' : name,
+            qty: qty,
+            unitPrice: round2(total / qty),
+            total: total,
+          ),
+        );
+        pendingName = null;
+        continue;
+      }
       // „Bere Ursus  2  15,00  30,00”: cantitate și preț fără „x”
       final cols = RegExp(
         r'^(.*?[A-Za-zĂÂÎȘŞȚŢăâîșşțţ].*?)\s+(\d+(?:[.,]\d{1,3})?)\s+(\d+[.,]\d{2})$',

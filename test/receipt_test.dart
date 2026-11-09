@@ -79,6 +79,38 @@ void main() {
     expect(r.missing, 0);
   });
 
+  test('„denumire x cantitate valoare”, fără preț unitar (4 beri Peroni)', () {
+    final r = parseReceipt([
+      'BISTRO CENTRAL',
+      'Peroni Draft  x 4.000  48.00',
+      '2 x Pizza Margherita  64,00',
+      'Limonada 0.4L',
+      'x 3  36,00',
+      'Fanta 6x0.5L  30,00',
+      'TOTAL  178,00',
+    ]);
+    expect(r.items.map((i) => i.name).toList(), [
+      'Peroni Draft',
+      'Pizza Margherita',
+      'Limonada 0.4L',
+      'Fanta 6x0.5L',
+    ]);
+    final peroni = r.items[0];
+    expect(peroni.qty, 4);
+    expect(peroni.units, 4);
+    expect(peroni.unitPrice, 12);
+    expect(peroni.total, 48);
+    expect(r.items[1].qty, 2);
+    expect(r.items[1].unitPrice, 32);
+    expect(r.items[2].qty, 3);
+    expect(r.items[2].unitPrice, 12);
+    expect(r.items[3].qty, 1); // „6x0.5L” e parte din denumire
+    expect(r.missing, 0);
+    // o persoană alege o singură bere din cele 4
+    final s = ReceiptSplit(r)..set('Eu', 0, 1);
+    expect(s.personTotal('Eu'), 12);
+  });
+
   test('rânduri refăcute: prețurile venite ca bloc separat', () {
     // ML Kit: coloana de denumiri și coloana de prețuri, blocuri diferite.
     final rows = rowsFromLines(const [
