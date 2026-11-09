@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'ocr_rows.dart';
+
 /// Un produs de pe bon: „BERE URSUS  2 x 15,00 = 30,00”.
 class ReceiptItem {
   ReceiptItem({
@@ -476,4 +478,37 @@ class ReceiptSplit {
     b.write('Total bon: ${formatLei(receipt.itemsTotal)} lei');
     return b.toString();
   }
+}
+
+/// Rândurile bonului din liniile citite de pe poză. Înclinarea pozei nu e
+/// sigură (cea raportată de telefon poate fi greșită), așa că încercăm
+/// mai multe și păstrăm citirea cea mai bună: suma produselor egală cu
+/// TOTAL-ul, apoi cele mai multe produse; la egalitate, poza mai dreaptă.
+List<String> receiptRows(List<OcrLine> lines) {
+  if (lines.isEmpty) return const [];
+  final candidates = <double>{
+    0,
+    reportedSkew(lines),
+    for (var i = 1; i <= 15; i++) ...[i / 100, -i / 100],
+  }.toList()..sort((a, b) => a.abs().compareTo(b.abs()));
+  List<String>? best;
+  var bestScore = double.negativeInfinity;
+  for (final k in candidates) {
+    final rows = rowsFromLines(lines, skew: k);
+    final score = _readScore(parseReceipt(rows));
+    if (score > bestScore + 1e-9) {
+      bestScore = score;
+      best = rows;
+    }
+  }
+  return best!;
+}
+
+double _readScore(Receipt r) {
+  var s = r.items.length.toDouble();
+  final total = r.printedTotal, missing = r.missing;
+  if (total != null && missing != null && r.items.isNotEmpty) {
+    s += missing.abs() < 0.01 ? 100 : -min(20, 20 * missing.abs() / total);
+  }
+  return s;
 }

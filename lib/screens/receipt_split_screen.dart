@@ -118,7 +118,7 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
       if (images.isEmpty || !mounted) return;
       // fiecare poză e o bucată; bucățile se lipesc fără rânduri dublate
       for (final img in images) {
-        _parts.add(await ScanService.recognizeRows(img));
+        _parts.add(receiptRows(await ScanService.recognizeLines(img)));
       }
       final merged = mergeRowParts(_parts);
       final receipt = parseReceipt(merged.rows);
@@ -311,12 +311,49 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
             ),
             TextButton(onPressed: _saveNote, child: const Text('Salvează')),
           ],
+          if (_parts.isNotEmpty)
+            IconButton(
+              tooltip: 'Textul citit de pe bon',
+              icon: const Icon(Icons.text_snippet_outlined),
+              onPressed: _showReadText,
+            ),
         ],
       ),
       body: s == null ? _start() : _body(s),
       bottomNavigationBar: s == null || s.receipt.items.isEmpty
           ? null
           : _totals(s),
+    );
+  }
+
+  /// Rândurile exact cum au fost citite de pe poză (pentru verificare).
+  Future<void> _showReadText() async {
+    final text = mergeRowParts(_parts).rows.join('\n');
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Textul citit de pe bon'),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            text.isEmpty ? '(nimic)' : text,
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: text));
+              Navigator.pop(ctx);
+              _toast('Textul a fost copiat.');
+            },
+            child: const Text('Copiază'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Închide'),
+          ),
+        ],
+      ),
     );
   }
 

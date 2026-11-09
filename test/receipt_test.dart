@@ -128,56 +128,69 @@ void main() {
     expect(r.items[1].total, 32);
   });
 
-  test('poză nedecupată, ținută strâmb: notă de plată cu bacșiș', () {
-    // ce întoarce cititorul: denumire, „X cantitate” și valoare, ca linii
-    // separate; bonul e înclinat ~3°, deci prețul din dreapta stă cu
-    // aproape un rând mai jos decât denumirea lui
-    const slope = 0.05;
-    final lines = <OcrLine>[];
-    void row(double y, List<(String, double, double)> cells) {
-      for (final (text, l, r) in cells) {
-        final dy = slope * (l + r) / 2;
-        lines.add(OcrLine(text, l, y + dy, r, y + dy + 40, slope: slope));
+  // ce întoarce cititorul: denumire, „X cantitate” și valoare, ca linii
+  // separate; bonul e înclinat ~3°, deci prețul din dreapta stă cu
+  // aproape un rând mai jos decât denumirea lui. Telefonul poate raporta
+  // o înclinare greșită (0 sau aiurea) — citirea trebuie să iasă oricum.
+  for (final reported in [0.05, 0.0, 0.3, -0.2]) {
+    test('poză nedecupată, strâmbă (înclinare raportată $reported)', () {
+      const slope = 0.05;
+      final lines = <OcrLine>[];
+      void row(double y, List<(String, double, double)> cells) {
+        for (final (text, l, r) in cells) {
+          final dy = slope * (l + r) / 2;
+          lines.add(OcrLine(text, l, y + dy, r, y + dy + 40, slope: reported));
+        }
       }
-    }
 
-    row(650, [('NOTA DE PLATA', 360, 760)]);
-    row(760, [('Nr.:N.partiala din 09.11.2026 22:21', 95, 750)]);
-    const items = [
-      ('Peroni Draft', 'X 8.000', '96.00'),
-      ('Apa minerala 750ml', 'X 2.000', '30.00'),
-      ('Pahar Vin Rosu-Purca', 'X 3.000', '51.00'),
-      ('Borzaska de porc', 'X 2.000', '76.00'),
-      ('Ceafa traditionala de', 'X 2.000', '76.00'),
-      ('Cartofi rustici', 'X 3.000', '45.00'),
-      ('Legume Grill', 'X 2.000', '40.00'),
-      ('Muraturi asortate', 'X 2.000', '24.00'),
-      ('Tandem Alb', 'X 1.000', '65.00'),
-    ];
-    for (var i = 0; i < items.length; i++) {
-      final (name, qty, price) = items[i];
-      row(900 + 50.0 * i, [
-        (name, 90, 470),
-        (qty, 585, 725),
-        (price, 880, 1000),
+      row(650, [('NOTA DE PLATA', 360, 760)]);
+      row(760, [('Nr.:N.partiala din 09.11.2026 22:21', 95, 750)]);
+      const items = [
+        ('Peroni Draft', 'X 8.000', '96.00'),
+        ('Apa minerala 750ml', 'X 2.000', '30.00'),
+        ('Pahar Vin Rosu-Purca', 'X 3.000', '51.00'),
+        ('Borzaska de porc', 'X 2.000', '76.00'),
+        ('Ceafa traditionala de', 'X 2.000', '76.00'),
+        ('Cartofi rustici', 'X 3.000', '45.00'),
+        ('Legume Grill', 'X 2.000', '40.00'),
+        ('Muraturi asortate', 'X 2.000', '24.00'),
+        ('Tandem Alb', 'X 1.000', '65.00'),
+      ];
+      for (var i = 0; i < items.length; i++) {
+        final (name, qty, price) = items[i];
+        row(900 + 50.0 * i, [
+          (name, 90, 470),
+          (qty, 585, 725),
+          (price, 880, 1000),
+        ]);
+      }
+      row(1440, [('Total de plata: 503.00', 545, 960)]);
+      row(1485, [('din care TVA: 65.62', 635, 960)]);
+      row(1570, [('Alegeti valoarea bacsisului', 135, 565)]);
+      row(1700, [('( ) 5% - 25.00 LEI', 140, 460)]);
+      row(1745, [('( ) 10% - 50.00 LEI', 140, 470)]);
+
+      final r = parseReceipt(receiptRows(lines));
+      expect(r.items.map((i) => i.name).toList(), [
+        for (final (name, _, _) in items) name,
       ]);
-    }
-    row(1440, [('Total de plata: 503.00', 545, 960)]);
-    row(1485, [('din care TVA: 65.62', 635, 960)]);
-    row(1570, [('Alegeti valoarea bacsisului', 135, 565)]);
-    row(1700, [('( ) 5% - 25.00 LEI', 140, 460)]);
-    row(1745, [('( ) 10% - 50.00 LEI', 140, 470)]);
+      expect(r.items.map((i) => i.qty).toList(), [8, 2, 3, 2, 2, 3, 2, 2, 1]);
+      expect(r.items[0].unitPrice, 12);
+      expect(r.printedTotal, 503);
+      expect(r.missing, 0);
+      expect(r.date, DateTime(2026, 11, 9));
+      expect(r.merchant, ''); // „NOTA DE PLATA” nu e numele localului
+    });
+  }
 
-    final r = parseReceipt(rowsFromLines(lines));
-    expect(r.items.map((i) => i.name).toList(), [
-      for (final (name, _, _) in items) name,
+  test('rânduri unul sub altul, în aceeași coloană, nu se lipesc', () {
+    // linii înalte și apropiate: „Total” și „din care TVA” rămân separate
+    final rows = rowsFromLines(const [
+      OcrLine('Total de plata: 503.00', 545, 1000, 960, 1060),
+      OcrLine('din care TVA: 65.62', 635, 1030, 960, 1090),
     ]);
-    expect(r.items.map((i) => i.qty).toList(), [8, 2, 3, 2, 2, 3, 2, 2, 1]);
-    expect(r.items[0].unitPrice, 12);
-    expect(r.printedTotal, 503);
-    expect(r.missing, 0);
-    expect(r.date, DateTime(2026, 11, 9));
-    expect(r.merchant, ''); // „NOTA DE PLATA” nu e numele localului
+    expect(rows, ['Total de plata: 503.00', 'din care TVA: 65.62']);
+    expect(parseReceipt(rows).printedTotal, 503);
   });
 
   test('o urmă de fundal după preț nu strică rândul', () {

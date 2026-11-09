@@ -25,10 +25,12 @@ class OcrLine {
 /// lipite înapoi, de la stânga la dreapta, ca pe hârtie. Poza ținută
 /// strâmb e îndreptată: înălțimea fiecărei linii e măsurată de-a lungul
 /// înclinării bonului, ca prețul din dreapta să rămână lângă denumirea lui.
-List<String> rowsFromLines(List<OcrLine> lines) {
+///
+/// [skew]: înclinarea folosită (dy/dx); implicit cea raportată de cititor.
+List<String> rowsFromLines(List<OcrLine> lines, {double? skew}) {
   if (lines.isEmpty) return const [];
-  final skew = _skew(lines);
-  double y(OcrLine l) => l.centerY - skew * l.centerX;
+  final k = skew ?? reportedSkew(lines);
+  double y(OcrLine l) => l.centerY - k * l.centerX;
   final sorted = [...lines]..sort((a, b) => y(a).compareTo(y(b)));
   final rows = <List<OcrLine>>[];
   for (final l in sorted) {
@@ -36,7 +38,11 @@ List<String> rowsFromLines(List<OcrLine> lines) {
     if (row != null) {
       final rowY = row.map(y).reduce((a, b) => a + b) / row.length;
       final h = row.map((e) => e.height).reduce((a, b) => a + b) / row.length;
-      if ((y(l) - rowY).abs() < (h < l.height ? h : l.height) * 0.6) {
+      // două texte unul sub altul (aceeași coloană) nu pot fi pe același
+      // rând, oricât de aproape ar părea
+      final stacked = row.any((e) => _overlapX(e, l));
+      if (!stacked &&
+          (y(l) - rowY).abs() < (h < l.height ? h : l.height) * 0.6) {
         row.add(l);
         continue;
       }
@@ -54,7 +60,7 @@ List<String> rowsFromLines(List<OcrLine> lines) {
 
 /// Înclinarea bonului: mediana înclinărilor liniilor lungi (cele scurte,
 /// de 1–2 caractere, au colțuri imprecise).
-double _skew(List<OcrLine> lines) {
+double reportedSkew(List<OcrLine> lines) {
   final s = [
     for (final l in lines)
       if (l.right - l.left > 2 * l.height && l.slope.abs() < 0.5) l.slope,
@@ -181,4 +187,15 @@ int _distance(String a, String b) {
     prev = cur;
   }
   return prev[b.length];
+}
+
+/// Se suprapun pe orizontală mai mult de o treime din cel mai îngust.
+bool _overlapX(OcrLine a, OcrLine b) {
+  final o =
+      (a.right < b.right ? a.right : b.right) -
+      (a.left > b.left ? a.left : b.left);
+  final w = (a.right - a.left) < (b.right - b.left)
+      ? a.right - a.left
+      : b.right - b.left;
+  return w > 0 && o > w / 3;
 }

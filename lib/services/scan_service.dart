@@ -28,4 +28,8 @@ class ScanService {
   /// dreapta rămân pe același rând cu denumirea.
   static Future<List<String>> recognizeRows(Uint8List bytes) async =>
       rowsFromLines(await impl.recognizeLines(bytes));
+
+  /// Liniile OCR cu poziția lor pe poză (după ce poza e întoarsă drept).
+  static Future<List<OcrLine>> recognizeLines(Uint8List bytes) =>
+      impl.recognizeLines(bytes);
 }
