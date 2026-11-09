@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../data/notes_store.dart';
 import '../models/attachment.dart';
+import '../services/ocr_rows.dart';
 import '../services/receipt.dart';
 import '../services/scan_service.dart';
 import '../widgets/pickers.dart';
@@ -33,6 +34,12 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
   String _person = 'Eu';
   bool _reading = false;
 
+  /// Rândurile citite din fiecare poză (bon lung = mai multe poze).
+  final _parts = <List<String>>[];
+
+  /// Produsele au fost corectate de mână (o recitire le-ar pierde).
+  bool _edited = false;
+
   /// Pozele / PDF-ul bonului, atașate la notiță la salvare.
   final _files = <(String, Uint8List, String)>[];
 
@@ -42,7 +49,9 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
 
   // ------------------------------------------------------------ citire
 
-  Future<void> _read(String source) async {
+  /// [append]: poză de continuare pentru un bon lung, lipită la cele de
+  /// dinainte fără să dubleze rândurile comune.
+  Future<void> _read(String source, {bool append = false}) async {
     if (!ScanService.scanSupported) {
       _toast(
         'Citirea bonului din poză merge pe telefon. Aici poți adăuga '
@@ -52,8 +61,20 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
     }
     setState(() => _reading = true);
     try {
+      if (append && _edited) {
+        final go = await confirm(
+          context,
+          'Recitesc bonul cu poza nouă. Corecturile făcute de mână la '
+          'produse se pierd (alegerile persoanelor rămân). Continui?',
+          action: 'Continuă',
+        );
+        if (!go) return;
+      }
       final images = <Uint8List>[];
-      _files.clear();
+      if (!append) {
+        _files.clear();
+        _parts.clear();
+      }
       switch (source) {
         case 'scan':
           for (final p in await ScanService.scan()) {
@@ -80,16 +101,28 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
           }
       }
       if (images.isEmpty || !mounted) return;
-      final rows = <String>[];
+      // fiecare poză e o bucată; bucățile se lipesc fără rânduri dublate
       for (final img in images) {
-        rows.addAll(await ScanService.recognizeRows(img));
+        _parts.add(await ScanService.recognizeRows(img));
       }
-      final receipt = parseReceipt(rows);
+      final merged = mergeRowParts(_parts);
+      final receipt = parseReceipt(merged.rows);
       if (!mounted) return;
+      final old = _split;
       setState(() {
-        _split = ReceiptSplit(receipt);
-        _person = 'Eu';
+        _split = old != null && append
+            ? old.withReceipt(receipt)
+            : ReceiptSplit(receipt);
+        if (!append) _person = 'Eu';
+        _edited = false;
       });
+      if (_parts.length > 1 && receipt.items.isNotEmpty) {
+        _toast(
+          'Am lipit ${_parts.length} poze'
+          '${merged.skipped > 0 ? '; ${merged.skipped} rânduri apăreau în '
+                    'ambele și le-am luat o singură dată' : ''}.',
+        );
+      }
       if (receipt.items.isEmpty) {
         _toast(
           'Nu am găsit produse pe bon. Fă poza dreaptă, cu tot bonul, sau '
@@ -106,6 +139,8 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
   void _startManual() => setState(() {
     _split = ReceiptSplit(Receipt());
     _person = 'Eu';
+    _parts.clear();
+    _files.clear();
   });
 
   // ---------------------------------------------------------- persoane
@@ -163,6 +198,7 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
       builder: (_) => _ItemDialog(item: item),
     );
     if (!mounted || result == null) return;
+    _edited = true;
     setState(() {
       if (result == 'delete' && index != null) {
         s.removeItem(index);
@@ -324,6 +360,17 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
                   onPressed: _startManual,
                   child: const Text('Introdu produsele manual'),
                 ),
+                const SizedBox(height: 16),
+                Text(
+                  'Bon lung? Fotografiază-l pe bucăți, de sus în jos, cu 2–3 '
+                  'rânduri comune între poze (scanerul primește mai multe '
+                  'poze odată). Le lipesc și nu dublez produsele.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
+                ),
               ],
             ],
           ),
@@ -405,14 +452,56 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
         for (var i = 0; i < r.items.length; i++) _itemTile(s, i),
         Padding(
           padding: const EdgeInsets.all(8),
-          child: TextButton.icon(
-            icon: const Icon(Icons.add),
-            label: const Text('Adaugă produs'),
-            onPressed: () => _editItem(null),
+          child: Wrap(
+            spacing: 4,
+            children: [
+              TextButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('Adaugă produs'),
+                onPressed: () => _editItem(null),
+              ),
+              if (ScanService.scanSupported)
+                TextButton.icon(
+                  icon: const Icon(Icons.add_a_photo_outlined),
+                  label: const Text('Adaugă continuarea bonului'),
+                  onPressed: _readContinuation,
+                ),
+            ],
           ),
         ),
       ],
     );
+  }
+
+  /// Bon lung: încă o poză (partea de jos). Se lipește la cele de dinainte.
+  Future<void> _readContinuation() async {
+    final source = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('Continuarea bonului'),
+              subtitle: Text(
+                'Fotografiază partea următoare, cu 2–3 rânduri din poza '
+                'anterioară: le recunosc și nu dublez produsele.',
+              ),
+            ),
+            for (final (v, icon, label) in [
+              ('scan', Icons.document_scanner_outlined, 'Fotografiază'),
+              ('image', Icons.photo_outlined, 'Alege o poză'),
+            ])
+              ListTile(
+                leading: Icon(icon),
+                title: Text(label),
+                onTap: () => Navigator.pop(ctx, v),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (source != null && mounted) await _read(source, append: true);
   }
 
   Widget _itemTile(ReceiptSplit s, int i) {

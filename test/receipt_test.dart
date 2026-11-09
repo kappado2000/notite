@@ -128,6 +128,110 @@ void main() {
     expect(r.items[1].total, 32);
   });
 
+  group('bon lung, din mai multe poze', () {
+    test('partea comună dintre poze apare o singură dată', () {
+      final m = mergeRowParts([
+        [
+          'RESTAURANT X',
+          'Bere  2 x 15,00  30,00',
+          'Pizza  32,00',
+          'Supa  18,00',
+        ],
+        ['Pizza  32,00', 'Supa  18,00', 'Desert  21,00', 'TOTAL  101,00'],
+      ]);
+      expect(m.rows, [
+        'RESTAURANT X',
+        'Bere  2 x 15,00  30,00',
+        'Pizza  32,00',
+        'Supa  18,00',
+        'Desert  21,00',
+        'TOTAL  101,00',
+      ]);
+      expect(m.skipped, 2);
+      final r = parseReceipt(m.rows);
+      expect(r.items.length, 4);
+      expect(r.missing, 0); // nimic dublat: suma bate cu TOTAL-ul
+    });
+
+    test('tolerează diferențe de citire între poze („30,00” / „30.00”)', () {
+      final m = mergeRowParts([
+        ['Bere Ursus  30,00 B', 'Pizza Diavola  32,00 B'],
+        ['Pizza Diavo1a  32.00 B', 'Apa  7,50 B'],
+      ]);
+      expect(m.rows.length, 3);
+      expect(m.rows.last, 'Apa  7,50 B');
+    });
+
+    test('rândurile tăiate la marginea pozelor sunt ignorate', () {
+      final m = mergeRowParts([
+        ['Bere  30,00', 'Pizza  32,00', 'Supa  18,00', 'Ceai  6,00', 'Ds~rt 2'],
+        ['iza 3', 'Supa  18,00', 'Ceai  6,00', 'Desert  21,00', 'Cafea  9,00'],
+      ]);
+      // „Ds~rt 2” (jos, tăiat) și „iza 3” (sus, tăiat) dispar
+      expect(m.rows, [
+        'Bere  30,00',
+        'Pizza  32,00',
+        'Supa  18,00',
+        'Ceai  6,00',
+        'Desert  21,00',
+        'Cafea  9,00',
+      ]);
+    });
+
+    test('fără parte comună: pozele se pun una după alta', () {
+      final m = mergeRowParts([
+        ['Bere  30,00', 'Pizza  32,00'],
+        ['Supa  18,00', 'Desert  21,00'],
+      ]);
+      expect(m.rows.length, 4);
+      expect(m.skipped, 0);
+    });
+
+    test('produse identice în aceeași poză rămân amândouă', () {
+      final m = mergeRowParts([
+        ['Bere  15,00', 'Bere  15,00', 'Pizza  32,00'],
+      ]);
+      expect(m.rows.length, 3);
+      expect(parseReceipt(m.rows).itemsTotal, 62);
+    });
+
+    test('trei poze', () {
+      final m = mergeRowParts([
+        ['Apa  1,00', 'Bere  2,00', 'Cafea  3,00'],
+        ['Bere  2,00', 'Cafea  3,00', 'Dulce  4,00', 'Ecler  5,00'],
+        ['Ecler  5,00', 'Fanta  6,00', 'TOTAL  21,00'],
+      ]);
+      final r = parseReceipt(m.rows);
+      expect(r.items.map((i) => i.name).toList(), [
+        'Apa',
+        'Bere',
+        'Cafea',
+        'Dulce',
+        'Ecler',
+        'Fanta',
+      ]);
+      expect(r.missing, 0);
+    });
+  });
+
+  test('continuare: alegerile făcute deja rămân după poza nouă', () {
+    final first = parseReceipt(['Bere  2 x 15,00  30,00', 'Pizza  32,00']);
+    final s = ReceiptSplit(first, persons: ['Eu', 'Ion'])
+      ..set('Eu', 0, 1)
+      ..set('Ion', 1, 1);
+    final merged = mergeRowParts([
+      ['Bere  2 x 15,00  30,00', 'Pizza  32,00'],
+      ['Pizza  32,00', 'Supa  18,00', 'TOTAL  80,00'],
+    ]);
+    final s2 = s.withReceipt(parseReceipt(merged.rows));
+    expect(s2.receipt.items.length, 3);
+    expect(s2.persons, ['Eu', 'Ion']);
+    expect(s2.taken('Eu', 0), 1);
+    expect(s2.taken('Ion', 1), 1);
+    expect(s2.receipt.missing, 0);
+    expect(s2.unassignedTotal, 33); // berea rămasă + supa
+  });
+
   test('împărțire: fiecare își alege bucățile, fără dubluri', () {
     final r = Receipt(
       items: [

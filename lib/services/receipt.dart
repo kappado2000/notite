@@ -408,6 +408,20 @@ class ReceiptSplit {
     }
   }
 
+  /// Același bon, recitit (ex. după o poză de continuare): persoanele și
+  /// alegerile rămân pentru produsele care nu s-au schimbat.
+  ReceiptSplit withReceipt(Receipt r) {
+    final s = ReceiptSplit(r, persons: [...persons]);
+    for (var i = 0; i < r.items.length && i < receipt.items.length; i++) {
+      final a = receipt.items[i], b = r.items[i];
+      if (a.name != b.name || a.total != b.total) continue;
+      for (final p in persons) {
+        if (taken(p, i) > 0) s.set(p, i, taken(p, i));
+      }
+    }
+    return s;
+  }
+
   /// Rezumat text: ce a ales fiecare și cât are de plătit.
   String summary() {
     final b = StringBuffer();
