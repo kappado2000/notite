@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'ocr_rows.dart';
 import 'scan_service.dart';
 
 bool get scanSupported => Platform.isAndroid || Platform.isIOS;
@@ -40,6 +41,40 @@ Future<String> recognize(Uint8List bytes) async {
   try {
     return await _recognizeFile(file.path);
   } finally {
+    if (await file.exists()) await file.delete();
+  }
+}
+
+/// Rândurile OCR cu poziția lor (pentru bonuri: prețurile aliniate la
+/// dreapta vin altfel separat de denumiri).
+Future<List<OcrLine>> recognizeLines(Uint8List bytes) async {
+  if (!scanSupported) return const [];
+  final dir = await getTemporaryDirectory();
+  final file = File(
+    '${dir.path}/ocr_${DateTime.now().microsecondsSinceEpoch}.jpg',
+  );
+  await file.writeAsBytes(bytes);
+  final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+  try {
+    final result = await recognizer.processImage(
+      InputImage.fromFilePath(file.path),
+    );
+    return [
+      for (final block in result.blocks)
+        for (final line in block.lines)
+          OcrLine(
+            line.text,
+            line.boundingBox.left,
+            line.boundingBox.top,
+            line.boundingBox.right,
+            line.boundingBox.bottom,
+          ),
+    ];
+  } catch (e) {
+    debugPrint('OCR: $e');
+    return const [];
+  } finally {
+    await recognizer.close();
     if (await file.exists()) await file.delete();
   }
 }

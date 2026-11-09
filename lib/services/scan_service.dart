@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'ocr_rows.dart';
 import 'scan_service_stub.dart'
     if (dart.library.io) 'scan_service_io.dart'
     as impl;
@@ -22,4 +23,9 @@ class ScanService {
 
   /// OCR pe o imagine existentă (ex. fotografie din galerie).
   static Future<String> recognize(Uint8List bytes) => impl.recognize(bytes);
+
+  /// OCR cu rândurile refăcute după poziție (bonuri, tabele): prețurile din
+  /// dreapta rămân pe același rând cu denumirea.
+  static Future<List<String>> recognizeRows(Uint8List bytes) async =>
+      rowsFromLines(await impl.recognizeLines(bytes));
 }

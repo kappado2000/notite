@@ -166,7 +166,7 @@ class NoteCard extends StatelessWidget {
           children: [
             Expanded(child: meta),
             const SizedBox(width: 8),
-            Text(formatDate(note.updatedAt), style: muted),
+            Text(note.trashLabel ?? formatDate(note.updatedAt), style: muted),
           ],
         ),
       ],
@@ -315,7 +315,12 @@ class NoteRow extends StatelessWidget {
                   const SizedBox(height: 26),
                   Row(
                     children: [
-                      Text(formatShortDate(note.updatedAt), style: small),
+                      Text(
+                        note.trashLabel ?? formatShortDate(note.updatedAt),
+                        style: note.isTrashed
+                            ? small.copyWith(color: scheme.error)
+                            : small,
+                      ),
                       if (nb != null) ...[
                         Text('  ·  ', style: small),
                         Flexible(

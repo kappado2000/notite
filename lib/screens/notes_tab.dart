@@ -87,12 +87,16 @@ class _NotesTabState extends State<NotesTab> {
     super.dispose();
   }
 
-  void _select(NoteView v) => setState(() {
-    _view = v;
-    _search.clear();
-    _query = '';
-    _searching = false;
-  });
+  void _select(NoteView v) {
+    setState(() {
+      _view = v;
+      _search.clear();
+      _query = '';
+      _searching = false;
+    });
+    // Coșul arată doar ce mai are de stat (max. 30 de zile).
+    if (v is TrashView) context.read<NotesStore>().purgeExpiredTrash();
+  }
 
   String _title(NotesStore store) => switch (_view) {
     AllNotesView() => 'Toate notițele',

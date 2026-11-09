@@ -91,11 +91,20 @@ class NotesStore extends ChangeNotifier {
     if (_notebooks.isEmpty) {
       await createNotebook('Primul meu carnet', id: _defaultNotebookSeedId);
     }
-    // Curăță automat coșul: notițele mai vechi de 30 de zile.
-    final limit = DateTime.now().subtract(const Duration(days: 30));
-    for (final n in trashedNotes.where((n) => n.trashedAt!.isBefore(limit))) {
+    await purgeExpiredTrash();
+  }
+
+  /// Șterge definitiv notițele aflate în coș de peste 30 de zile. Rulează la
+  /// pornire și la intrarea în coș (aplicația poate sta deschisă zile).
+  Future<int> purgeExpiredTrash() async {
+    final limit = DateTime.now().subtract(const Duration(days: Note.trashDays));
+    final expired = trashedNotes
+        .where((n) => n.trashedAt!.isBefore(limit))
+        .toList();
+    for (final n in expired) {
       await deleteForever(n);
     }
+    return expired.length;
   }
 
   int get _generation => (_settingsBox.get('boxGeneration_$uid') as int?) ?? 0;

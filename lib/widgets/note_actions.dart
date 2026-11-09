@@ -110,6 +110,8 @@ void showNoteActions(BuildContext context, Note note) {
                     store.trash(note);
                     messenger.showSnackBar(
                       SnackBar(
+                        // Dispare singur, deși are buton (implicit ar rămâne).
+                        persist: false,
                         content: const Text('Notița a fost mutată în coș'),
                         action: SnackBarAction(
                           label: 'Anulează',
@@ -361,6 +363,8 @@ class SwipeToDelete extends StatelessWidget {
         if (doneMessage != null) {
           messenger.showSnackBar(
             SnackBar(
+              // Dispare singur, deși are buton (implicit ar rămâne).
+              persist: false,
               content: Text(doneMessage!),
               action: onUndo == null
                   ? null

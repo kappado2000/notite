@@ -165,6 +165,8 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
+        // Dispare singur, deși are buton (implicit ar rămâne).
+        persist: false,
         content: Text(m),
         duration: Duration(seconds: ocrText == null ? 4 : 8),
         action: ocrText == null
@@ -623,12 +625,20 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
     child: InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: () async {
-        final now = DateTime.now();
+        // Interval larg: buletinele emise după 55 de ani sunt valabile
+        // zeci de ani (ex. până în 2075), iar actele vechi pot fi din 1900+.
+        final first = DateTime(1900);
+        final last = DateTime(2100, 12, 31);
+        var initial = value ?? DateTime.now();
+        if (initial.isBefore(first)) initial = first;
+        if (initial.isAfter(last)) initial = last;
         final d = await showDatePicker(
           context: context,
-          initialDate: value ?? now,
-          firstDate: DateTime(1950),
-          lastDate: DateTime(now.year + 30),
+          initialDate: initial,
+          firstDate: first,
+          lastDate: last,
+          // Se poate și scrie data direct (iconița creion din selector).
+          helpText: 'Alege data sau scrie-o (creionul de sus)',
         );
         if (d != null) setState(() => onChanged(d));
       },

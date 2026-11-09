@@ -40,6 +40,25 @@ class Note {
   bool locked;
 
   bool get isTrashed => trashedAt != null;
+
+  /// Cât stă o notiță în coș până la ștergerea definitivă.
+  static const trashDays = 30;
+
+  /// Zile rămase până la ștergerea definitivă (null dacă nu e în coș).
+  int? daysLeftInTrash([DateTime? now]) {
+    final t = trashedAt;
+    if (t == null) return null;
+    final passed = (now ?? DateTime.now()).difference(t).inDays;
+    return (trashDays - passed).clamp(0, trashDays);
+  }
+
+  /// „Se șterge definitiv în 12 zile” / „mâine” / „azi”.
+  String? get trashLabel => switch (daysLeftInTrash()) {
+    null => null,
+    0 => 'Se șterge definitiv azi',
+    1 => 'Se șterge definitiv mâine',
+    final d => 'Se șterge definitiv în $d zile',
+  };
   bool get hasReminder => reminderAt != null;
 
   String get displayTitle => title.trim().isEmpty ? 'Fără titlu' : title.trim();

@@ -13,6 +13,7 @@ import '../widgets/notebook_editor.dart';
 import 'note_editor_screen.dart';
 import 'notes_tab.dart';
 import 'qr_scan_screen.dart';
+import 'receipt_split_screen.dart';
 import 'shell.dart';
 
 /// Pagina de start: acțiuni rapide, recente, mementouri, carnete.
@@ -387,6 +388,13 @@ class _QuickActions extends StatelessWidget {
           final note = await scanCodeFlow(context);
           if (note != null && context.mounted) openNote(context, note);
         },
+      ),
+      (
+        Icons.receipt_long_outlined,
+        'Bon',
+        neutral,
+        scheme.primary,
+        () => openReceiptSplit(context),
       ),
     ];
     return Row(
