@@ -248,6 +248,10 @@ class _SecretsScreenState extends State<SecretsScreen>
       ),
     );
     if (type == null || !mounted) return;
+    await _addType(type);
+  }
+
+  Future<void> _addType(SecretType type) async {
     final store = context.read<NotesStore>();
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -517,7 +521,6 @@ class _SecretsScreenState extends State<SecretsScreen>
     final scoped = all.where(
       (i) => (!_favorites || i.favorite) && (_type == null || i.type == _type),
     );
-    final types = {for (final i in all) i.type};
     final today = DateUtils.dateOnly(DateTime.now());
     final soon = [
       for (final i in all)
@@ -531,6 +534,7 @@ class _SecretsScreenState extends State<SecretsScreen>
       if (c != null) monthly[i.currency] = (monthly[i.currency] ?? 0) + c;
     }
     final items = store.searchSecrets(_query, scoped);
+    final grouped = _type == null && !_favorites && _query.trim().isEmpty;
     final report = PasswordReport.of(all);
 
     return Column(
@@ -547,16 +551,18 @@ class _SecretsScreenState extends State<SecretsScreen>
               onChanged: (v) => setState(() => _query = v),
             ),
           ),
-        SizedBox(
-          height: 48,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+        // Toate tipurile la vedere, pe mai multe rânduri, cu câte sunt.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
             children: [
-              for (final (selected, label, tint, onTap) in [
+              for (final (selected, label, icon, tint, onTap) in [
                 (
                   _type == null && !_favorites,
-                  'Toate (${all.length})',
+                  'Toate ${all.length}',
+                  Icons.apps,
                   null,
                   () => setState(() {
                     _type = null;
@@ -567,40 +573,41 @@ class _SecretsScreenState extends State<SecretsScreen>
                   (
                     _favorites,
                     'Favorite',
+                    Icons.star_outline,
                     null,
                     () => setState(() => _favorites = !_favorites),
                   ),
                 for (final t in SecretType.values)
-                  if (types.contains(t))
-                    (
-                      _type == t,
-                      _plural(t),
-                      secretTint(t),
-                      () => setState(() => _type = _type == t ? null : t),
-                    ),
-              ])
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: Center(
-                    child: ChoiceChip(
-                      label: Text(label),
-                      selected: selected,
-                      backgroundColor: tint?.surface(context),
-                      selectedColor: tint?.container(context),
-                      side: tint == null
-                          ? null
-                          : BorderSide(
-                              color: tint
-                                  .onContainer(context)
-                                  .withValues(alpha: 0.45),
-                            ),
-                      labelStyle: tint == null
-                          ? null
-                          : TextStyle(color: tint.onContainer(context)),
-                      checkmarkColor: tint?.onContainer(context),
-                      onSelected: (_) => onTap(),
-                    ),
+                  (
+                    _type == t,
+                    '${_plural(t)} ${all.where((i) => i.type == t).length}',
+                    t.icon,
+                    secretTint(t),
+                    () => setState(() => _type = _type == t ? null : t),
                   ),
+              ])
+                ChoiceChip(
+                  avatar: selected
+                      ? null
+                      : Icon(icon, size: 16, color: tint?.onContainer(context)),
+                  label: Text(label),
+                  selected: selected,
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  backgroundColor: tint?.surface(context),
+                  selectedColor: tint?.container(context),
+                  side: tint == null
+                      ? null
+                      : BorderSide(
+                          color: tint
+                              .onContainer(context)
+                              .withValues(alpha: 0.45),
+                        ),
+                  labelStyle: tint == null
+                      ? null
+                      : TextStyle(color: tint.onContainer(context)),
+                  checkmarkColor: tint?.onContainer(context),
+                  onSelected: (_) => onTap(),
                 ),
             ],
           ),
@@ -659,7 +666,7 @@ class _SecretsScreenState extends State<SecretsScreen>
             ),
           ),
         Expanded(
-          child: items.isEmpty
+          child: items.isEmpty && !grouped
               ? Center(
                   child: Text(
                     all.isEmpty
@@ -668,28 +675,162 @@ class _SecretsScreenState extends State<SecretsScreen>
                     textAlign: TextAlign.center,
                   ),
                 )
+              : grouped
+              // „Toate”, fără căutare: câte o secțiune pe tip, în nuanța lui.
+              ? ListView(
+                  padding: EdgeInsets.fromLTRB(12, 4, 12, bottomSpace(context)),
+                  children: [
+                    // toate tipurile, mereu în aceeași ordine (și cele goale)
+                    for (final t in SecretType.values)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _section(
+                          t,
+                          items.where((i) => i.type == t).toList(),
+                        ),
+                      ),
+                  ],
+                )
               : ListView.builder(
                   padding: EdgeInsets.only(bottom: bottomSpace(context)),
                   itemCount: items.length,
-                  itemBuilder: (_, i) => SwipeToDelete(
-                    id: 'secret-${items[i].id}',
-                    label: 'Șterge',
-                    question:
-                        'Ștergi „${items[i].displayTitle}”? Datele salvate '
-                        'vor fi șterse definitiv.',
-                    onDelete: (store) => store.deleteSecret(items[i]),
-                    doneMessage: 'Șters',
-                    // Fără „Anulează” când are atașamente: acelea se
-                    // șterg imediat, odată cu intrarea.
-                    onUndo:
-                        store.attachmentsOf(items[i].attachmentOwnerId).isEmpty
-                        ? (store) => store.saveSecret(items[i].copy())
-                        : null,
-                    child: SecretTile(item: items[i]),
-                  ),
+                  itemBuilder: (_, i) =>
+                      _swipe(items[i], SecretTile(item: items[i])),
                 ),
         ),
       ],
+    );
+  }
+
+  Widget _swipe(SecretItem item, Widget child) {
+    final store = context.read<NotesStore>();
+    return SwipeToDelete(
+      id: 'secret-${item.id}',
+      label: 'Șterge',
+      question:
+          'Ștergi „${item.displayTitle}”? Datele salvate '
+          'vor fi șterse definitiv.',
+      onDelete: (store) => store.deleteSecret(item),
+      doneMessage: 'Șters',
+      // Fără „Anulează” când are atașamente: acelea se
+      // șterg imediat, odată cu intrarea.
+      onUndo: store.attachmentsOf(item.attachmentOwnerId).isEmpty
+          ? (store) => store.saveSecret(item.copy())
+          : null,
+      child: child,
+    );
+  }
+
+  /// Secțiunea unui tip: antet colorat (nume, câte sunt, adaugă, deschide)
+  /// și primele intrări (favoritele întâi).
+  Widget _section(SecretType t, List<SecretItem> list) {
+    const shown = 4;
+    final tint = secretTint(t);
+    final accent = tint.onContainer(context);
+    final sorted = [...list]
+      ..sort((a, b) => a.favorite == b.favorite ? 0 : (a.favorite ? -1 : 1));
+    void open() => setState(() => _type = t);
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      color: tint.surface(context),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: accent, width: 4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: list.isEmpty ? () => _addType(t) : open,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 4, 6),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: tint.container(context),
+                      foregroundColor: accent,
+                      child: Icon(t.icon, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _plural(t),
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: tint.container(context),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${list.length}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Adaugă: ${t.label}',
+                      icon: Icon(Icons.add, color: accent),
+                      onPressed: () => _addType(t),
+                    ),
+                    Icon(Icons.chevron_right, color: accent),
+                    const SizedBox(width: 6),
+                  ],
+                ),
+              ),
+            ),
+            if (list.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Text(
+                  'Nimic salvat încă',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            for (final i in sorted.take(shown)) ...[
+              Divider(
+                height: 1,
+                indent: 16,
+                endIndent: 16,
+                color: accent.withValues(alpha: 0.15),
+              ),
+              _swipe(i, SecretTile(item: i, plain: true)),
+            ],
+            if (list.length > shown)
+              InkWell(
+                onTap: open,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: Text(
+                    'Toate cele ${list.length} ›',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: accent,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -711,9 +852,12 @@ class _SecretsScreenState extends State<SecretsScreen>
 }
 
 class SecretTile extends StatelessWidget {
-  const SecretTile({super.key, required this.item});
+  const SecretTile({super.key, required this.item, this.plain = false});
 
   final SecretItem item;
+
+  /// În secțiunea colorată a tipului: fără fundalul și bara proprii.
+  final bool plain;
 
   @override
   Widget build(BuildContext context) {
@@ -730,13 +874,15 @@ class SecretTile extends StatelessWidget {
     };
     final tint = secretTint(item.type);
     return Material(
-      color: tint.surface(context),
+      color: plain ? Colors.transparent : tint.surface(context),
       child: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(color: tint.onContainer(context), width: 4),
-          ),
-        ),
+        decoration: plain
+            ? null
+            : BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: tint.onContainer(context), width: 4),
+                ),
+              ),
         child: ListTile(
           leading: SecretAvatar(item: item),
           title: Row(
