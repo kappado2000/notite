@@ -6,6 +6,7 @@ import '../data/notes_store.dart';
 import '../models/note.dart';
 import '../services/scan_service.dart';
 import '../session.dart';
+import '../theme.dart';
 import '../utils/format.dart';
 import '../widgets/note_actions.dart';
 import '../widgets/note_card.dart';
@@ -240,6 +241,7 @@ class _HomeTabState extends State<HomeTab> {
                     for (final nb in store.notebooks)
                       _NotebookTile(
                         name: nb.name,
+                        tint: GroupTint.at(store.tintOf(nb)),
                         count: store.notebookCount(nb.id),
                         onTap: () => shell.openNotes(NotebookView(nb.id)),
                         onLongPress: () => showNotebookMenu(context, nb),
@@ -460,6 +462,7 @@ class _QuickActions extends StatelessWidget {
 class _NotebookTile extends StatelessWidget {
   const _NotebookTile({
     required this.name,
+    required this.tint,
     required this.count,
     required this.onTap,
     required this.onLongPress,
@@ -467,6 +470,7 @@ class _NotebookTile extends StatelessWidget {
   });
 
   final String name;
+  final GroupTint tint;
   final int count;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
@@ -477,6 +481,7 @@ class _NotebookTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Card(
       clipBehavior: Clip.antiAlias,
+      color: tint.surface(context),
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
@@ -491,13 +496,13 @@ class _NotebookTile extends StatelessWidget {
                     width: 34,
                     height: 34,
                     decoration: BoxDecoration(
-                      color: scheme.primaryContainer,
+                      color: tint.container(context),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
                       Icons.book_outlined,
                       size: 19,
-                      color: scheme.onPrimaryContainer,
+                      color: tint.onContainer(context),
                     ),
                   ),
                   const Spacer(),
@@ -505,7 +510,7 @@ class _NotebookTile extends StatelessWidget {
                     onTap: onRename,
                     radius: 20,
                     child: Tooltip(
-                      message: 'Redenumește',
+                      message: 'Editează',
                       child: Padding(
                         padding: const EdgeInsets.all(6),
                         child: Icon(

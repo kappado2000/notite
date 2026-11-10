@@ -10,6 +10,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:notite/data/notes_store.dart';
 import 'package:notite/models/note_template.dart';
 import 'package:notite/services/note_pdf.dart';
+import 'package:notite/theme.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -78,6 +79,23 @@ void main() {
     expect(lineHintOf(lines[2]), 'Lapte');
     // textul notiței conține doar ce s-a scris
     expect(c.document.toPlainText().trim(), 'Cafea');
+  });
+
+  test('fiecare carnet nou are altă nuanță; nuanța aleasă rămâne', () async {
+    final store = await openStore('tint');
+    expect(NotesStore.tintCount, GroupTint.all.length);
+    final made = [
+      for (var i = 0; i < 4; i++) await store.createNotebook('C$i'),
+    ];
+    final tints = {for (final nb in store.allNotebooks) store.tintOf(nb)};
+    expect(tints.length, store.allNotebooks.length);
+    await store.updateNotebook(
+      made.first,
+      name: 'C0',
+      emoji: made.first.emoji,
+      color: 6,
+    );
+    expect(store.tintOf(made.first), 5);
   });
 
   test('notița blocată nu se găsește după conținut, doar după titlu', () async {

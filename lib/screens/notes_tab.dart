@@ -284,7 +284,7 @@ class _NotesTabState extends State<NotesTab> {
                 ],
                 if (nbView != null) ...[
                   const PopupMenuDivider(),
-                  item('notebook', Icons.edit_outlined, 'Redenumește carnetul'),
+                  item('notebook', Icons.edit_outlined, 'Editează carnetul'),
                 ],
                 if (_view is TagView) ...[
                   const PopupMenuDivider(),

@@ -242,6 +242,34 @@ class NotesStore extends ChangeNotifier {
 
   Notebook? notebook(String id) => _notebooks[id];
 
+  /// Nuanța carnetului (index în `GroupTint.all`). Cea aleasă de user
+  /// (`color` 1…8); altfel una automată, după ordinea creării, ca fiecare
+  /// carnet să arate diferit.
+  int tintOf(Notebook nb) {
+    if (nb.color > 0) return nb.color - 1;
+    final ordered = _notebooks.values.toList()
+      ..sort((a, b) {
+        final c = a.createdAt.compareTo(b.createdAt);
+        return c != 0 ? c : a.id.compareTo(b.id);
+      });
+    return ordered.indexOf(nb) % tintCount;
+  }
+
+  static const tintCount = 8;
+
+  /// Prima nuanță nefolosită de alt carnet (sau cea mai puțin folosită).
+  int _freeTint() {
+    final used = List.filled(tintCount, 0);
+    for (final nb in _notebooks.values) {
+      used[tintOf(nb) % tintCount]++;
+    }
+    var best = 0;
+    for (var i = 1; i < tintCount; i++) {
+      if (used[i] < used[best]) best = i;
+    }
+    return best;
+  }
+
   int notebookCount(String id) =>
       activeNotes.where((n) => n.notebookId == id).length;
 
@@ -258,7 +286,7 @@ class NotesStore extends ChangeNotifier {
       createdAt: now,
       updatedAt: now,
       emoji: emoji,
-      color: color,
+      color: color > 0 ? color : _freeTint() + 1,
     );
     _notebooks[nb.id] = nb;
     await _notebooksBox.put(nb.id, nb.toMap());

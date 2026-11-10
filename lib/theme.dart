@@ -78,6 +78,47 @@ class AppColors {
   );
 }
 
+/// Nuanțele grupurilor: fiecare carnet și fiecare tip de parolă are una.
+/// Din culoarea de bază rezultă fundalul ușor colorat al cardurilor,
+/// fundalul iconiței și culoarea textului/iconiței, pe luminos și întunecat.
+class GroupTint {
+  const GroupTint._(this.name, this.base);
+  final String name;
+  final Color base;
+
+  static const all = [
+    GroupTint._('Salvie', Color(0xFF3F8F6B)),
+    GroupTint._('Albastru', Color(0xFF3F78C2)),
+    GroupTint._('Mov', Color(0xFF8460B8)),
+    GroupTint._('Roz', Color(0xFFC2507A)),
+    GroupTint._('Coral', Color(0xFFD56A3C)),
+    GroupTint._('Miere', Color(0xFFC4922A)),
+    GroupTint._('Turcoaz', Color(0xFF23949C)),
+    GroupTint._('Cafeniu', Color(0xFF8E6A4E)),
+  ];
+
+  static GroupTint at(int i) => all[i % all.length];
+
+  bool _dark(BuildContext c) => Theme.of(c).brightness == Brightness.dark;
+
+  /// Fundalul cardului / rândului — abia colorat.
+  Color surface(BuildContext c) {
+    final s = Theme.of(c).colorScheme;
+    final bg = _dark(c) ? s.surfaceContainerLow : s.surfaceContainerLowest;
+    return Color.lerp(bg, base, _dark(c) ? 0.16 : 0.09)!;
+  }
+
+  /// Fundalul iconiței / etichetei.
+  Color container(BuildContext c) => _dark(c)
+      ? Color.lerp(const Color(0xFF141712), base, 0.45)!
+      : Color.lerp(Colors.white, base, 0.24)!;
+
+  /// Iconița și textul de pe [container]; și bara colorată din stânga.
+  Color onContainer(BuildContext c) => _dark(c)
+      ? Color.lerp(Colors.white, base, 0.25)!
+      : Color.lerp(Colors.black, base, 0.62)!;
+}
+
 ThemeData buildTheme(Brightness brightness) {
   final s = brightness == Brightness.light ? AppColors.light : AppColors.dark;
   final light = brightness == Brightness.light;

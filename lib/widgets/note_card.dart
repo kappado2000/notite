@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../data/notes_store.dart';
 import '../models/note.dart';
+import '../theme.dart';
 import '../utils/format.dart';
 
 /// Cardul unei notițe: titlu, fragment, imagine, carnet, etichete.
@@ -37,6 +38,7 @@ class NoteCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final nb = store.notebook(note.notebookId);
+    final tint = nb == null ? null : GroupTint.at(store.tintOf(nb));
     final thumb = note.locked ? null : store.firstImageOf(note.id);
     final thumbBytes = thumb == null || !showImage
         ? null
@@ -54,14 +56,14 @@ class NoteCard extends StatelessWidget {
       children: [
         if (showNotebook && nb != null)
           _Pill(
-            color: scheme.primaryContainer,
+            color: tint!.container(context),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   Icons.book_outlined,
                   size: 12,
-                  color: scheme.onPrimaryContainer,
+                  color: tint.onContainer(context),
                 ),
                 const SizedBox(width: 4),
                 Flexible(
@@ -69,7 +71,7 @@ class NoteCard extends StatelessWidget {
                     nb.name,
                     style: text.labelSmall?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: scheme.onPrimaryContainer,
+                      color: tint.onContainer(context),
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -174,6 +176,7 @@ class NoteCard extends StatelessWidget {
 
     return Card(
       clipBehavior: Clip.antiAlias,
+      color: tint?.surface(context),
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
@@ -209,6 +212,14 @@ class NoteCard extends StatelessWidget {
                   ),
               ],
             ),
+            if (tint != null)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 4,
+                child: ColoredBox(color: tint.onContainer(context)),
+              ),
           ],
         ),
       ),
@@ -262,6 +273,8 @@ class NoteRow extends StatelessWidget {
         ? '🔒 Notiță blocată'
         : snippet(note.plainText, max: 260);
     final nb = showNotebook ? store.notebook(note.notebookId) : null;
+    final own = store.notebook(note.notebookId);
+    final tint = own == null ? null : GroupTint.at(store.tintOf(own));
     // Tipografie după lista Evernote: titlu semi-îngroșat, text normal gri
     // neutru, fără spațiere suplimentară între litere.
     final small = TextStyle(
@@ -271,107 +284,128 @@ class NoteRow extends StatelessWidget {
       color: scheme.onSurface.withValues(alpha: 0.58),
     );
 
-    return InkWell(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (leading != null)
-              Padding(padding: const EdgeInsets.only(right: 8), child: leading),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    note.displayTitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.2,
-                      height: 1.25,
-                      color: scheme.onSurface,
+    return Material(
+      color: tint?.surface(context) ?? Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Container(
+          decoration: tint == null
+              ? null
+              : BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: tint.onContainer(context),
+                      width: 4,
                     ),
                   ),
-                  if (body.isNotEmpty) ...[
-                    const SizedBox(height: 2),
+                ),
+          padding: const EdgeInsets.fromLTRB(16, 18, 20, 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (leading != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: leading,
+                ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      body,
-                      maxLines: 3,
+                      note.displayTitle,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w400,
-                        letterSpacing: 0,
-                        height: 1.3,
-                        color: scheme.onSurface.withValues(alpha: 0.74),
+                        fontSize: 19,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                        height: 1.25,
+                        color: scheme.onSurface,
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 26),
-                  Row(
-                    children: [
+                    if (body.isNotEmpty) ...[
+                      const SizedBox(height: 2),
                       Text(
-                        note.trashLabel ?? formatShortDate(note.updatedAt),
-                        style: note.isTrashed
-                            ? small.copyWith(color: scheme.error)
-                            : small,
+                        body,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: 0,
+                          height: 1.3,
+                          color: scheme.onSurface.withValues(alpha: 0.74),
+                        ),
                       ),
-                      if (nb != null) ...[
-                        Text('  ·  ', style: small),
-                        Flexible(
-                          child: Text(
-                            nb.name,
-                            style: small,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                      if (note.pinned) ...[
-                        const SizedBox(width: 8),
-                        Icon(Icons.push_pin, size: 14, color: scheme.primary),
-                      ],
-                      if (note.hasReminder) ...[
-                        const SizedBox(width: 8),
-                        Icon(
-                          note.reminderDone ? Icons.check_circle : Icons.alarm,
-                          size: 14,
-                          color: small.color,
-                        ),
-                      ],
-                      if (attCount > 0) ...[
-                        const SizedBox(width: 8),
-                        Icon(Icons.attach_file, size: 14, color: small.color),
-                      ],
                     ],
-                  ),
-                ],
-              ),
-            ),
-            if (thumbBytes != null) ...[
-              const SizedBox(width: 14),
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: scheme.outlineVariant),
+                    const SizedBox(height: 26),
+                    Row(
+                      children: [
+                        Text(
+                          note.trashLabel ?? formatShortDate(note.updatedAt),
+                          style: note.isTrashed
+                              ? small.copyWith(color: scheme.error)
+                              : small,
+                        ),
+                        if (nb != null) ...[
+                          Text('  ·  ', style: small),
+                          Flexible(
+                            child: Text(
+                              nb.name,
+                              style: small.copyWith(
+                                color: tint?.onContainer(context),
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                        if (note.pinned) ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.push_pin, size: 14, color: scheme.primary),
+                        ],
+                        if (note.hasReminder) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            note.reminderDone
+                                ? Icons.check_circle
+                                : Icons.alarm,
+                            size: 14,
+                            color: small.color,
+                          ),
+                        ],
+                        if (attCount > 0) ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.attach_file, size: 14, color: small.color),
+                        ],
+                      ],
+                    ),
+                  ],
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(9),
-                  child: Image.memory(
-                    thumbBytes,
-                    width: 104,
-                    height: 104,
-                    fit: BoxFit.cover,
-                    cacheWidth: 312,
+              ),
+              if (thumbBytes != null) ...[
+                const SizedBox(width: 14),
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: scheme.outlineVariant),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(9),
+                    child: Image.memory(
+                      thumbBytes,
+                      width: 104,
+                      height: 104,
+                      fit: BoxFit.cover,
+                      cacheWidth: 312,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

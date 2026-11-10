@@ -9,9 +9,21 @@ import '../../models/secret_item.dart';
 import '../../services/file_opener.dart';
 import '../../services/password_tools.dart';
 import '../../services/secret_helpers.dart';
+import '../../theme.dart';
 import '../../utils/format.dart';
 import '../../widgets/pickers.dart';
 import '../image_viewer_screen.dart';
+
+/// Nuanța fiecărui tip de intrare (Conturi, Carduri, Acte…).
+GroupTint secretTint(SecretType t) => GroupTint.at(switch (t) {
+  SecretType.login => 1, // albastru
+  SecretType.card => 2, // mov
+  SecretType.bank => 6, // turcoaz
+  SecretType.identity => 4, // coral
+  SecretType.subscription => 3, // roz
+  SecretType.wifi => 0, // salvie
+  SecretType.note => 5, // miere
+});
 
 /// Iconița din listă: culoarea și inițiala serviciului recunoscut
 /// (eMAG, Netflix, BT…) sau iconița tipului.
@@ -23,7 +35,6 @@ class SecretAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final site =
         item.type == SecretType.login || item.type == SecretType.subscription
         ? siteOf(item)
@@ -44,10 +55,11 @@ class SecretAvatar extends StatelessWidget {
         ),
       );
     }
+    final tint = secretTint(item.type);
     return CircleAvatar(
       radius: radius,
-      backgroundColor: scheme.secondaryContainer,
-      foregroundColor: scheme.onSecondaryContainer,
+      backgroundColor: tint.container(context),
+      foregroundColor: tint.onContainer(context),
       child: item.type == SecretType.login && item.displayTitle.isNotEmpty
           ? Text(item.displayTitle.substring(0, 1).toUpperCase())
           : Icon(item.type.icon, size: radius),

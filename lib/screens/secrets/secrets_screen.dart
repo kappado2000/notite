@@ -235,7 +235,11 @@ class _SecretsScreenState extends State<SecretsScreen>
           children: [
             for (final t in SecretType.values)
               ListTile(
-                leading: Icon(t.icon),
+                leading: CircleAvatar(
+                  backgroundColor: secretTint(t).container(ctx),
+                  foregroundColor: secretTint(t).onContainer(ctx),
+                  child: Icon(t.icon, size: 20),
+                ),
                 title: Text(t.label),
                 onTap: () => Navigator.pop(ctx, t),
               ),
@@ -549,10 +553,11 @@ class _SecretsScreenState extends State<SecretsScreen>
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             children: [
-              for (final (selected, label, onTap) in [
+              for (final (selected, label, tint, onTap) in [
                 (
                   _type == null && !_favorites,
                   'Toate (${all.length})',
+                  null,
                   () => setState(() {
                     _type = null;
                     _favorites = false;
@@ -562,6 +567,7 @@ class _SecretsScreenState extends State<SecretsScreen>
                   (
                     _favorites,
                     'Favorite',
+                    null,
                     () => setState(() => _favorites = !_favorites),
                   ),
                 for (final t in SecretType.values)
@@ -569,6 +575,7 @@ class _SecretsScreenState extends State<SecretsScreen>
                     (
                       _type == t,
                       _plural(t),
+                      secretTint(t),
                       () => setState(() => _type = _type == t ? null : t),
                     ),
               ])
@@ -578,6 +585,19 @@ class _SecretsScreenState extends State<SecretsScreen>
                     child: ChoiceChip(
                       label: Text(label),
                       selected: selected,
+                      backgroundColor: tint?.surface(context),
+                      selectedColor: tint?.container(context),
+                      side: tint == null
+                          ? null
+                          : BorderSide(
+                              color: tint
+                                  .onContainer(context)
+                                  .withValues(alpha: 0.45),
+                            ),
+                      labelStyle: tint == null
+                          ? null
+                          : TextStyle(color: tint.onContainer(context)),
+                      checkmarkColor: tint?.onContainer(context),
                       onSelected: (_) => onTap(),
                     ),
                   ),
@@ -708,32 +728,43 @@ class SecretTile extends StatelessWidget {
       SecretType.identity => (item.cnp, 'CNP copiat', true),
       SecretType.note => (item.notes, 'Nota copiată', true),
     };
-    return ListTile(
-      leading: SecretAvatar(item: item),
-      title: Row(
-        children: [
-          Flexible(
-            child: Text(item.displayTitle, overflow: TextOverflow.ellipsis),
+    final tint = secretTint(item.type);
+    return Material(
+      color: tint.surface(context),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(color: tint.onContainer(context), width: 4),
           ),
-          if (item.favorite) ...[
-            const SizedBox(width: 4),
-            Icon(Icons.star, size: 16, color: scheme.primary),
-          ],
-        ],
-      ),
-      subtitle: item.subtitle.isEmpty
-          ? null
-          : Text(item.subtitle, overflow: TextOverflow.ellipsis),
-      trailing: copy.isEmpty
-          ? null
-          : IconButton(
-              tooltip: 'Copiază',
-              icon: const Icon(Icons.copy),
-              onPressed: () =>
-                  copyValue(context, copy, secret: secret, what: what),
-            ),
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => SecretDetailScreen(id: item.id)),
+        ),
+        child: ListTile(
+          leading: SecretAvatar(item: item),
+          title: Row(
+            children: [
+              Flexible(
+                child: Text(item.displayTitle, overflow: TextOverflow.ellipsis),
+              ),
+              if (item.favorite) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.star, size: 16, color: scheme.primary),
+              ],
+            ],
+          ),
+          subtitle: item.subtitle.isEmpty
+              ? null
+              : Text(item.subtitle, overflow: TextOverflow.ellipsis),
+          trailing: copy.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Copiază',
+                  icon: const Icon(Icons.copy),
+                  onPressed: () =>
+                      copyValue(context, copy, secret: secret, what: what),
+                ),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => SecretDetailScreen(id: item.id)),
+          ),
+        ),
       ),
     );
   }
