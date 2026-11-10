@@ -606,6 +606,13 @@ class _SecretsScreenState extends State<SecretsScreen>
           Card(
             margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
             color: Theme.of(context).colorScheme.errorContainer,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(
+                color: Theme.of(context).colorScheme.error
+                    .withValues(alpha: 0.55),
+              ),
+            ),
             child: ListTile(
               leading: const Icon(Icons.health_and_safety_outlined),
               title: Text(
@@ -624,6 +631,13 @@ class _SecretsScreenState extends State<SecretsScreen>
           Card(
             margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
             color: Theme.of(context).colorScheme.secondaryContainer,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(
+                color: Theme.of(context).colorScheme.secondary
+                    .withValues(alpha: 0.55),
+              ),
+            ),
             child: ListTile(
               leading: const Icon(Icons.event_busy_outlined),
               title: Text(
@@ -731,6 +745,11 @@ class _SecretsScreenState extends State<SecretsScreen>
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       color: tint.surface(context),
+      // margine subțire, în nuanța închisă a tipului
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: accent.withValues(alpha: 0.55)),
+      ),
       child: Container(
         decoration: BoxDecoration(
           border: Border(left: BorderSide(color: accent, width: 4)),
@@ -847,7 +866,7 @@ class _SecretsScreenState extends State<SecretsScreen>
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: BorderSide(
-          color: selected ? fg : fg.withValues(alpha: 0.25),
+          color: selected ? fg : fg.withValues(alpha: 0.55),
           width: selected ? 2 : 1,
         ),
       ),
