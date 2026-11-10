@@ -15,6 +15,17 @@ class OcrLine {
   final double slope;
 
   double get height => bottom - top;
+
+  /// Linia văzută pe poza rotită cu [quarters] sferturi de tură în sensul
+  /// acelor de ceasornic (1 = 90°). Telefonul dă uneori pozițiile pe poza
+  /// culcată, așa cum a ieșit din cameră.
+  OcrLine rotated(int quarters) => switch (quarters % 4) {
+    1 => OcrLine(text, -bottom, left, -top, right),
+    2 => OcrLine(text, -right, -bottom, -left, -top),
+    3 => OcrLine(text, top, -right, bottom, -left),
+    _ => this,
+  };
+
   double get centerX => (left + right) / 2;
   double get centerY => (top + bottom) / 2;
 }

@@ -294,7 +294,7 @@ Receipt parseReceipt(List<String> rows) {
       // cantitatea și valoarea totală, fără prețul unitar.
       final nameX = RegExp(
         // înainte de „x” nu e cifră: „Fanta 6x0.5L” rămâne denumire
-        r'^(.*?[A-Za-zĂÂÎȘŞȚŢăâîșşțţ].*?[^\d\s.,])\s*[xX×\*]\s*(\d+(?:[.,]\d{1,3})?)\s*(?:BUC\.?|KG|L)?$',
+        r'^(.*?[A-Za-zĂÂÎȘŞȚŢăâîșşțţ].*?[^\d\s.,])\s*[xX×\*]\s*(\d+(?:[.,]\d{1,3})?)[oO°]?\s*(?:BUC\.?|KG|L)?$',
         caseSensitive: false,
       ).firstMatch(before);
       final xName = RegExp(
@@ -484,21 +484,28 @@ class ReceiptSplit {
 /// sigură (cea raportată de telefon poate fi greșită), așa că încercăm
 /// mai multe și păstrăm citirea cea mai bună: suma produselor egală cu
 /// TOTAL-ul, apoi cele mai multe produse; la egalitate, poza mai dreaptă.
+///
+/// Dacă poza a ajuns culcată la cititor, rândurile ies pe coloane (toate
+/// prețurile într-un rând); de aceea sunt încercate și cele patru
+/// orientări, întâi cea așa cum a venit.
 List<String> receiptRows(List<OcrLine> lines) {
   if (lines.isEmpty) return const [];
-  final candidates = <double>{
-    0,
-    reportedSkew(lines),
-    for (var i = 1; i <= 15; i++) ...[i / 100, -i / 100],
-  }.toList()..sort((a, b) => a.abs().compareTo(b.abs()));
   List<String>? best;
   var bestScore = double.negativeInfinity;
-  for (final k in candidates) {
-    final rows = rowsFromLines(lines, skew: k);
-    final score = _readScore(parseReceipt(rows));
-    if (score > bestScore + 1e-9) {
-      bestScore = score;
-      best = rows;
+  for (final q in const [0, 1, 3, 2]) {
+    final view = [for (final l in lines) l.rotated(q)];
+    final candidates = <double>{
+      0,
+      if (q == 0) reportedSkew(view),
+      for (var i = 1; i <= 15; i++) ...[i / 100, -i / 100],
+    }.toList()..sort((a, b) => a.abs().compareTo(b.abs()));
+    for (final k in candidates) {
+      final rows = rowsFromLines(view, skew: k);
+      final score = _readScore(parseReceipt(rows));
+      if (score > bestScore + 1e-9) {
+        bestScore = score;
+        best = rows;
+      }
     }
   }
   return best!;

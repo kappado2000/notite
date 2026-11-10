@@ -132,8 +132,17 @@ void main() {
   // separate; bonul e înclinat ~3°, deci prețul din dreapta stă cu
   // aproape un rând mai jos decât denumirea lui. Telefonul poate raporta
   // o înclinare greșită (0 sau aiurea) — citirea trebuie să iasă oricum.
-  for (final reported in [0.05, 0.0, 0.3, -0.2]) {
-    test('poză nedecupată, strâmbă (înclinare raportată $reported)', () {
+  // (înclinare raportată, poza culcată: 0 = dreaptă, 1/3 = un sfert de
+  // tură — pozițiile vin pe poza culcată, deci textul iese pe coloane)
+  for (final (reported, lying) in [
+    (0.05, 0),
+    (0.0, 0),
+    (0.3, 0),
+    (-0.2, 0),
+    (0.0, 3),
+    (0.0, 1),
+  ]) {
+    test('poză nedecupată, strâmbă (înclinare $reported, culcată $lying)', () {
       const slope = 0.05;
       final lines = <OcrLine>[];
       void row(double y, List<(String, double, double)> cells) {
@@ -170,7 +179,9 @@ void main() {
       row(1700, [('( ) 5% - 25.00 LEI', 140, 460)]);
       row(1745, [('( ) 10% - 50.00 LEI', 140, 470)]);
 
-      final r = parseReceipt(receiptRows(lines));
+      final r = parseReceipt(
+        receiptRows([for (final l in lines) l.rotated(lying)]),
+      );
       expect(r.items.map((i) => i.name).toList(), [
         for (final (name, _, _) in items) name,
       ]);
@@ -191,6 +202,12 @@ void main() {
     ]);
     expect(rows, ['Total de plata: 503.00', 'din care TVA: 65.62']);
     expect(parseReceipt(rows).printedTotal, 503);
+  });
+
+  test('„X 3.000o” (o literă citită în plus după cantitate)', () {
+    final r = parseReceipt(['Cartofi rustici  X 3.000o  45.00']);
+    expect(r.items.single.qty, 3);
+    expect(r.items.single.unitPrice, 15);
   });
 
   test('o urmă de fundal după preț nu strică rândul', () {

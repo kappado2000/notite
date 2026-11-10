@@ -97,7 +97,13 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
             _files.add(('Bon.jpg', p.bytes, 'image/jpeg'));
           }
         case 'image':
-          for (final f in await FilePicker.pickFiles(type: FileType.image)) {
+          // selectorul de poze al telefonului dă JPEG drept (pozele iPhone
+          // sunt HEIC, salvate culcate, și altfel se citesc pe coloane)
+          for (final f in await ImagePicker().pickMultiImage(
+            maxWidth: 3000,
+            maxHeight: 3000,
+            imageQuality: 92,
+          )) {
             final b = await f.readAsBytes();
             images.add(b);
             _files.add((f.name, b, Attachment.mimeFromName(f.name)));
