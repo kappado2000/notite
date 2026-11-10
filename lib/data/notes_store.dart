@@ -419,6 +419,9 @@ class NotesStore extends ChangeNotifier {
     }).toList();
   }
 
+  /// Text pentru comparat/sortat: fără diacritice, cu litere mici.
+  static String foldText(String s) => _fold(s);
+
   static String _fold(String s) {
     const from = 'ăâîșşțţĂÂÎȘŞȚŢ';
     const to = 'aaissttaaisstt';

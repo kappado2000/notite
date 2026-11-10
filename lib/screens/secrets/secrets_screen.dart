@@ -535,6 +535,8 @@ class _SecretsScreenState extends State<SecretsScreen>
     }
     final items = store.searchSecrets(_query, scoped);
     final grouped = _type == null && !_favorites && _query.trim().isEmpty;
+    // fără căutare: alfabetic; cu căutare: ordinea potrivirilor
+    final shownItems = _query.trim().isEmpty ? _alphabetical(items) : items;
     final report = PasswordReport.of(all);
 
     return Column(
@@ -693,9 +695,9 @@ class _SecretsScreenState extends State<SecretsScreen>
                 )
               : ListView.builder(
                   padding: EdgeInsets.only(bottom: bottomSpace(context)),
-                  itemCount: items.length,
+                  itemCount: shownItems.length,
                   itemBuilder: (_, i) =>
-                      _swipe(items[i], SecretTile(item: items[i])),
+                      _swipe(shownItems[i], SecretTile(item: shownItems[i])),
                 ),
         ),
       ],
@@ -721,14 +723,21 @@ class _SecretsScreenState extends State<SecretsScreen>
     );
   }
 
+  /// După titlu, fără să țină cont de diacritice și de majuscule.
+  static List<SecretItem> _alphabetical(Iterable<SecretItem> items) {
+    String key(SecretItem i) => NotesStore.foldText(i.displayTitle.trim());
+    return [...items]..sort((a, b) {
+      final c = key(a).compareTo(key(b));
+      return c != 0 ? c : a.displayTitle.compareTo(b.displayTitle);
+    });
+  }
+
   /// Secțiunea unui tip: antet colorat (nume, câte sunt, adaugă, deschide)
-  /// și primele intrări (favoritele întâi).
+  /// și toate intrările lui, în ordine alfabetică.
   Widget _section(SecretType t, List<SecretItem> list) {
-    const shown = 4;
     final tint = secretTint(t);
     final accent = tint.onContainer(context);
-    final sorted = [...list]
-      ..sort((a, b) => a.favorite == b.favorite ? 0 : (a.favorite ? -1 : 1));
+    final sorted = _alphabetical(list);
     void open() => setState(() => _type = t);
     return Card(
       margin: EdgeInsets.zero,
@@ -804,7 +813,7 @@ class _SecretsScreenState extends State<SecretsScreen>
                   ),
                 ),
               ),
-            for (final i in sorted.take(shown)) ...[
+            for (final i in sorted) ...[
               Divider(
                 height: 1,
                 indent: 16,
@@ -813,21 +822,6 @@ class _SecretsScreenState extends State<SecretsScreen>
               ),
               _swipe(i, SecretTile(item: i, plain: true)),
             ],
-            if (list.length > shown)
-              InkWell(
-                onTap: open,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: Text(
-                    'Toate cele ${list.length} ›',
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: accent,
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
