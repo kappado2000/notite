@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../data/notes_store.dart';
 import '../models/note.dart';
+import '../models/notebook.dart';
 import '../services/scan_service.dart';
 import '../session.dart';
 import '../theme.dart';
@@ -17,7 +18,8 @@ import 'qr_scan_screen.dart';
 import 'receipt_split_screen.dart';
 import 'shell.dart';
 
-/// Pagina de start: acțiuni rapide, recente, mementouri, carnete.
+/// Pagina de start: acțiuni rapide, mementouri, apoi câte o secțiune
+/// colorată pe fiecare carnet, cu ultimele lui notițe.
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
 
@@ -46,8 +48,6 @@ class _HomeTabState extends State<HomeTab> {
 
     final searching = _query.trim().isNotEmpty;
     final results = searching ? store.search(_query, store.activeNotes) : [];
-    final recent = [...store.activeNotes]
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     final upcoming = store.reminderNotes
         .where((n) => !n.reminderDone)
         .take(3)
@@ -189,66 +189,26 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                   ),
                 ),
-              if (recent.isNotEmpty)
-                _section(
-                  _Header(
-                    'Recente',
-                    action: 'Toate',
-                    onAction: () => shell.openNotes(),
-                  ),
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 52 + MediaQuery.textScalerOf(context).scale(120),
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        clipBehavior: Clip.none,
-                        itemCount: recent.length.clamp(0, 10),
-                        separatorBuilder: (_, _) => const SizedBox(width: 10),
-                        itemBuilder: (_, i) => SizedBox(
-                          width: 210,
-                          child: SingleChildScrollView(
-                            physics: const NeverScrollableScrollPhysics(),
-                            child: NoteCard(
-                              note: recent[i],
-                              compact: true,
-                              showImage: false,
-                              onTap: () => openNote(context, recent[i]),
-                              onLongPress: () =>
-                                  showNoteActions(context, recent[i]),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               _section(
                 _Header(
                   'Carnete',
                   action: 'Nou',
                   onAction: () => editNotebook(context),
                 ),
-                SliverGrid(
-                  // Înălțimea crește odată cu mărimea textului (Cont → Aspect).
-                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 220,
-                    mainAxisExtent:
-                        62 + MediaQuery.textScalerOf(context).scale(44),
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  delegate: SliverChildListDelegate([
-                    for (final nb in store.notebooks)
-                      _NotebookTile(
-                        name: nb.name,
-                        tint: GroupTint.at(store.tintOf(nb)),
-                        count: store.notebookCount(nb.id),
-                        onTap: () => shell.openNotes(NotebookView(nb.id)),
-                        onLongPress: () => showNotebookMenu(context, nb),
-                        onRename: () => editNotebook(context, notebook: nb),
-                      ),
-                    _NewNotebookTile(onTap: () => editNotebook(context)),
-                  ]),
+                // Câte o secțiune pe carnet, în nuanța lui, cu ultimele notițe.
+                SliverList.separated(
+                  itemCount: store.notebooks.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (_, i) {
+                    final nb = store.notebooks[i];
+                    return _NotebookSection(
+                      notebook: nb,
+                      tint: GroupTint.at(store.tintOf(nb)),
+                      notes: _latest(store, nb.id),
+                      count: store.notebookCount(nb.id),
+                      onOpen: () => shell.openNotes(NotebookView(nb.id)),
+                    );
+                  },
                 ),
               ),
               if (store.allTags.isNotEmpty)
@@ -315,6 +275,16 @@ class _HomeTabState extends State<HomeTab> {
       ],
     ),
   );
+
+  /// Ultimele 3 notițe ale carnetului: întâi cele fixate, apoi cele mai noi.
+  static List<Note> _latest(NotesStore store, String notebookId) =>
+      (store.activeNotes.where((n) => n.notebookId == notebookId).toList()
+            ..sort((a, b) {
+              if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+              return b.updatedAt.compareTo(a.updatedAt);
+            }))
+          .take(3)
+          .toList();
 
   static String _capitalize(String s) =>
       s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
@@ -459,116 +429,155 @@ class _QuickActions extends StatelessWidget {
   }
 }
 
-class _NotebookTile extends StatelessWidget {
-  const _NotebookTile({
-    required this.name,
+/// Un carnet pe pagina de start: antet colorat și ultimele lui notițe.
+class _NotebookSection extends StatelessWidget {
+  const _NotebookSection({
+    required this.notebook,
     required this.tint,
+    required this.notes,
     required this.count,
-    required this.onTap,
-    required this.onLongPress,
-    required this.onRename,
+    required this.onOpen,
   });
 
-  final String name;
+  final Notebook notebook;
   final GroupTint tint;
+  final List<Note> notes;
   final int count;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
-  final VoidCallback onRename;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final accent = tint.onContainer(context);
+    final muted = TextStyle(fontSize: 13, color: scheme.onSurfaceVariant);
     return Card(
+      margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       color: tint.surface(context),
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: tint.container(context),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.book_outlined,
-                      size: 19,
-                      color: tint.onContainer(context),
-                    ),
-                  ),
-                  const Spacer(),
-                  InkResponse(
-                    onTap: onRename,
-                    radius: 20,
-                    child: Tooltip(
-                      message: 'Editează',
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Icon(
-                          Icons.edit_outlined,
-                          size: 18,
-                          color: scheme.onSurfaceVariant,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: accent, width: 4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: onOpen,
+              onLongPress: () => showNotebookMenu(context, notebook),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 4, 6),
+                child: Row(
+                  children: [
+                    NotebookBadge(notebook: notebook, size: 32),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        notebook.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: accent,
                         ),
                       ),
                     ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: tint.container(context),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Notiță nouă în ${notebook.name}',
+                      icon: Icon(Icons.add, color: accent),
+                      onPressed: () =>
+                          createAndOpenNote(context, notebookId: notebook.id),
+                    ),
+                    Icon(Icons.chevron_right, color: accent),
+                    const SizedBox(width: 6),
+                  ],
+                ),
+              ),
+            ),
+            if (notes.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                child: Text('Nicio notiță încă', style: muted),
+              )
+            else ...[
+              for (final n in notes) ...[
+                Divider(
+                  height: 1,
+                  indent: 16,
+                  endIndent: 16,
+                  color: accent.withValues(alpha: 0.15),
+                ),
+                InkWell(
+                  onTap: () => openNote(context, n),
+                  onLongPress: () => showNoteActions(context, n),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
+                    child: Row(
+                      children: [
+                        if (n.pinned) ...[
+                          Icon(Icons.push_pin, size: 15, color: accent),
+                          const SizedBox(width: 6),
+                        ],
+                        Expanded(
+                          child: Text(
+                            n.displayTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w500,
+                              color: scheme.onSurface,
+                            ),
+                          ),
+                        ),
+                        if (n.hasReminder && !n.reminderDone) ...[
+                          const SizedBox(width: 6),
+                          Icon(Icons.alarm, size: 15, color: muted.color),
+                        ],
+                        const SizedBox(width: 10),
+                        Text(formatShortDate(n.updatedAt), style: muted),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              Text(
-                count == 1 ? '1 notiță' : '$count notițe',
-                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
-              ),
+                ),
+              ],
+              if (count > notes.length)
+                InkWell(
+                  onTap: onOpen,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                    child: Text(
+                      'Toate cele $count notițe ›',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: accent,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                const SizedBox(height: 4),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NewNotebookTile extends StatelessWidget {
-  const _NewNotebookTile({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: scheme.outlineVariant, width: 1.5),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.add, color: scheme.onSurfaceVariant),
-              const SizedBox(height: 4),
-              Text(
-                'Carnet nou',
-                style: TextStyle(color: scheme.onSurfaceVariant),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
