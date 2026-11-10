@@ -10,6 +10,7 @@ import '../../services/biometric_service.dart';
 import '../../services/csv_import.dart';
 import '../../services/firestore_sync.dart';
 import '../../services/password_tools.dart';
+import '../../theme.dart';
 import '../../services/pin_lock.dart';
 import '../../services/vault.dart';
 import '../../session.dart';
@@ -334,6 +335,16 @@ class _SecretsScreenState extends State<SecretsScreen>
       appBar: AppBar(
         title: const Text('Parole'),
         actions: [
+          if (_unlocked &&
+              context.watch<NotesStore>().secrets.any((i) => i.favorite))
+            IconButton(
+              tooltip: _favorites ? 'Toate' : 'Doar favoritele',
+              icon: Icon(_favorites ? Icons.star : Icons.star_outline),
+              onPressed: () => setState(() {
+                _favorites = !_favorites;
+                if (_favorites) _type = null;
+              }),
+            ),
           if (_unlocked)
             IconButton(
               tooltip: _searchOpen ? 'Închide căutarea' : 'Caută',
@@ -553,63 +564,40 @@ class _SecretsScreenState extends State<SecretsScreen>
               onChanged: (v) => setState(() => _query = v),
             ),
           ),
-        // Toate tipurile la vedere, pe mai multe rânduri, cu câte sunt.
+        // Toate tipurile la vedere: grilă 4×2, pătrate egale.
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 6,
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+          child: GridView.count(
+            crossAxisCount: 4,
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 1.25,
             children: [
-              for (final (selected, label, icon, tint, onTap) in [
-                (
-                  _type == null && !_favorites,
-                  'Toate ${all.length}',
-                  Icons.apps,
-                  null,
-                  () => setState(() {
-                    _type = null;
+              _typeTile(
+                icon: Icons.apps,
+                label: 'Toate',
+                count: all.length,
+                tint: null,
+                selected: _type == null && !_favorites,
+                onTap: () => setState(() {
+                  _type = null;
+                  _favorites = false;
+                }),
+              ),
+              for (final t in SecretType.values)
+                _typeTile(
+                  icon: t.icon,
+                  label: _short(t),
+                  count: all.where((i) => i.type == t).length,
+                  tint: secretTint(t),
+                  selected: _type == t,
+                  onTap: () => setState(() {
                     _favorites = false;
+                    _type = _type == t ? null : t;
                   }),
-                ),
-                if (all.any((i) => i.favorite))
-                  (
-                    _favorites,
-                    'Favorite',
-                    Icons.star_outline,
-                    null,
-                    () => setState(() => _favorites = !_favorites),
-                  ),
-                for (final t in SecretType.values)
-                  (
-                    _type == t,
-                    '${_plural(t)} ${all.where((i) => i.type == t).length}',
-                    t.icon,
-                    secretTint(t),
-                    () => setState(() => _type = _type == t ? null : t),
-                  ),
-              ])
-                ChoiceChip(
-                  avatar: selected
-                      ? null
-                      : Icon(icon, size: 16, color: tint?.onContainer(context)),
-                  label: Text(label),
-                  selected: selected,
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  backgroundColor: tint?.surface(context),
-                  selectedColor: tint?.container(context),
-                  side: tint == null
-                      ? null
-                      : BorderSide(
-                          color: tint
-                              .onContainer(context)
-                              .withValues(alpha: 0.45),
-                        ),
-                  labelStyle: tint == null
-                      ? null
-                      : TextStyle(color: tint.onContainer(context)),
-                  checkmarkColor: tint?.onContainer(context),
-                  onSelected: (_) => onTap(),
                 ),
             ],
           ),
@@ -833,6 +821,78 @@ class _SecretsScreenState extends State<SecretsScreen>
     for (final e in byCurrency.entries)
       '${(e.value * factor).toStringAsFixed(2).replaceAll('.00', '').replaceAll('.', ',')} ${e.key}',
   ].join(' + ');
+
+  /// Numele scurt din grila de sus (încape pe un rând).
+  static String _short(SecretType t) => switch (t) {
+    SecretType.bank => 'Bancă',
+    _ => _plural(t),
+  };
+
+  /// Un pătrat din grila tipurilor: iconiță, nume, câte sunt.
+  Widget _typeTile({
+    required IconData icon,
+    required String label,
+    required int count,
+    required GroupTint? tint,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = tint?.onContainer(context) ?? scheme.onPrimaryContainer;
+    final bg = selected
+        ? (tint?.container(context) ?? scheme.primaryContainer)
+        : (tint?.surface(context) ?? scheme.surfaceContainerLowest);
+    return Material(
+      color: bg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: selected ? fg : fg.withValues(alpha: 0.25),
+          width: selected ? 2 : 1,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 20, color: fg),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: fg,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    color: fg,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   static String _plural(SecretType t) => switch (t) {
     SecretType.login => 'Conturi',
