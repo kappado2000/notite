@@ -12,3 +12,11 @@ textul dictat.
 
 La actualizarea flutter_quill: verifică dacă problema e rezolvată în
 versiunea nouă; dacă da, șterge acest folder și override-ul.
+
+## A doua modificare: texte-exemplu pe rânduri (șabloane)
+
+`lib/src/editor/widgets/text/text_line.dart`: un rând gol cu atributul
+`hint` (text) afișează textul gri; atingerea pune cursorul la începutul
+rândului. `lineHintKey` / `lineHintOf` sunt exportate din
+`flutter_quill.dart`. Atributul nu e înregistrat (scope `ignore`) și se
+salvează în Delta; aplicația îl scoate de pe rândul pe care s-a scris.

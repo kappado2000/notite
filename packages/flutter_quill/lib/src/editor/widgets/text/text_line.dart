@@ -195,6 +195,23 @@ class _TextLineState extends State<TextLine> {
 
   InlineSpan _getTextSpanForWholeLine() {
     var lineStyle = _getLineStyle(widget.styles);
+    // Notițe: text-exemplu al șablonului, arătat gri doar cât rândul e gol
+    // (nu face parte din notiță).
+    final hint = lineHintOf(widget.line);
+    if (hint != null) {
+      final color =
+          widget.styles.placeHolder?.style.color ??
+          (lineStyle.color ?? const Color(0xFF000000)).withValues(alpha: 0.4);
+      return TextSpan(
+        style: lineStyle,
+        children: [
+          TextSpan(
+            text: hint,
+            style: lineStyle.copyWith(color: color),
+          ),
+        ],
+      );
+    }
     if (!widget.line.hasEmbed) {
       return _buildTextSpan(
         widget.styles,
@@ -1101,6 +1118,7 @@ class RenderEditableTextLine extends RenderEditableBox {
 
   @override
   TextRange getLineBoundary(TextPosition position) {
+    if (lineHintOf(line) != null) return const TextRange.collapsed(0);
     final lineDy = getOffsetForCaret(
       position,
     ).translate(0, 0.5 * preferredLineHeight(position)).dy;
@@ -1159,6 +1177,8 @@ class RenderEditableTextLine extends RenderEditableBox {
 
   @override
   TextPosition getPositionForOffset(Offset offset) {
+    // rând gol cu text-exemplu: singura poziție reală e începutul
+    if (lineHintOf(line) != null) return const TextPosition(offset: 0);
     return _body!.getPositionForOffset(
       offset - (_body!.parentData as BoxParentData).offset,
     );
@@ -1166,6 +1186,7 @@ class RenderEditableTextLine extends RenderEditableBox {
 
   @override
   TextRange getWordBoundary(TextPosition position) {
+    if (lineHintOf(line) != null) return const TextRange.collapsed(0);
     return _body!.getWordBoundary(position);
   }
 
@@ -1703,4 +1724,14 @@ class _TextLineElement extends RenderObjectElement {
       _slotToChildren[slot] = newChild;
     }
   }
+}
+
+/// Atributul de rând cu textul-exemplu (Notițe, șabloane).
+const lineHintKey = 'hint';
+
+/// Textul-exemplu de afișat pe [line], dacă rândul e gol și are unul.
+String? lineHintOf(Line line) {
+  if (line.length != 1) return null;
+  final v = line.style.attributes[lineHintKey]?.value;
+  return v is String && v.isNotEmpty ? v : null;
 }

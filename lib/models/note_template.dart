@@ -1,16 +1,21 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_quill/quill_delta.dart';
 import 'package:intl/intl.dart';
 
-/// Un șablon de notiță: titlu + conținut gata structurat (Delta Quill).
+/// Un șablon de notiță: structura (titluri, liste, bife) cu texte-exemplu.
+/// Textele-exemplu apar gri doar pe rândurile goale și dispar când scrii;
+/// nu fac parte din notiță (nu se salvează ca text, nu apar la căutare).
 class NoteTemplate {
   const NoteTemplate(this.name, this.icon, this.title, this.build);
 
   final String name;
   final IconData icon;
 
-  /// Titlul propus (poate conține data curentă).
+  /// Titlul-exemplu (poate conține data curentă); devine titlul notiței
+  /// doar dacă rămâne necompletat și notița are conținut.
   final String Function(DateTime now) title;
 
   /// Rândurile șablonului.
@@ -19,22 +24,20 @@ class NoteTemplate {
   String contentJson() {
     final ops = <Map<String, dynamic>>[];
     for (final l in build()) {
-      if (l.text.isNotEmpty) ops.add({'insert': l.text});
-      ops.add({
-        'insert': '\n',
-        if (l.attributes.isNotEmpty) 'attributes': l.attributes,
-      });
+      final attrs = {
+        ...l.attributes,
+        if (l.hint.isNotEmpty) lineHintKey: l.hint,
+      };
+      ops.add({'insert': '\n', if (attrs.isNotEmpty) 'attributes': attrs});
     }
     return jsonEncode(ops);
   }
-
-  String plainText() => build().map((l) => l.text).join('\n');
 }
 
-/// Un rând al șablonului: text + atributele rândului (titlu, listă).
+/// Un rând gol al șablonului: textul-exemplu + atributele rândului.
 class TemplateLine {
-  const TemplateLine(this.text, [this.attributes = const {}]);
-  final String text;
+  const TemplateLine(this.hint, [this.attributes = const {}]);
+  final String hint;
   final Map<String, dynamic> attributes;
 }
 
@@ -57,7 +60,6 @@ final noteTemplates = <NoteTemplate>[
       _todo('Ouă'),
       _todo('Fructe'),
       _todo('Legume'),
-      _todo(''),
     ],
   ),
   NoteTemplate(
@@ -65,16 +67,16 @@ final noteTemplates = <NoteTemplate>[
     Icons.groups_outlined,
     (now) => 'Ședință — ${_day(now)}',
     () => [
-      _p('Participanți: '),
-      _p('Loc: '),
+      _p('Participanți'),
+      _p('Locul'),
       _h('Agenda'),
-      _li(''),
+      _li('Primul subiect'),
       _h('Discuții'),
-      _p(''),
+      _p('Ce s-a discutat'),
       _h('Decizii'),
-      _li(''),
+      _li('Ce s-a hotărât'),
       _h('De făcut'),
-      _todo(''),
+      _todo('Cine ce face'),
     ],
   ),
   NoteTemplate(
@@ -83,13 +85,13 @@ final noteTemplates = <NoteTemplate>[
     (now) => 'Jurnal — ${_day(now)}',
     () => [
       _h('Cum a fost ziua'),
-      _p(''),
+      _p('Ce s-a întâmplat azi'),
       _h('Recunoștință'),
-      _num(''),
-      _num(''),
-      _num(''),
+      _num('Un lucru bun'),
+      _num('Încă unul'),
+      _num('Și încă unul'),
       _h('Mâine'),
-      _todo(''),
+      _todo('Ce am de făcut'),
     ],
   ),
   NoteTemplate(
@@ -97,37 +99,71 @@ final noteTemplates = <NoteTemplate>[
     Icons.restaurant_outlined,
     (_) => 'Rețetă',
     () => [
-      _p('Porții: '),
-      _p('Timp de preparare: '),
+      _p('Porții'),
+      _p('Timp de preparare'),
       _h('Ingrediente'),
-      _li(''),
+      _li('Ingredient și cantitate'),
       _h('Preparare'),
-      _num(''),
+      _num('Primul pas'),
     ],
   ),
   NoteTemplate(
     'De făcut',
     Icons.checklist,
     (now) => 'De făcut — ${_day(now)}',
-    () => [_h('Important'), _todo(''), _h('Când am timp'), _todo('')],
+    () => [
+      _h('Important'),
+      _todo('Sarcină importantă'),
+      _h('Când am timp'),
+      _todo('Altă sarcină'),
+    ],
   ),
   NoteTemplate(
     'Călătorie',
     Icons.luggage_outlined,
     (_) => 'Călătorie',
     () => [
-      _p('Destinație: '),
-      _p('Perioada: '),
+      _p('Destinația'),
+      _p('Perioada'),
       _h('Rezervări'),
-      _li('Transport: '),
-      _li('Cazare: '),
+      _li('Transport'),
+      _li('Cazare'),
       _h('Bagaj'),
       _todo('Acte de identitate'),
       _todo('Încărcător telefon'),
       _todo('Medicamente'),
-      _todo(''),
       _h('Itinerariu'),
-      _num(''),
+      _num('Prima zi'),
     ],
   ),
 ];
+
+/// Scoate textul-exemplu de pe rândurile pe care s-a scris (altfel Enter
+/// l-ar copia pe rândul nou, iar golirea rândului l-ar arăta din nou).
+void dropFilledHints(Document doc) {
+  final change = Delta();
+  var last = 0;
+  var offset = 0;
+  void visit(Iterable<Node> nodes) {
+    for (final n in nodes) {
+      if (n is Line) {
+        final end = offset + n.length - 1;
+        if (n.length > 1 && n.style.attributes.containsKey(lineHintKey)) {
+          change
+            ..retain(end - last)
+            ..retain(1, {lineHintKey: null});
+          last = end + 1;
+        }
+        offset += n.length;
+      } else if (n is Block) {
+        visit(n.children);
+      }
+    }
+  }
+
+  visit(doc.root.children);
+  if (change.isEmpty) return;
+  try {
+    doc.compose(change, ChangeSource.silent);
+  } catch (_) {}
+}

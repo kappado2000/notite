@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,10 +42,42 @@ void main() {
     }
     final shopping = noteTemplates.first;
     final doc = Document.fromJson(jsonDecode(shopping.contentJson()) as List);
-    expect(doc.toPlainText(), startsWith('Pâine\nLapte'));
-    // rândurile sunt listă de bifat
-    final firstLine = doc.root.children.first;
-    expect(firstLine.style.attributes['list']?.value, 'unchecked');
+    // nimic scris de fapt: doar texte-exemplu pe rânduri goale
+    expect(doc.toPlainText().trim(), isEmpty);
+    final block = doc.root.children.first as Block;
+    final line = block.children.first as Line;
+    expect(line.style.attributes['list']?.value, 'unchecked');
+    expect(line.style.attributes[lineHintKey]?.value, 'Pâine');
+    expect(lineHintOf(line), 'Pâine');
+    // după ce scrii pe rând, exemplul nu mai e afișat
+    doc.insert(0, 'Cafea');
+    expect(lineHintOf(line), isNull);
+  });
+
+  test('exemplul dispare de pe rândul scris; Enter nu-l copiază', () {
+    final c = QuillController(
+      document: Document.fromJson(
+        jsonDecode(noteTemplates.first.contentJson()) as List,
+      ),
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+    c.replaceText(0, 0, 'Cafea', const TextSelection.collapsed(offset: 5));
+    dropFilledHints(c.document);
+    c.replaceText(5, 0, '\n', const TextSelection.collapsed(offset: 6));
+    dropFilledHints(c.document);
+    final lines = [
+      for (final b in c.document.root.children)
+        for (final l in (b as Block).children) l as Line,
+    ];
+    expect(lines[0].toPlainText(), 'Cafea\n');
+    expect(lines[0].style.attributes.containsKey(lineHintKey), isFalse);
+    // rândul nou, gol, nu primește „Pâine”
+    expect(lines[1].length, 1);
+    expect(lineHintOf(lines[1]), isNull);
+    // celelalte exemple rămân
+    expect(lineHintOf(lines[2]), 'Lapte');
+    // textul notiței conține doar ce s-a scris
+    expect(c.document.toPlainText().trim(), 'Cafea');
   });
 
   test('notița blocată nu se găsește după conținut, doar după titlu', () async {

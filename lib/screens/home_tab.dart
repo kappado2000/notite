@@ -349,19 +349,20 @@ class _QuickActions extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final neutral = Theme.of(context).cardTheme.color ?? scheme.surface;
     final actions = <(IconData, String, Color, Color, VoidCallback)>[
-      (
-        Icons.edit_outlined,
-        'Notiță',
-        scheme.primary,
-        scheme.onPrimary,
-        () => createAndOpenNote(context),
-      ),
+      // lista de bifat prima, peste tot
       (
         Icons.checklist,
         'Listă',
+        scheme.primary,
+        scheme.onPrimary,
+        () => createAndOpenNote(context, checklist: true),
+      ),
+      (
+        Icons.edit_outlined,
+        'Notiță',
         neutral,
         scheme.primary,
-        () => createAndOpenNote(context, checklist: true),
+        () => createAndOpenNote(context),
       ),
       if (ScanService.scanSupported)
         (

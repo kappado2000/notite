@@ -64,6 +64,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   bool _busy = false;
   bool _editorHadFocus = false;
 
+  /// Titlul-exemplu al șablonului ales (arătat gri în câmpul de titlu).
+  String? _titleHint;
+
   bool get _isMobile =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -90,7 +93,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
       selection: const TextSelection.collapsed(offset: 0),
       readOnly: _note.isTrashed,
     );
-    _docSub = _controller.document.changes.listen((_) => _changed());
+    _docSub = _controller.document.changes.listen((e) {
+      if (e.source == ChangeSource.local) _dropFilledHints();
+      _changed();
+    });
     _title.addListener(() {
       if (_title.text != _note.title) _changed();
     });
@@ -117,11 +123,40 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
       if (!_toolbarVisible) setState(() => _toolbarVisible = true);
     } else {
       _toolbarTimer = Timer(const Duration(milliseconds: 300), () {
-        if (mounted && !_editorFocus.hasFocus && _toolbarVisible) {
-          setState(() => _toolbarVisible = false);
+        if (!mounted || _editorFocus.hasFocus) return;
+        if (_toolbarVisible) setState(() => _toolbarVisible = false);
+        // Pe iPhone tastatura rămânea uneori ridicată după ce editorul a
+        // pierdut focusul (meniu, fereastră, alegere de fișier), fără să
+        // mai scrie nicăieri și acoperind aplicația. Dacă nu se scrie în
+        // alt câmp, o închidem explicit.
+        if (!_typingElsewhere()) {
+          SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
         }
       });
     }
+  }
+
+  /// Alt câmp de text (ex. titlul) are focusul.
+  bool _typingElsewhere() {
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    return ctx != null &&
+        (ctx.widget is EditableText ||
+            ctx.findAncestorWidgetOfExactType<EditableText>() != null);
+  }
+
+  /// Închide tastatura (buton în bara de formatare și înainte de meniuri).
+  void _hideKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  }
+
+  /// Textul-exemplu al unui rând de șablon dispare de tot după ce scrii pe
+  /// rând (altfel Enter l-ar copia pe rândul nou).
+  void _dropFilledHints() {
+    // după schimbarea curentă, nu în mijlocul ei
+    scheduleMicrotask(() {
+      if (mounted) dropFilledHints(_controller.document);
+    });
   }
 
   /// Notița blocată se arată abia după Face ID / amprentă sau parolă.
@@ -150,12 +185,19 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _debounce?.cancel();
     if (!_dirty) return;
     _dirty = false;
+    final text = _controller.document.toPlainText(const [
+      AttachmentImageEmbedBuilder(),
+    ]);
+    // titlul-exemplu al șablonului devine titlu doar dacă nu ai scris altul
+    // și notița are deja conținut
+    final hint = _titleHint;
     _note
-      ..title = _title.text
+      ..title =
+          _title.text.trim().isEmpty && hint != null && text.trim().isNotEmpty
+          ? hint
+          : _title.text
       ..contentJson = jsonEncode(_controller.document.toDelta().toJson())
-      ..plainText = _controller.document.toPlainText(const [
-        AttachmentImageEmbedBuilder(),
-      ]);
+      ..plainText = text;
     await _store.saveNote(_note);
   }
 
@@ -434,83 +476,95 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   }
 
   void _showAddMenu() {
+    // tastatura jos înainte de meniu: altfel rămânea uneori ridicată și
+    // blocată după alegerea unei poze / a unui fișier
+    _hideKeyboard();
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
+      // toate opțiunile încap (cu derulare), deasupra marginii de jos a
+      // telefonului — ultima opțiune cădea sub ea și nu se putea alege
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+      ),
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (ScanService.scanSupported)
+        minimum: const EdgeInsets.only(bottom: 16),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               ListTile(
-                leading: const Icon(Icons.document_scanner_outlined),
-                title: const Text('Scanează document'),
-                subtitle: const Text(
-                  'Din cameră sau dintr-o poză → PDF sau text',
+                leading: const Icon(Icons.checklist),
+                title: const Text('Listă de bifat'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _controller.formatSelection(Attribute.unchecked);
+                  _editorFocus.requestFocus();
+                },
+              ),
+              if (ScanService.scanSupported)
+                ListTile(
+                  leading: const Icon(Icons.document_scanner_outlined),
+                  title: const Text('Scanează document'),
+                  subtitle: const Text(
+                    'Din cameră sau dintr-o poză → PDF sau text',
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _scan();
+                  },
                 ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _scan();
-                },
-              ),
-            if (_isMobile)
-              ListTile(
-                leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Fotografie'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickImages(camera: true);
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.image_outlined),
-              title: const Text('Imagine din galerie'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _pickImages();
-              },
-            ),
-            if (VoiceService.recordingSupported)
-              ListTile(
-                leading: const Icon(Icons.mic_none),
-                title: const Text('Notă vocală'),
-                subtitle: Text(
-                  VoiceService.transcriptionSupported
-                      ? 'Înregistrare + transcriere automată în text'
-                      : 'Înregistrare audio atașată',
+              if (_isMobile)
+                ListTile(
+                  leading: const Icon(Icons.photo_camera_outlined),
+                  title: const Text('Fotografie'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickImages(camera: true);
+                  },
                 ),
+              ListTile(
+                leading: const Icon(Icons.image_outlined),
+                title: const Text('Imagine din galerie'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _recordVoice();
+                  _pickImages();
                 },
               ),
-            ListTile(
-              leading: const Icon(Icons.qr_code_scanner),
-              title: const Text('Cod QR / de bare'),
-              subtitle: const Text('Adaugă conținutul codului în notiță'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _insertScannedCode();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.attach_file),
-              title: const Text('Fișier (PDF, document…)'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _pickFiles();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.checklist),
-              title: const Text('Listă de bifat'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _controller.formatSelection(Attribute.unchecked);
-                _editorFocus.requestFocus();
-              },
-            ),
-          ],
+              if (VoiceService.recordingSupported)
+                ListTile(
+                  leading: const Icon(Icons.mic_none),
+                  title: const Text('Notă vocală'),
+                  subtitle: Text(
+                    VoiceService.transcriptionSupported
+                        ? 'Înregistrare + transcriere automată în text'
+                        : 'Înregistrare audio atașată',
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _recordVoice();
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.qr_code_scanner),
+                title: const Text('Cod QR / de bare'),
+                subtitle: const Text('Adaugă conținutul codului în notiță'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _insertScannedCode();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.attach_file),
+                title: const Text('Fișier (PDF, document…)'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickFiles();
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -601,12 +655,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
       const TextSelection.collapsed(offset: 0),
       ChangeSource.local,
     );
-    if (_title.text.trim().isEmpty) _title.text = t.title(DateTime.now());
-    // Cursorul la finalul primului rând (ex. după „Participanți: ”),
-    // ca scrisul să continue șablonul, nu să-l preceadă.
-    final firstLineEnd = _controller.document.toPlainText().indexOf('\n');
+    // titlul doar ca exemplu (gri); se salvează dacă nu scrii altul
+    setState(() => _titleHint = t.title(DateTime.now()));
+    // cursorul pe primul rând gol al șablonului
     _controller.updateSelection(
-      TextSelection.collapsed(offset: firstLineEnd < 0 ? 0 : firstLineEnd),
+      const TextSelection.collapsed(offset: 0),
       ChangeSource.local,
     );
     _editorFocus.requestFocus();
@@ -982,8 +1035,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   readOnly: trashed,
                   style: Theme.of(context).textTheme.headlineSmall
                       ?.copyWith(fontWeight: FontWeight.w600),
-                  decoration: const InputDecoration(
-                    hintText: 'Titlu',
+                  decoration: InputDecoration(
+                    hintText: _titleHint ?? 'Titlu',
                     filled: false,
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
@@ -1101,6 +1154,12 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                           ),
                         ),
                       ),
+                      if (_isMobile)
+                        IconButton(
+                          tooltip: 'Ascunde tastatura',
+                          icon: const Icon(Icons.keyboard_hide_outlined),
+                          onPressed: _hideKeyboard,
+                        ),
                     ],
                   ),
                 ),

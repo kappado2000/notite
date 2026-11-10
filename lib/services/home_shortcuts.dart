@@ -5,8 +5,8 @@ import 'scan_service.dart';
 
 /// Acțiunile rapide de pe iconița aplicației (apăsare lungă pe iconiță).
 enum HomeShortcut {
-  note('Notiță nouă'),
   list('Listă de bifat'),
+  note('Notiță nouă'),
   scan('Scanează document'),
   qr('Citește cod QR');
 
