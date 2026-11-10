@@ -47,13 +47,18 @@ Future<void> main() async {
 
 /// Date demonstrative pentru previzualizare (doar la primul start).
 Future<void> _seedDemo(NotesStore store) async {
-  final work = await store.createNotebook('Muncă', emoji: '💼', color: 5);
-  final home = await store.createNotebook('Acasă', emoji: '🏠', color: 1);
-  final ideas = await store.createNotebook('Idei', emoji: '💡', color: 4);
+  final work = await store.createNotebook('Muncă', emoji: '💼');
+  final home = await store.createNotebook('Acasă', emoji: '🏠');
+  final ideas = await store.createNotebook('Idei', emoji: '💡');
   final first = store.notebooks.firstWhere(
     (n) => n.name == 'Primul meu carnet',
   );
-  await store.updateNotebook(first, name: 'Personal', emoji: '🌱', color: 0);
+  await store.updateNotebook(
+    first,
+    name: 'Personal',
+    emoji: '🌱',
+    color: first.color,
+  );
 
   Future<void> note(
     String nb,

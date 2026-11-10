@@ -86,14 +86,16 @@ class GroupTint {
   final String name;
   final Color base;
 
+  // Ordinea contează: carnetele noi le primesc pe rând, deci culorile
+  // vecine sunt cât mai diferite.
   static const all = [
     GroupTint._('Salvie', Color(0xFF3F8F6B)),
-    GroupTint._('Albastru', Color(0xFF3F78C2)),
-    GroupTint._('Mov', Color(0xFF8460B8)),
-    GroupTint._('Roz', Color(0xFFC2507A)),
     GroupTint._('Coral', Color(0xFFD56A3C)),
+    GroupTint._('Albastru', Color(0xFF3F78C2)),
     GroupTint._('Miere', Color(0xFFC4922A)),
-    GroupTint._('Turcoaz', Color(0xFF23949C)),
+    GroupTint._('Mov', Color(0xFF8460B8)),
+    GroupTint._('Turcoaz', Color(0xFF0E9FBF)),
+    GroupTint._('Roz', Color(0xFFC2507A)),
     GroupTint._('Cafeniu', Color(0xFF8E6A4E)),
   ];
 

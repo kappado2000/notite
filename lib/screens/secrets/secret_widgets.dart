@@ -16,13 +16,13 @@ import '../image_viewer_screen.dart';
 
 /// Nuanța fiecărui tip de intrare (Conturi, Carduri, Acte…).
 GroupTint secretTint(SecretType t) => GroupTint.at(switch (t) {
-  SecretType.login => 1, // albastru
-  SecretType.card => 2, // mov
-  SecretType.bank => 6, // turcoaz
-  SecretType.identity => 4, // coral
-  SecretType.subscription => 3, // roz
+  SecretType.login => 2, // albastru
+  SecretType.card => 4, // mov
+  SecretType.bank => 5, // turcoaz
+  SecretType.identity => 1, // coral
+  SecretType.subscription => 6, // roz
   SecretType.wifi => 0, // salvie
-  SecretType.note => 5, // miere
+  SecretType.note => 3, // miere
 });
 
 /// Iconița din listă: culoarea și inițiala serviciului recunoscut
