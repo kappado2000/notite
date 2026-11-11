@@ -24,8 +24,12 @@ class IosAutofill {
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   /// Conturile care pot fi completate (cu parolă), în forma pentru extensie.
+  /// Cel mai nou primul: la dubluri (același site și utilizator), iOS
+  /// primește doar versiunea cea mai recentă.
   static List<Map<String, String>> loginsFor(Iterable<SecretItem> items) => [
-    for (final i in items)
+    for (final i in [
+      ...items,
+    ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt)))
       if ((i.type == SecretType.login || i.type == SecretType.subscription) &&
           i.password.isNotEmpty)
         {

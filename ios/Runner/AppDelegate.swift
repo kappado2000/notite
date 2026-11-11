@@ -381,10 +381,14 @@ class AutofillBridge: NSObject, FlutterPlugin {
         AutofillLog.write("aplicație: Notițe NU e bifat în Completare automată")
         return
       }
+      // același site + utilizator o singură dată (lista vine cu cel mai nou
+      // primul), ca iOS să nu arate dubluri deasupra tastaturii
+      var seen = Set<String>()
       let ids: [ASPasswordCredentialIdentity] = logins.compactMap { l in
         guard let host = l["host"] as? String, !host.isEmpty,
           let user = l["user"] as? String,
-          let id = l["id"] as? String
+          let id = l["id"] as? String,
+          seen.insert(host.lowercased() + "|" + user.lowercased()).inserted
         else { return nil }
         return ASPasswordCredentialIdentity(
           serviceIdentifier: ASCredentialServiceIdentifier(identifier: host, type: .domain),

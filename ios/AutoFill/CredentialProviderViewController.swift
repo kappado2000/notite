@@ -157,10 +157,12 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         let list = AutofillVault.read(context: context)
         DispatchQueue.main.async {
           if let list {
+            // dubluri (același site + utilizator): rămâne cel mai nou
+            var seen = Set<String>()
             self.logins = list.compactMap {
               try? JSONDecoder().decode(
                 Login.self, from: JSONSerialization.data(withJSONObject: $0))
-            }
+            }.filter { seen.insert($0.host.lowercased() + "|" + $0.user.lowercased()).inserted }
             done(true)
           } else {
             done(false)
