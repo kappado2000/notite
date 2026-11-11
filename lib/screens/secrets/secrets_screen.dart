@@ -756,87 +756,82 @@ class _SecretsScreenState extends State<SecretsScreen>
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(color: accent.withValues(alpha: 0.55)),
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: accent, width: 4)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            InkWell(
-              onTap: list.isEmpty ? () => _addType(t) : open,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 4, 6),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundColor: tint.container(context),
-                      foregroundColor: accent,
-                      child: Icon(t.icon, size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _plural(t),
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: accent,
-                        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: list.isEmpty ? () => _addType(t) : open,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 4, 6),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: tint.container(context),
+                    foregroundColor: accent,
+                    child: Icon(t.icon, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _plural(t),
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: accent,
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: tint.container(context),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${list.length}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: accent,
-                        ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: tint.container(context),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${list.length}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: accent,
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Adaugă: ${t.label}',
-                      icon: Icon(Icons.add, color: accent),
-                      onPressed: () => _addType(t),
-                    ),
-                    Icon(Icons.chevron_right, color: accent),
-                    const SizedBox(width: 6),
-                  ],
+                  ),
+                  IconButton(
+                    tooltip: 'Adaugă: ${t.label}',
+                    icon: Icon(Icons.add, color: accent),
+                    onPressed: () => _addType(t),
+                  ),
+                  Icon(Icons.chevron_right, color: accent),
+                  const SizedBox(width: 6),
+                ],
+              ),
+            ),
+          ),
+          if (list.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text(
+                'Nimic salvat încă',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
-            if (list.isEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Text(
-                  'Nimic salvat încă',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            for (final i in sorted) ...[
-              Divider(
-                height: 1,
-                indent: 16,
-                endIndent: 16,
-                color: accent.withValues(alpha: 0.15),
-              ),
-              _swipe(i, SecretTile(item: i, plain: true)),
-            ],
+          for (final i in sorted) ...[
+            Divider(
+              height: 1,
+              indent: 16,
+              endIndent: 16,
+              color: accent.withValues(alpha: 0.15),
+            ),
+            _swipe(i, SecretTile(item: i, plain: true)),
           ],
-        ),
+        ],
       ),
     );
   }

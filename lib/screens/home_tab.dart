@@ -454,131 +454,130 @@ class _NotebookSection extends StatelessWidget {
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       color: tint.surface(context),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: accent, width: 4)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            InkWell(
-              onTap: onOpen,
-              onLongPress: () => showNotebookMenu(context, notebook),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 4, 6),
-                child: Row(
-                  children: [
-                    NotebookBadge(notebook: notebook, size: 32),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        notebook.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: accent,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: tint.container(context),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '$count',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: accent,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Notiță nouă în ${notebook.name}',
-                      icon: Icon(Icons.add, color: accent),
-                      onPressed: () =>
-                          createAndOpenNote(context, notebookId: notebook.id),
-                    ),
-                    Icon(Icons.chevron_right, color: accent),
-                    const SizedBox(width: 6),
-                  ],
-                ),
-              ),
-            ),
-            if (notes.isEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                child: Text('Nicio notiță încă', style: muted),
-              )
-            else ...[
-              for (final n in notes) ...[
-                Divider(
-                  height: 1,
-                  indent: 16,
-                  endIndent: 16,
-                  color: accent.withValues(alpha: 0.15),
-                ),
-                InkWell(
-                  onTap: () => openNote(context, n),
-                  onLongPress: () => showNoteActions(context, n),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
-                    child: Row(
-                      children: [
-                        if (n.pinned) ...[
-                          Icon(Icons.push_pin, size: 15, color: accent),
-                          const SizedBox(width: 6),
-                        ],
-                        Expanded(
-                          child: Text(
-                            n.displayTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.w500,
-                              color: scheme.onSurface,
-                            ),
-                          ),
-                        ),
-                        if (n.hasReminder && !n.reminderDone) ...[
-                          const SizedBox(width: 6),
-                          Icon(Icons.alarm, size: 15, color: muted.color),
-                        ],
-                        const SizedBox(width: 10),
-                        Text(formatShortDate(n.updatedAt), style: muted),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-              if (count > notes.length)
-                InkWell(
-                  onTap: onOpen,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: accent.withValues(alpha: 0.55)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: onOpen,
+            onLongPress: () => showNotebookMenu(context, notebook),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 4, 6),
+              child: Row(
+                children: [
+                  NotebookBadge(notebook: notebook, size: 32),
+                  const SizedBox(width: 10),
+                  Expanded(
                     child: Text(
-                      'Toate cele $count notițe ›',
+                      notebook.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
                         color: accent,
                       ),
                     ),
                   ),
-                )
-              else
-                const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: tint.container(context),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: accent,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Notiță nouă în ${notebook.name}',
+                    icon: Icon(Icons.add, color: accent),
+                    onPressed: () =>
+                        createAndOpenNote(context, notebookId: notebook.id),
+                  ),
+                  Icon(Icons.chevron_right, color: accent),
+                  const SizedBox(width: 6),
+                ],
+              ),
+            ),
+          ),
+          if (notes.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+              child: Text('Nicio notiță încă', style: muted),
+            )
+          else ...[
+            for (final n in notes) ...[
+              Divider(
+                height: 1,
+                indent: 16,
+                endIndent: 16,
+                color: accent.withValues(alpha: 0.15),
+              ),
+              InkWell(
+                onTap: () => openNote(context, n),
+                onLongPress: () => showNoteActions(context, n),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
+                  child: Row(
+                    children: [
+                      if (n.pinned) ...[
+                        Icon(Icons.push_pin, size: 15, color: accent),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          n.displayTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w500,
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                      ),
+                      if (n.hasReminder && !n.reminderDone) ...[
+                        const SizedBox(width: 6),
+                        Icon(Icons.alarm, size: 15, color: muted.color),
+                      ],
+                      const SizedBox(width: 10),
+                      Text(formatShortDate(n.updatedAt), style: muted),
+                    ],
+                  ),
+                ),
+              ),
             ],
+            if (count > notes.length)
+              InkWell(
+                onTap: onOpen,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: Text(
+                    'Toate cele $count notițe ›',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: accent,
+                    ),
+                  ),
+                ),
+              )
+            else
+              const SizedBox(height: 4),
           ],
-        ),
+        ],
       ),
     );
   }
