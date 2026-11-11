@@ -11,6 +11,8 @@ import 'package:notite/data/notes_store.dart';
 import 'package:notite/models/note_template.dart';
 import 'package:notite/models/notebook.dart';
 import 'package:notite/services/note_pdf.dart';
+import 'package:notite/services/password_tools.dart';
+import 'package:notite/models/secret_item.dart';
 import 'package:notite/theme.dart';
 
 void main() {
@@ -122,6 +124,59 @@ void main() {
     );
     expect((old.intensity, old.textMode), (1, 0));
   });
+
+  test(
+    'dublurile se unesc; conturile locale și ignorate nu sunt probleme',
+    () async {
+      final store = await openStore('dubluri');
+      SecretItem login(String title, String url, String user, String pass) =>
+          store.newSecret(SecretType.login)
+            ..title = title
+            ..url = url
+            ..username = user
+            ..password = pass;
+      final a = login(
+        'Adi',
+        'https://www.exemplu.ro',
+        'adi@test.ro',
+        'parola1',
+      );
+      final b =
+          login('Adi', 'https://exemplu.ro/login', 'ADI@test.ro', 'parola1')
+            ..favorite = true
+            ..notes = 'din LastPass';
+      final c = login(
+        'Adi',
+        'https://exemplu.ro',
+        'adi@test.ro',
+        'alta-parola',
+      );
+      final router = login('Router', 'http://192.168.0.1', 'admin', 'admin');
+      await store.addSecrets([a, b, c, router]);
+
+      expect(duplicateGroups(store.allSecrets), hasLength(1));
+      expect(await store.mergeDuplicateSecrets(), 1);
+      final left = store.allSecrets.where((i) => i.password == 'parola1');
+      expect(left, hasLength(1));
+      expect(left.single.favorite, isTrue);
+      expect(left.single.notes, 'din LastPass');
+      // cel cu altă parolă nu e dublură
+      expect(store.allSecrets, hasLength(3));
+
+      // routerul (rețeaua de acasă) nu se numără, deși parola e slabă
+      expect(isLocalAccount(router), isTrue);
+      final report = PasswordReport.of(store.allSecrets);
+      expect(report.weak.any((i) => i.id == router.id), isFalse);
+
+      // un cont ignorat iese din verificare
+      final weak = store.allSecrets.firstWhere((i) => i.password == 'parola1');
+      expect(PasswordReport.of(store.allSecrets).weak, contains(weak));
+      weak.ignoreHealth = true;
+      await store.saveSecret(weak);
+      expect(PasswordReport.of(store.allSecrets).weak, isNot(contains(weak)));
+      expect(SecretItem.fromMap(weak.toMap()).ignoreHealth, isTrue);
+    },
+  );
 
   test('notița blocată nu se găsește după conținut, doar după titlu', () async {
     final store = await openStore('u1');

@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/services.dart';
 
 import '../models/secret_item.dart';
+import 'secret_helpers.dart';
 
 /// Generator de parole cu `Random.secure()`.
 class PasswordGenerator {
@@ -93,13 +94,23 @@ class PasswordReport {
 
   int get problems => weak.length + reused.length + old.length;
 
+  /// Câte conturi diferite au cel puțin o problemă.
+  int get accounts => {
+    for (final i in weak) i.id,
+    for (final g in reused)
+      for (final i in g) i.id,
+    for (final i in old) i.id,
+  }.length;
+
   static PasswordReport of(Iterable<SecretItem> items) {
     final logins = items
         .where(
           (i) =>
               (i.type == SecretType.login ||
                   i.type == SecretType.subscription) &&
-              i.password.isNotEmpty,
+              i.password.isNotEmpty &&
+              !i.ignoreHealth &&
+              !isLocalAccount(i),
         )
         .toList();
     final byPassword = <String, List<SecretItem>>{};
@@ -115,6 +126,90 @@ class PasswordReport {
       logins.where((i) => i.passwordChangedAt.isBefore(yearAgo)).toList(),
     );
   }
+}
+
+/// Cont din rețeaua de acasă (router, NAS, imprimantă): nu e pe internet,
+/// deci nu se numără la riscuri.
+bool isLocalAccount(SecretItem i) {
+  final h = hostOf(i.url.isNotEmpty ? i.url : i.title);
+  if (h.isEmpty) return false;
+  final ip = RegExp(r'^(\d+)\.(\d+)\.\d+\.\d+(:\d+)?$').firstMatch(h);
+  if (ip != null) {
+    final a = int.parse(ip[1]!), b = int.parse(ip[2]!);
+    return a == 10 ||
+        a == 127 ||
+        (a == 192 && b == 168) ||
+        (a == 172 && b >= 16 && b <= 31);
+  }
+  return h == 'localhost' ||
+      h.startsWith('localhost:') ||
+      h.endsWith('.local') ||
+      h.endsWith('.lan');
+}
+
+/// Cheia unui cont pentru dubluri: același site (sau nume), utilizator și
+/// parolă.
+String _dupKey(SecretItem i) {
+  final site = hostOf(i.url).isNotEmpty
+      ? hostOf(i.url)
+      : i.title.trim().toLowerCase();
+  return '$site|${i.username.trim().toLowerCase()}|${i.password}';
+}
+
+/// Grupurile de conturi identice (de obicei din importuri repetate).
+List<List<SecretItem>> duplicateGroups(Iterable<SecretItem> items) {
+  final by = <String, List<SecretItem>>{};
+  for (final i in items) {
+    if (i.type != SecretType.login || i.password.isEmpty) continue;
+    by.putIfAbsent(_dupKey(i), () => []).add(i);
+  }
+  return by.values.where((g) => g.length > 1).toList();
+}
+
+/// Unește un grup de dubluri în intrarea cea mai completă; întoarce
+/// intrarea păstrată (cu datele adunate de la celelalte) și cele de șters.
+({SecretItem keep, List<SecretItem> remove}) mergeDuplicates(
+  List<SecretItem> group, {
+  bool Function(SecretItem)? hasAttachments,
+}) {
+  int richness(SecretItem i) =>
+      (hasAttachments?.call(i) == true ? 1000 : 0) +
+      (i.favorite ? 50 : 0) +
+      (i.totp.isNotEmpty ? 40 : 0) +
+      i.custom.length * 10 +
+      i.passwordHistory.length * 5 +
+      (i.notes.isNotEmpty ? 5 : 0) +
+      (i.url.isNotEmpty ? 3 : 0) +
+      (i.title.isNotEmpty ? 2 : 0);
+  final sorted = [...group]
+    ..sort((a, b) {
+      final r = richness(b).compareTo(richness(a));
+      return r != 0 ? r : a.createdAt.compareTo(b.createdAt);
+    });
+  final keep = sorted.first.copy();
+  for (final o in sorted.skip(1)) {
+    keep.favorite = keep.favorite || o.favorite;
+    if (keep.totp.isEmpty) keep.totp = o.totp;
+    if (keep.url.isEmpty) keep.url = o.url;
+    if (keep.title.isEmpty) keep.title = o.title;
+    if (keep.category.isEmpty) keep.category = o.category;
+    final n = o.notes.trim();
+    if (n.isNotEmpty && !keep.notes.contains(n)) {
+      keep.notes = keep.notes.trim().isEmpty ? n : '${keep.notes.trim()}\n\n$n';
+    }
+    for (final f in o.custom) {
+      if (!keep.custom.any((k) => k.label == f.label && k.value == f.value)) {
+        keep.custom.add(f);
+      }
+    }
+    for (final p in o.passwordHistory) {
+      if (!keep.passwordHistory.any((k) => k.password == p.password)) {
+        keep.passwordHistory.add(p);
+      }
+    }
+  }
+  keep.passwordHistory = keep.passwordHistory.take(10).toList();
+  return (keep: keep, remove: sorted.skip(1).toList());
 }
 
 /// Copiere în clipboard cu ștergere automată după 30 de secunde.

@@ -20,6 +20,7 @@ import '../../utils/format.dart';
 import '../../widgets/note_actions.dart';
 import '../../widgets/pin_pad.dart';
 import '../shell.dart';
+import 'password_fix_screen.dart';
 import 'password_health_screen.dart';
 import 'pin_setup.dart';
 import 'secret_detail_screen.dart';
@@ -634,15 +635,17 @@ class _SecretsScreenState extends State<SecretsScreen>
                 child: ListTile(
                   leading: const Icon(Icons.health_and_safety_outlined),
                   title: Text(
-                    '${report.problems} '
-                    '${report.problems == 1 ? 'problemă' : 'probleme'} '
-                    'de securitate',
+                    '${report.accounts} '
+                    '${report.accounts == 1 ? 'cont de reparat' : 'conturi de reparat'}',
                   ),
-                  subtitle: const Text('Parole slabe, repetate sau vechi'),
+                  subtitle: const Text(
+                    'Parole slabe, repetate sau vechi · apasă ca să le '
+                    'repari pe rând',
+                  ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const PasswordHealthScreen(),
+                      builder: (_) => const PasswordFixScreen(),
                     ),
                   ),
                 ),

@@ -10,6 +10,7 @@ import '../models/note.dart';
 import '../models/notebook.dart';
 import '../models/secret_item.dart';
 import '../services/encryption_key_service.dart';
+import '../services/password_tools.dart';
 import '../services/reminder_service.dart';
 import '../theme.dart';
 
@@ -842,6 +843,24 @@ class NotesStore extends ChangeNotifier {
   }
 
   DateTime? secretUpdatedAt(String id) => _secrets[id]?.updatedAt;
+
+  /// Unește conturile identice (același site, utilizator și parolă).
+  /// Grupurile în care mai multe intrări au atașamente sunt lăsate așa.
+  /// Întoarce câte intrări au fost șterse.
+  Future<int> mergeDuplicateSecrets() async {
+    var removed = 0;
+    bool hasAtt(SecretItem i) => attachmentsOf(i.attachmentOwnerId).isNotEmpty;
+    for (final g in duplicateGroups(_secrets.values)) {
+      if (g.where(hasAtt).length > 1) continue;
+      final r = mergeDuplicates(g, hasAttachments: hasAtt);
+      await saveSecret(r.keep);
+      for (final o in r.remove) {
+        await deleteSecret(o);
+        removed++;
+      }
+    }
+    return removed;
+  }
 
   Future<void> applyRemoteSecret(Map<String, dynamic> m) async {
     final remote = SecretItem.fromMap(m);

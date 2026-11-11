@@ -156,6 +156,7 @@ class SecretItem {
     List<PasswordVersion>? passwordHistory,
     this.favorite = false,
     this.category = '',
+    this.ignoreHealth = false,
     required this.createdAt,
     required this.updatedAt,
     DateTime? passwordChangedAt,
@@ -220,6 +221,9 @@ class SecretItem {
   /// Categoria aleasă pentru un cont (`LoginCategory.name`); goală =
   /// automată, după site.
   String category;
+
+  /// Scos din verificarea de securitate de user (cont neimportant / vechi).
+  bool ignoreHealth;
   final DateTime createdAt;
   DateTime updatedAt;
 
@@ -360,6 +364,7 @@ class SecretItem {
     'passwordHistory': [for (final p in passwordHistory) p.toMap()],
     'favorite': favorite,
     'category': category,
+    'ignoreHealth': ignoreHealth,
     'createdAt': createdAt.millisecondsSinceEpoch,
     'updatedAt': updatedAt.millisecondsSinceEpoch,
     'passwordChangedAt': passwordChangedAt.millisecondsSinceEpoch,
@@ -417,6 +422,7 @@ class SecretItem {
       ],
       favorite: (m['favorite'] as bool?) ?? false,
       category: s('category'),
+      ignoreHealth: (m['ignoreHealth'] as bool?) ?? false,
       createdAt: d('createdAt'),
       updatedAt: d('updatedAt'),
       passwordChangedAt: od('passwordChangedAt'),
