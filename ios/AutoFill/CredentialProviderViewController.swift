@@ -35,6 +35,23 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     AutofillLog.write("extensie: pornită")
   }
 
+  /// Face ID se poate cere doar după ce fereastra extensiei e pe ecran
+  /// (altfel iOS refuză: eroarea -25308). Cererile așteaptă până atunci.
+  private var appeared = false
+  private var waiting: [() -> Void] = []
+
+  override func viewDidAppear(_ animated: Bool) {
+    super.viewDidAppear(animated)
+    appeared = true
+    let run = waiting
+    waiting.removeAll()
+    run.forEach { $0() }
+  }
+
+  private func whenVisible(_ action: @escaping () -> Void) {
+    if appeared { action() } else { waiting.append(action) }
+  }
+
   // MARK: - Lista de conturi (din bara de deasupra tastaturii → „Parole”)
 
   override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
@@ -120,17 +137,34 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     "Seiful nu s-a deschis.\n\nDeschide o dată aplicația Notițe și încearcă din nou."
 
   /// Citește cheia din Keychain (iOS cere Face ID / codul) și decriptează.
+  /// Întâi Face ID / codul (fereastra sistemului), apoi cheia din Keychain
+  /// citită cu aceeași confirmare — fără a doua cerere.
   private func unlock(_ done: @escaping (Bool) -> Void) {
-    DispatchQueue.global(qos: .userInitiated).async {
-      let list = AutofillVault.read(reason: "Deblochează parolele din Notițe")
-      DispatchQueue.main.async {
-        if let list {
-          self.logins = list.compactMap {
-            try? JSONDecoder().decode(Login.self, from: JSONSerialization.data(withJSONObject: $0))
+    whenVisible {
+      let context = LAContext()
+      context.localizedFallbackTitle = "Folosește codul"
+      context.evaluatePolicy(
+        .deviceOwnerAuthentication,
+        localizedReason: "Deblochează parolele din Notițe"
+      ) { ok, error in
+        guard ok else {
+          AutofillLog.write(
+            "extensie: Face ID refuzat/anulat — \((error as NSError?)?.code ?? 0)")
+          DispatchQueue.main.async { done(false) }
+          return
+        }
+        AutofillLog.write("extensie: Face ID ok")
+        let list = AutofillVault.read(context: context)
+        DispatchQueue.main.async {
+          if let list {
+            self.logins = list.compactMap {
+              try? JSONDecoder().decode(
+                Login.self, from: JSONSerialization.data(withJSONObject: $0))
+            }
+            done(true)
+          } else {
+            done(false)
           }
-          done(true)
-        } else {
-          done(false)
         }
       }
     }
@@ -303,9 +337,9 @@ enum AutofillVault {
   }
 
   /// Cheia (cere Face ID / codul), apoi decriptarea listei de conturi.
-  static func read(reason: String) -> [[String: Any]]? {
-    let context = LAContext()
-    context.localizedReason = reason
+  static func read(context: LAContext) -> [[String: Any]]? {
+    // contextul e deja confirmat cu Face ID: Keychain-ul nu mai întreabă
+    context.interactionNotAllowed = false
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
