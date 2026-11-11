@@ -83,7 +83,29 @@ async function status() {
   const unlocked = !!k && Date.now() - lastUsed <= LOCK_AFTER_MS;
   if (k && !unlocked) await lock();
   const { email, autoSave } = await settings();
-  return { loggedIn: !!session, unlocked, email, autoSave };
+  const pending = await pendingLogin();
+  return {
+    loggedIn: !!session,
+    unlocked,
+    email,
+    autoSave,
+    awaitingCode: pending ? pending.email : null,
+  };
+}
+
+/// Conectare oprită la codul 2FA. Pe iPhone fereastra extensiei se închide
+/// cât copiezi codul din aplicația de autentificare, așa că ținem minte (doar
+/// în memorie, max. 3 minute) emailul și parola până vine codul.
+const PENDING_LOGIN_MS = 3 * 60 * 1000;
+
+async function pendingLogin() {
+  const { pendingLogin: p } = await getS('pendingLogin');
+  if (!p) return null;
+  if (Date.now() - p.at > PENDING_LOGIN_MS) {
+    await S.remove('pendingLogin');
+    return null;
+  }
+  return p;
 }
 
 async function updateBadge() {
@@ -428,14 +450,27 @@ async function handle(msg, sender) {
     // ---- fereastra extensiei (popup)
     case 'status':
       return status();
-    case 'login':
+    case 'login': {
       if (!fromExtension(sender)) return null;
+      // doar codul: continuăm conectarea începută (fereastra s-a închis)
+      const p = !msg.password && msg.code ? await pendingLogin() : null;
+      const email = p ? p.email : msg.email;
+      const password = p ? p.password : msg.password;
       try {
-        await login(msg.email, msg.password, msg.code);
+        await login(email, password, msg.code);
       } catch (e) {
-        if (e instanceof fb.MfaRequired) return { needCode: true };
+        if (e instanceof fb.MfaRequired) {
+          await S.set({ pendingLogin: { email, password, at: Date.now() } });
+          return { needCode: true };
+        }
         throw e;
       }
+      await S.remove('pendingLogin');
+      return status();
+    }
+    case 'cancelLogin':
+      if (!fromExtension(sender)) return null;
+      await S.remove('pendingLogin');
       return status();
     case 'unlock':
       if (!fromExtension(sender)) return null;

@@ -188,8 +188,21 @@ $('genCopy').addEventListener('click', async () => {
 async function refresh() {
   const st = await send({ type: 'status' });
   $('autoSave').checked = st.autoSave;
-  if (!st.loggedIn) {
+  if (!st.loggedIn && st.awaitingCode) {
+    // conectarea așteaptă doar codul (parola e ținută minte câteva minute)
+    $('email').value = st.awaitingCode;
+    $('pass').hidden = true;
+    $('pass').required = false;
+    $('code').hidden = false;
+    $('code').required = true;
+    $('cancelCode').hidden = false;
+    show('vLogin');
+    $('code').focus();
+  } else if (!st.loggedIn) {
     $('email').value = st.email;
+    $('pass').hidden = false;
+    $('pass').required = true;
+    $('cancelCode').hidden = true;
     show('vLogin');
     (st.email ? $('pass') : $('email')).focus();
   } else if (!st.unlocked) {
@@ -227,7 +240,7 @@ $('fLogin').addEventListener('submit', (e) => {
     const r = await send({
       type: 'login',
       email: $('email').value,
-      password: $('pass').value,
+      password: $('pass').hidden ? undefined : $('pass').value,
       code,
     });
     if (r?.needCode) {
@@ -249,6 +262,14 @@ $('fUnlock').addEventListener('submit', (e) => {
     await send({ type: 'unlock', password: $('upass').value });
     $('upass').value = '';
   });
+});
+
+$('cancelCode').addEventListener('click', async () => {
+  await send({ type: 'cancelLogin' });
+  $('code').value = '';
+  $('code').hidden = true;
+  $('code').required = false;
+  refresh();
 });
 
 $('lockBtn').addEventListener('click', async () => {
