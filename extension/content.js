@@ -51,6 +51,21 @@
     return /pass|parol|pwd|passwd|mot de passe|kennwort/.test(hints(el));
   }
 
+  /// Schimbare de parolă: un câmp cu parola actuală + unul cu cea nouă.
+  const isChangeForm = (pws) =>
+    pws.some(isNewPassword) && pws.some((p) => !isNewPassword(p));
+
+  /// Un câmp care e sigur utilizatorul / emailul (după nume sau tip).
+  function clearUserField(scope) {
+    return [...(scope ?? document).querySelectorAll(USER_SEL)].find(
+      (el) =>
+        visible(el) &&
+        el.value &&
+        !isPasswordField(el) &&
+        (el.type === 'email' || /user|mail|login|identifier/.test(hints(el))),
+    ) ?? null;
+  }
+
   /// Parola NOUĂ (sau confirmarea ei) dintr-un formular de schimbare.
   const isNewPassword = (el) =>
     el.autocomplete === 'new-password' ||
@@ -288,6 +303,15 @@
       );
       const pass = generate(max);
       for (const p of targets) setValue(p, pass);
+      // ținută minte în Notițe imediat, înainte de „Salvează” pe site
+      const u = clearUserField(menuFor?.form ?? document);
+      send({ type: 'generated', password: pass, username: u?.value?.trim() ?? '' })
+        .then((r) => {
+          if (r?.result === 'kept') {
+            showToast({ result: 'generatedKept', site: location.hostname });
+          }
+        })
+        .catch(() => {});
       hideMenu();
       return;
     }
@@ -330,11 +354,13 @@
     }
     // la înregistrare / schimbare: parola nouă (sau, altfel, ultima)
     const pw = pws.filter(isNewPassword).pop() ?? pws[pws.length - 1];
-    const user = userFieldFor(pws[0]);
+    const change = isChangeForm(pws);
+    const user = change ? clearUserField(scope) : userFieldFor(pws[0]);
     send({
       type: 'captured',
       username: user?.value?.trim() ?? '',
       password: pw.value,
+      change,
     }).then((info) => {
       showToast(info);
       // afișat deja aici: nu-l mai repetăm pe pagina următoare dacă nu
@@ -384,6 +410,9 @@
     } else if (info.result === 'askUpdate') {
       html = `Ai folosit altă parolă pentru <b>${esc(info.site)}</b>${who}. O actualizez în Notițe? <span style="opacity:.75">(Dacă logarea n-a reușit, alege „Nu”.)</span>
         <div class="row"><button class="sec" data-a="ok">Nu</button><button class="pri" data-a="save">Actualizează</button></div>`;
+    } else if (info.result === 'generatedKept') {
+      html = `🔑 Parola generată e ținută minte în Notițe (la contul <b>${esc(info.site)}</b>). Dacă site-ul o acceptă, confirm-o la salvare.
+        <div class="row"><button class="pri" data-a="ok">OK</button></div>`;
     } else if (info.result === 'locked') {
       html = `🔒 Notițe e blocat. Parola pentru <b>${esc(info.site)}</b>${who} va fi salvată când îl deblochezi din iconița extensiei.
         <div class="row"><button class="pri" data-a="ok">OK</button></div>`;

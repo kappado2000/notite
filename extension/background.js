@@ -275,15 +275,34 @@ function newLogin(url, username, password) {
 }
 
 /// Contul existent pentru site + utilizator (dacă există).
-async function existingLogin(url, username) {
+async function existingLogin(url, username, { change = false } = {}) {
   const all = (await items()) ?? [];
   const user = (username || '').trim().toLowerCase();
-  return all.find(
-    (i) =>
-      i.type === 'login' &&
-      matches(i, url) &&
-      (i.username || '').trim().toLowerCase() === user,
+  const site = all.filter((i) => i.type === 'login' && matches(i, url));
+  const exact = site.find(
+    (i) => (i.username || '').trim().toLowerCase() === user,
   );
+  if (exact) return exact;
+  // formular de schimbare a parolei: utilizatorul nu apare pe pagină
+  if (change && site.length === 1) return site[0];
+  return undefined;
+}
+
+/// Parolă generată de Notițe pe o pagină: o ținem minte ÎNAINTE de
+/// trimitere, în contul site-ului (ca „schimbare neterminată” — aplicația o
+/// arată și o poate confirma). Nu se mai pierde dacă site-ul se blochează,
+/// dai de două ori clic sau închizi fila.
+async function rememberGenerated(tabUrl, username, password) {
+  const key = await dataKey();
+  if (!key) return { result: 'locked' };
+  const old = await existingLogin(tabUrl, username, { change: true });
+  if (!old) return { result: 'none' };
+  if (old.pendingPassword === password) return { result: 'kept' };
+  const updated = { ...old, pendingPassword: password, updatedAt: Date.now() };
+  await writeItem(key, await authSession(), updated);
+  const { items: list = [] } = await getS('items');
+  await S.set({ items: list.map((i) => (i.id === old.id ? updated : i)) });
+  return { result: 'kept', id: old.id };
 }
 
 /// Parolele prinse și nesalvate expiră după 30 de minute.
@@ -319,6 +338,8 @@ async function saveCredential(url, username, password) {
     const updated = {
       ...existing,
       password,
+      pendingPassword:
+        existing.pendingPassword === password ? '' : existing.pendingPassword ?? '',
       updatedAt: now,
       passwordChangedAt: now,
       passwordHistory: [
@@ -454,7 +475,10 @@ async function captured(msg, tabUrl, tabId) {
     let reply;
     // Cont existent cu altă parolă: poate fi o parolă greșită tastată la
     // logare, deci NU o schimbăm singuri — întrebăm.
-    const old = st.unlocked ? await existingLogin(tabUrl, username) : null;
+    const old = st.unlocked
+      ? await existingLogin(tabUrl, username, { change: !!msg.change })
+      : null;
+    if (old && !username) username = old.username || '';
     const changed = !!old && old.password !== msg.password;
     if (!st.loggedIn) {
       reply = { result: 'loggedOut' };
@@ -666,6 +690,11 @@ async function handle(msg, sender) {
       await touch();
       return { username: i.username, password: i.password };
     }
+    case 'generated':
+      if (!tabUrl || sender.frameId !== 0 || !msg.password) return null;
+      return serial(() =>
+        rememberGenerated(tabUrl, msg.username || '', msg.password),
+      );
     case 'usernameStep':
       if (tabId != null && msg.username) {
         usernameHint.set(tabId, { url: tabUrl, username: msg.username });
