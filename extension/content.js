@@ -162,7 +162,7 @@
       'ABCDEFGHJKLMNPQRSTUVWXYZ',
       'abcdefghijkmnopqrstuvwxyz',
       '23456789',
-      '!@#$%&*-_=+?',
+      '!*-_.',
     ];
     const all = sets.join('');
     const rnd = (n) => {
@@ -275,13 +275,18 @@
       return;
     }
     if (it.dataset.gen) {
-      const pass = generate();
       const pws = passwordFields(menuFor?.form ?? document);
       // schimbare de parolă: doar câmpurile „nouă” / „confirmă”, nu cea actuală
       const fresh = pws.filter(isNewPassword);
       const targets = fresh.length
         ? fresh
         : pws.filter((p) => !p.value || pws.length === 1);
+      // lungimea maximă cerută de site (altfel site-ul o taie pe tăcute)
+      const max = Math.min(
+        18,
+        ...targets.map((p) => (p.maxLength >= 8 ? p.maxLength : 18)),
+      );
+      const pass = generate(max);
       for (const p of targets) setValue(p, pass);
       hideMenu();
       return;

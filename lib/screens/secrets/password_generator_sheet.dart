@@ -154,7 +154,7 @@ class _GeneratorSheetState extends State<_GeneratorSheet> {
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text(r'Simboluri (!@#$…)'),
+                title: const Text(r'Simboluri (! * - _ .)'),
                 value: _symbols,
                 onChanged: (v) {
                   _symbols = v;

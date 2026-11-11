@@ -11,7 +11,7 @@ class PasswordGenerator {
   static const _lower = 'abcdefghijkmnopqrstuvwxyz';
   static const _upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   static const _digits = '23456789';
-  static const _symbols = r'!@#$%^&*()-_=+[]{};:,.?';
+  static const _symbols = '!*-_.';
   // Variantele „ambigue” (l, I, O, 0, 1) sunt excluse implicit.
   static const _ambiguous = 'lIO01';
 

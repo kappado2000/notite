@@ -152,7 +152,7 @@ async function load(fresh = false) {
 
 function generate(len, symbols) {
   const sets = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789'];
-  if (symbols) sets.push('!@#$%&*-_=+?');
+  if (symbols) sets.push('!*-_.');
   const pool = sets.join('');
   const rnd = (n) => {
     const a = new Uint32Array(1);
