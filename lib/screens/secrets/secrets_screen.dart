@@ -11,6 +11,7 @@ import '../../services/biometric_service.dart';
 import '../../services/csv_import.dart';
 import '../../services/firestore_sync.dart';
 import '../../services/password_tools.dart';
+import '../../services/secret_helpers.dart';
 import '../../theme.dart';
 import '../../services/pin_lock.dart';
 import '../../services/vault.dart';
@@ -702,7 +703,14 @@ class _SecretsScreenState extends State<SecretsScreen>
               : _type != null
               ? ListView(
                   padding: EdgeInsets.fromLTRB(12, 4, 12, bottomSpace(context)),
-                  children: [_section(_type!, shownItems)],
+                  children: [
+                    _section(
+                      _type!,
+                      shownItems,
+                      // în „Conturi”: subgrupe Email, Rețele sociale…
+                      byCategory: _type == SecretType.login,
+                    ),
+                  ],
                 )
               : ListView.builder(
                   padding: EdgeInsets.only(bottom: bottomSpace(context)),
@@ -745,7 +753,11 @@ class _SecretsScreenState extends State<SecretsScreen>
 
   /// Secțiunea unui tip: antet colorat (nume, câte sunt, adaugă, deschide)
   /// și toate intrările lui, în ordine alfabetică.
-  Widget _section(SecretType t, List<SecretItem> list) {
+  Widget _section(
+    SecretType t,
+    List<SecretItem> list, {
+    bool byCategory = false,
+  }) {
     final tint = secretTint(context, t);
     final accent = tint.onContainer(context);
     final sorted = _alphabetical(list);
@@ -830,15 +842,63 @@ class _SecretsScreenState extends State<SecretsScreen>
                 ),
               ),
             ),
-          for (final i in sorted) ...[
-            Divider(
-              height: 1,
-              indent: 16,
-              endIndent: 16,
-              color: accent.withValues(alpha: 0.15),
-            ),
-            tint.themed(context, _swipe(i, SecretTile(item: i, plain: true))),
-          ],
+          if (!byCategory)
+            for (final i in sorted) ...[
+              Divider(
+                height: 1,
+                indent: 16,
+                endIndent: 16,
+                color: accent.withValues(alpha: 0.15),
+              ),
+              tint.themed(context, _swipe(i, SecretTile(item: i, plain: true))),
+            ]
+          else
+            for (final c in LoginCategory.values)
+              if (sorted.where((i) => loginCategory(i) == c).toList()
+                  case final group when group.isNotEmpty) ...[
+                // titlul subgrupei: iconiță, nume, câte sunt
+                Container(
+                  color: tint.container(context).withValues(alpha: 0.55),
+                  padding: const EdgeInsets.fromLTRB(16, 9, 16, 7),
+                  child: Row(
+                    children: [
+                      Icon(c.icon, size: 17, color: accent),
+                      const SizedBox(width: 8),
+                      Text(
+                        c.label.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          color: accent,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${group.length}',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: accent.withValues(alpha: 0.75),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                for (final (n, i) in group.indexed) ...[
+                  if (n > 0)
+                    Divider(
+                      height: 1,
+                      indent: 16,
+                      endIndent: 16,
+                      color: accent.withValues(alpha: 0.15),
+                    ),
+                  tint.themed(
+                    context,
+                    _swipe(i, SecretTile(item: i, plain: true)),
+                  ),
+                ],
+              ],
         ],
       ),
     );

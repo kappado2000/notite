@@ -14,6 +14,27 @@ enum SecretType {
   final IconData icon;
 }
 
+/// Categoria unui cont (subgrupele din „Conturi”).
+enum LoginCategory {
+  email('Email', Icons.mail_outline),
+  social('Rețele sociale', Icons.forum_outlined),
+  shopping('Cumpărături', Icons.shopping_bag_outlined),
+  entertainment('Divertisment', Icons.movie_outlined),
+  publicServices('Servicii publice', Icons.account_balance_outlined),
+  other('Altele', Icons.more_horiz);
+
+  const LoginCategory(this.label, this.icon);
+  final String label;
+  final IconData icon;
+
+  static LoginCategory? parse(String? s) {
+    for (final c in values) {
+      if (c.name == s) return c;
+    }
+    return null;
+  }
+}
+
 /// Felul actului (pentru [SecretType.identity]).
 enum DocKind {
   ci('Carte de identitate'),
@@ -129,6 +150,7 @@ class SecretItem {
     List<CustomField>? custom,
     List<PasswordVersion>? passwordHistory,
     this.favorite = false,
+    this.category = '',
     required this.createdAt,
     required this.updatedAt,
     DateTime? passwordChangedAt,
@@ -189,6 +211,10 @@ class SecretItem {
   /// Parolele anterioare, cea mai recentă prima (max. 10).
   List<PasswordVersion> passwordHistory;
   bool favorite;
+
+  /// Categoria aleasă pentru un cont (`LoginCategory.name`); goală =
+  /// automată, după site.
+  String category;
   final DateTime createdAt;
   DateTime updatedAt;
 
@@ -328,6 +354,7 @@ class SecretItem {
     'custom': [for (final f in custom) f.toMap()],
     'passwordHistory': [for (final p in passwordHistory) p.toMap()],
     'favorite': favorite,
+    'category': category,
     'createdAt': createdAt.millisecondsSinceEpoch,
     'updatedAt': updatedAt.millisecondsSinceEpoch,
     'passwordChangedAt': passwordChangedAt.millisecondsSinceEpoch,
@@ -384,6 +411,7 @@ class SecretItem {
           PasswordVersion.fromMap(p as Map),
       ],
       favorite: (m['favorite'] as bool?) ?? false,
+      category: s('category'),
       createdAt: d('createdAt'),
       updatedAt: d('updatedAt'),
       passwordChangedAt: od('passwordChangedAt'),

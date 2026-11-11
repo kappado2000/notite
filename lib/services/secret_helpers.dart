@@ -823,3 +823,89 @@ ClipKind classifyClip(String text) {
   }
   return (issuer: issuer, account: account);
 }
+
+// ------------------------------------------------- categoriile conturilor
+
+const _siteCategory = {
+  'Google': LoginCategory.email,
+  'Gmail': LoginCategory.email,
+  'Apple': LoginCategory.email,
+  'iCloud': LoginCategory.email,
+  'Microsoft': LoginCategory.email,
+  'Outlook': LoginCategory.email,
+  'Yahoo': LoginCategory.email,
+  'Facebook': LoginCategory.social,
+  'Instagram': LoginCategory.social,
+  'WhatsApp': LoginCategory.social,
+  'Messenger': LoginCategory.social,
+  'TikTok': LoginCategory.social,
+  'X (Twitter)': LoginCategory.social,
+  'LinkedIn': LoginCategory.social,
+  'Amazon': LoginCategory.shopping,
+  'eMAG': LoginCategory.shopping,
+  'OLX': LoginCategory.shopping,
+  'Altex': LoginCategory.shopping,
+  'Flanco': LoginCategory.shopping,
+  'Dedeman': LoginCategory.shopping,
+  'IKEA': LoginCategory.shopping,
+  'Decathlon': LoginCategory.shopping,
+  'Fashion Days': LoginCategory.shopping,
+  'Elefant': LoginCategory.shopping,
+  'Carturesti': LoginCategory.shopping,
+  'Glovo': LoginCategory.shopping,
+  'Tazz': LoginCategory.shopping,
+  'YouTube': LoginCategory.entertainment,
+  'Netflix': LoginCategory.entertainment,
+  'Spotify': LoginCategory.entertainment,
+  'Disney+': LoginCategory.entertainment,
+  'HBO Max': LoginCategory.entertainment,
+  'SkyShowtime': LoginCategory.entertainment,
+  'Voyo': LoginCategory.entertainment,
+  'Steam': LoginCategory.entertainment,
+  'PlayStation': LoginCategory.entertainment,
+  'Xbox': LoginCategory.entertainment,
+  'ANAF': LoginCategory.publicServices,
+  'Ghișeul.ro': LoginCategory.publicServices,
+  'eSănătateaMea': LoginCategory.publicServices,
+  'Enel': LoginCategory.publicServices,
+  'E.ON': LoginCategory.publicServices,
+  'Electrica': LoginCategory.publicServices,
+  'Engie': LoginCategory.publicServices,
+  'Digi': LoginCategory.publicServices,
+  'Orange': LoginCategory.publicServices,
+  'Vodafone': LoginCategory.publicServices,
+  'Telekom': LoginCategory.publicServices,
+};
+
+/// Categoria automată a unui cont, după site / nume.
+LoginCategory autoLoginCategory(SecretItem i) {
+  final site =
+      recognizeSite(i.url.isNotEmpty ? i.url : i.title) ??
+      (i.url.isNotEmpty ? recognizeSite(i.title) : null);
+  final known = site == null ? null : _siteCategory[site.name];
+  if (known != null) return known;
+  final text = _norm('${hostOf(i.url)} ${i.title}');
+  if (RegExp(r'mail|posta|webmail').hasMatch(text)) return LoginCategory.email;
+  if (RegExp(
+    r'\.gov\.ro|gov\.ro|primari|anaf|cnas|casa de sanatate|'
+    r'politia|mai\.gov|ghiseul|rovinieta|e-guvernare|hidroelectrica|'
+    r'apa nova|apavital|distrigaz|ppc|aquatim',
+  ).hasMatch(text)) {
+    return LoginCategory.publicServices;
+  }
+  if (RegExp(r'shop|store|magazin|market|comenzi').hasMatch(text)) {
+    return LoginCategory.shopping;
+  }
+  if (RegExp(r'game|games|joc|film|music|muzica|stream|tv').hasMatch(text)) {
+    return LoginCategory.entertainment;
+  }
+  if (RegExp(r'social|forum|discord|reddit|telegram|snapchat|pinterest')
+      .hasMatch(text)) {
+    return LoginCategory.social;
+  }
+  return LoginCategory.other;
+}
+
+/// Categoria contului: cea aleasă de user, altfel cea automată.
+LoginCategory loginCategory(SecretItem i) =>
+    LoginCategory.parse(i.category) ?? autoLoginCategory(i);

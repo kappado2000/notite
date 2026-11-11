@@ -391,4 +391,48 @@ void main() {
     final again = secretsFromCsv(csv, existing: r.items, create: _new);
     expect(again.items, isEmpty);
   });
+
+  test(
+    'conturile se împart singure pe categorii; alegerea manuală câștigă',
+    () {
+      SecretItem l(String title, [String url = '']) => _new()
+        ..title = title
+        ..url = url;
+      expect(loginCategory(l('Gmail')), LoginCategory.email);
+      expect(
+        loginCategory(l('Yahoo', 'https://login.yahoo.com')),
+        LoginCategory.email,
+      );
+      expect(
+        loginCategory(l('Facebook', 'https://www.facebook.com')),
+        LoginCategory.social,
+      );
+      expect(loginCategory(l('eMAG', 'emag.ro')), LoginCategory.shopping);
+      expect(loginCategory(l('Netflix')), LoginCategory.entertainment);
+      expect(
+        loginCategory(l('ANAF SPV', 'https://www.anaf.ro')),
+        LoginCategory.publicServices,
+      );
+      expect(
+        loginCategory(l('Primăria Sector 3', 'https://ps3.gov.ro')),
+        LoginCategory.publicServices,
+      );
+      expect(
+        loginCategory(l('Webmail firmă', 'https://mail.firma.ro')),
+        LoginCategory.email,
+      );
+      expect(
+        loginCategory(l('BT24', 'https://bt24.bancatransilvania.ro')),
+        LoginCategory.other,
+      );
+      expect(
+        loginCategory(l('Ceva', 'https://exemplu.ro')),
+        LoginCategory.other,
+      );
+      final manual = l('Gmail')..category = LoginCategory.other.name;
+      expect(loginCategory(manual), LoginCategory.other);
+      // se păstrează la salvare / sincronizare
+      expect(SecretItem.fromMap(manual.toMap()).category, 'other');
+    },
+  );
 }

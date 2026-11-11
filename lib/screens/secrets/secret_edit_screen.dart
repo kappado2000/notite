@@ -75,6 +75,7 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
   late DateTime? _expiryDate = _i.expiryDate;
   late DateTime? _renewalDate = _i.renewalDate;
   late String _currency = _i.currency;
+  late String _category = _i.category;
   late BillingPeriod _period = _i.period;
   bool _showPassword = false;
   bool _clipAvailable = false;
@@ -148,6 +149,7 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
       ..price = _v('price')
       ..currency = _currency
       ..period = _period
+      ..category = _category
       ..renewalDate = _renewalDate
       ..notes = _c['notes']!.text.trim()
       ..custom = [
@@ -715,6 +717,10 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
         keyboard: TextInputType.url,
       ),
       _totpField(),
+      _dropdown<String>('Categorie', Icons.folder_outlined, _category, [
+        ('', 'Automat (${autoLoginCategory(_i).label})'),
+        for (final c in LoginCategory.values) (c.name, c.label),
+      ], (v) => _category = v),
     ],
     SecretType.card => [
       _readButton(),
