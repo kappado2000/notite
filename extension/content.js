@@ -20,11 +20,19 @@
 
   // ------------------------------------------------------ câmpuri
 
+  // „vizibil” = un om îl poate vedea și folosi. Google (și alții) pun pe
+  // pagina cu emailul și un câmp de parolă ascuns (aria-hidden, în afara
+  // ecranului, transparent) — acela nu contează.
   const visible = (el) => {
     if (!el || el.disabled || el.readOnly) return false;
+    if (el.closest('[aria-hidden="true"]') || el.tabIndex < 0) return false;
     const r = el.getBoundingClientRect();
     const st = getComputedStyle(el);
-    return r.width > 4 && r.height > 4 && st.visibility !== 'hidden' && st.display !== 'none';
+    if (r.width <= 4 || r.height <= 4) return false;
+    if (st.visibility === 'hidden' || st.display === 'none') return false;
+    if (Number(st.opacity) === 0) return false;
+    if (r.right < 0 || r.bottom < 0 || r.left > innerWidth + 50) return false;
+    return true;
   };
 
   const passwordFields = (root = document) =>
@@ -101,13 +109,19 @@
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  function fill(username, password) {
+  /// [target] = câmpul în care ai dat clic (dacă e unul de utilizator, emailul
+  /// merge sigur acolo).
+  function fill(username, password, target = null) {
     const pws = passwordFields();
     const pw = pws.find((p) => p === document.activeElement) ?? pws[0];
+    const userTarget =
+      target && target.type !== 'password' && visible(target) ? target : null;
     if (pw) {
-      const u = userFieldFor(pw);
+      const u = userTarget ?? userFieldFor(pw);
       if (u && username) setValue(u, username);
       setValue(pw, password);
+    } else if (userTarget) {
+      if (username) setValue(userTarget, username);
     } else {
       // pasul cu utilizatorul (ex. Google, Microsoft)
       const u = [...document.querySelectorAll(USER_SEL)].find(visible);
@@ -244,7 +258,7 @@
       return;
     }
     const cred = await send({ type: 'fill', id: it.dataset.id });
-    if (cred) fill(cred.username, cred.password);
+    if (cred) fill(cred.username, cred.password, menuFor);
     hideMenu();
   });
 
