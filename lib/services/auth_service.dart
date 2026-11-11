@@ -113,7 +113,11 @@ class AuthService extends ChangeNotifier {
       final session = await _auth.currentUser!.multiFactor.getSession();
       return await TotpMultiFactorGenerator.generateSecret(session);
     } on FirebaseAuthException catch (e) {
-      throw AuthError(_message(e.code));
+      throw AuthError(
+        e.code == 'unknown' || e.code == 'internal-error'
+            ? '${_message(e.code)} ${e.message ?? ''}'
+            : _message(e.code),
+      );
     }
   }
 

@@ -134,6 +134,26 @@ class _MfaScreenState extends State<MfaScreen> {
     return true;
   }
 
+  bool _verifySent = false;
+
+  Future<void> _sendVerification() async {
+    try {
+      await context.read<AuthService>().resendVerification();
+      if (mounted) setState(() => _verifySent = true);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Eroare: $e');
+    }
+  }
+
+  Future<void> _checkVerified() async {
+    final auth = context.read<AuthService>();
+    await auth.reload();
+    if (!mounted) return;
+    setState(
+      () => _error = auth.user?.emailVerified == true ? null : 'Încă nu e confirmat. Apasă linkul din email, apoi încearcă din nou.',
+    );
+  }
+
   Future<void> _start() async {
     setState(() {
       _busy = true;
@@ -155,6 +175,9 @@ class _MfaScreenState extends State<MfaScreen> {
       }
     } on AuthError catch (e) {
       if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      // orice altă eroare: o arătăm, ca să știm ce s-a întâmplat
+      if (mounted) setState(() => _error = 'Eroare: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -180,6 +203,9 @@ class _MfaScreenState extends State<MfaScreen> {
       );
     } on AuthError catch (e) {
       if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      // orice altă eroare: o arătăm, ca să știm ce s-a întâmplat
+      if (mounted) setState(() => _error = 'Eroare: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -218,6 +244,9 @@ class _MfaScreenState extends State<MfaScreen> {
       if (mounted) setState(() => _enabled = false);
     } on AuthError catch (e) {
       if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      // orice altă eroare: o arătăm, ca să știm ce s-a întâmplat
+      if (mounted) setState(() => _error = 'Eroare: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -288,11 +317,54 @@ class _MfaScreenState extends State<MfaScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: _busy ? null : _start,
-                  icon: const Icon(Icons.qr_code_2),
-                  label: const Text('Activează'),
-                ),
+                if (context.watch<AuthService>().user?.emailVerified !=
+                    true) ...[
+                  // Firebase cere emailul confirmat înainte de 2FA.
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Pasul 1: confirmă adresa de email',
+                            style: text.titleMedium,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _verifySent
+                                ? 'Ți-am trimis un email la '
+                                      '${context.read<AuthService>().user?.email}. '
+                                      'Apasă linkul din el (verifică și Spam), '
+                                      'apoi „Am confirmat”.'
+                                : 'Îți trimitem un email cu un link de '
+                                      'confirmare.',
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            onPressed: _sendVerification,
+                            icon: const Icon(Icons.mark_email_read_outlined),
+                            label: Text(
+                              _verifySent
+                                  ? 'Retrimite emailul'
+                                  : 'Trimite emailul de confirmare',
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          FilledButton(
+                            onPressed: _checkVerified,
+                            child: const Text('Am confirmat'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ] else
+                  FilledButton.icon(
+                    onPressed: _busy ? null : _start,
+                    icon: const Icon(Icons.qr_code_2),
+                    label: const Text('Activează'),
+                  ),
               ] else ...[
                 Text('1. Adaugă contul în aplicație', style: text.titleMedium),
                 const SizedBox(height: 8),
