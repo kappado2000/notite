@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -574,10 +575,29 @@ class _ChangeSheetState extends State<_ChangeSheet> {
   /// să ajungi la „Parolă nouă”.
   static const _keepFor = Duration(minutes: 3);
 
+  bool _copiedOld = false;
+
+  Future<void> _copyOld() async {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _copiedOld = true;
+      _copied = false;
+    });
+    await SecureClipboard.copy(widget.item.password, keepFor: _keepFor);
+    _copiedTimer?.cancel();
+    _copiedTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _copiedOld = false);
+    });
+  }
+
   Future<void> _copy() async {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _copied = true;
+      _copiedOld = false;
+    });
     await SecureClipboard.copy(_pass.text, keepFor: _keepFor);
     if (!mounted) return;
-    setState(() => _copied = true);
     _copiedTimer?.cancel();
     _copiedTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _copied = false);
@@ -728,10 +748,24 @@ class _ChangeSheetState extends State<_ChangeSheet> {
             ),
             step('2', 'Schimb-o pe site'),
             Text(
-              'Conectează-te, mergi la setările contului → Parolă și '
-              'lipește parola nouă. Parola actuală o găsești în Notițe.',
+              'Deschide site-ul și conectează-te cu parola actuală (o copiezi '
+              'de aici), apoi mergi la setările contului → Parolă. Când îți '
+              'cere parola nouă, revino aici, copiaz-o (pasul 1) și lipește-o.',
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
+            const SizedBox(height: 8),
+            if (widget.item.password.isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: _copyOld,
+                icon: Icon(
+                  _copiedOld ? Icons.check_circle : Icons.key_outlined,
+                ),
+                label: Text(
+                  _copiedOld
+                      ? 'Parola actuală copiată — lipește-o la conectare'
+                      : 'Copiază parola actuală (pentru conectare)',
+                ),
+              ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: site == null ? null : () => _open(site),
