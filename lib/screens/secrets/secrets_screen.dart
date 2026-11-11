@@ -278,7 +278,7 @@ class _SecretsScreenState extends State<SecretsScreen>
       final r = secretsFromCsv(
         text,
         existing: store.allSecrets,
-        create: () => store.newSecret(SecretType.login),
+        create: ([t = SecretType.login]) => store.newSecret(t),
       );
       if (!mounted) return;
       if (r.items.isEmpty) {

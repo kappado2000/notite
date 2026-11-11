@@ -323,4 +323,72 @@ void main() {
     expect(e.expiry, '12/30');
     expect(e.holder, '');
   });
+
+  test('LastPass: fiecare intrare ajunge în secțiunea ei', () {
+    const csv =
+        'url,username,password,totp,extra,name,grouping,fav\n'
+        'https://www.emag.ro,ion@test.ro,Parola#1,,,eMAG,Cumpărături,1\n'
+        'http://sn,,,,"NoteType:Credit Card\nLanguage:en-US\nName on Card:ION POPESCU\nType:Visa\nNumber:4111111111111111\nSecurity Code:123\nStart Date:,\nExpiration Date:March,2029\nNotes:card de salariu",Card salariu,Bancă,0\n'
+        'http://sn,,,,"NoteType:Bank Account\nLanguage:en-US\nBank Name:Banca Exemplu\nAccount Type:Curent\nRouting Number:\nAccount Number:123456\nSWIFT Code:EXMPROBU\nIBAN Number:RO49AAAA1B31007593840000\nPin:9876\nNotes:",Cont curent,Bancă,0\n'
+        'http://sn,,,,"NoteType:Wi-Fi Password\nLanguage:en-US\nSSID:Acasa-5G\nPassword:soare-munte-42\nConnection Type:ESS\nAuthentication:WPA2PSK\nEncryption:AES\nNotes:",Wi-Fi acasă,,0\n'
+        'http://sn,,,,"NoteType:Passport\nLanguage:en-US\nType:P\nName:POPESCU ION\nCountry:România\nNumber:051234567\nSex:M\nNationality:ROU\nDate of Birth:May,05,1980\nIssued Date:June,10,2020\nExpiration Date:June,10,2030\nNotes:",Pașaport,Acte,0\n'
+        'http://sn,,,,"NoteType:Server\nLanguage:en-US\nHostname:srv.exemplu.ro\nUsername:admin\nPassword:Adm!n-2026\nNotes:acces SSH",Server birou,,0\n'
+        'http://sn,,,,"NoteType:Generic\nNotes:coduri de rezervă\nrândul 2",Coduri Google,,0\n';
+    final r = secretsFromCsv(csv, existing: const [], create: _new);
+    expect(r.source, 'LastPass');
+    final by = {for (final i in r.items) i.title: i};
+    expect(r.items, hasLength(7));
+
+    final login = by['eMAG']!;
+    expect(
+      (login.type, login.username, login.favorite),
+      (SecretType.login, 'ion@test.ro', true),
+    );
+    expect(login.custom.single.value, 'Cumpărături');
+
+    final card = by['Card salariu']!;
+    expect(card.type, SecretType.card);
+    expect(
+      (card.cardHolder, card.cardNumber, card.cardCvv, card.cardExpiry),
+      ('ION POPESCU', '4111111111111111', '123', '03/29'),
+    );
+    expect(card.notes, 'card de salariu');
+
+    final bank = by['Cont curent']!;
+    expect(bank.type, SecretType.bank);
+    expect(
+      (bank.bankName, bank.iban, bank.swift),
+      ('Banca Exemplu', 'RO49AAAA1B31007593840000', 'EXMPROBU'),
+    );
+    final pin = bank.custom.firstWhere((c) => c.label == 'Pin');
+    expect((pin.value, pin.hidden), ('9876', true));
+
+    final wifi = by['Wi-Fi acasă']!;
+    expect(
+      (wifi.type, wifi.username, wifi.password, wifi.wifiSecurity),
+      (SecretType.wifi, 'Acasa-5G', 'soare-munte-42', 'WPA'),
+    );
+
+    final pass = by['Pașaport']!;
+    expect(
+      (pass.type, pass.docKind, pass.docNumber),
+      (SecretType.identity, DocKind.passport, '051234567'),
+    );
+    expect(pass.expiryDate, DateTime(2030, 6, 10));
+    expect(pass.issueDate, DateTime(2020, 6, 10));
+
+    final server = by['Server birou']!;
+    expect(
+      (server.type, server.username, server.password, server.url),
+      (SecretType.login, 'admin', 'Adm!n-2026', 'srv.exemplu.ro'),
+    );
+
+    final note = by['Coduri Google']!;
+    expect(note.type, SecretType.note);
+    expect(note.notes, 'coduri de rezervă\nrândul 2');
+
+    // importul repetat nu dublează nimic
+    final again = secretsFromCsv(csv, existing: r.items, create: _new);
+    expect(again.items, isEmpty);
+  });
 }

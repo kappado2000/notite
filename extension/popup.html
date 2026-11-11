@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <title>Notițe – Parole</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/32.png" alt="" width="22" height="22">
+    <h1>Notițe – Parole</h1>
+    <button id="lockBtn" class="icon" title="Blochează" hidden>🔒</button>
+  </header>
+
+  <!-- conectare -->
+  <section id="vLogin" hidden>
+    <p class="muted">Conectează-te cu contul din aplicația Notițe. Parola deschide și seiful criptat.</p>
+    <form id="fLogin">
+      <input id="email" type="email" placeholder="Email" autocomplete="username" required>
+      <input id="pass" type="password" placeholder="Parola contului" autocomplete="current-password" required>
+      <button class="pri" type="submit">Conectează-te</button>
+    </form>
+  </section>
+
+  <!-- blocat -->
+  <section id="vLocked" hidden>
+    <p class="muted">Seiful e blocat. <span id="who"></span></p>
+    <form id="fUnlock">
+      <input id="upass" type="password" placeholder="Parola contului" autocomplete="current-password" required>
+      <button class="pri" type="submit">Deblochează</button>
+    </form>
+    <button id="logoutBtn" class="link">Deconectează contul</button>
+  </section>
+
+  <!-- deblocat -->
+  <section id="vMain" hidden>
+    <div id="pending"></div>
+    <input id="q" type="search" placeholder="Caută cont, site, utilizator…" autocomplete="off">
+    <div id="list"></div>
+
+    <details id="gen">
+      <summary>🎲 Generator de parole</summary>
+      <div class="genrow">
+        <code id="genOut"></code>
+        <button id="genCopy" class="sec">Copiază</button>
+      </div>
+      <label class="range">Lungime <input id="genLen" type="range" min="10" max="40" value="18"> <span id="genLenV">18</span></label>
+      <label><input id="genSym" type="checkbox" checked> Simboluri (!@#…)</label>
+      <button id="genNew" class="sec">Altă parolă</button>
+    </details>
+
+    <details>
+      <summary>⚙️ Setări</summary>
+      <label><input id="autoSave" type="checkbox"> Salvează automat parolele noi</label>
+      <p class="muted small">Schimbările de parolă pentru conturile existente sunt confirmate mereu de tine.
+        Seiful se blochează singur după 15 minute fără folosire și la închiderea browserului.</p>
+      <button id="logoutBtn2" class="link">Deconectează contul</button>
+    </details>
+  </section>
+
+  <div id="msg" class="msg" hidden></div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
