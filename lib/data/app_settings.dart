@@ -64,6 +64,15 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// După câte minute fără folosire se blochează singură secțiunea Parole
+  /// (0 = doar manual / la ieșirea din aplicație).
+  int get secretsAutoLockMinutes =>
+      (_box.get('secretsAutoLockMinutes') as int?) ?? 5;
+  set secretsAutoLockMinutes(int v) {
+    _box.put('secretsAutoLockMinutes', v);
+    notifyListeners();
+  }
+
   /// Ultimul email folosit la logare, precompletat data viitoare.
   String get lastEmail => (_box.get('lastEmail') as String?) ?? '';
   set lastEmail(String v) => _box.put('lastEmail', v);

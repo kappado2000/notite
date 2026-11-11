@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/app_settings.dart';
@@ -73,8 +76,61 @@ class _SecretsScreenState extends State<SecretsScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Orice atingere / tastă, oriunde în aplicație, amână blocarea.
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_onPointer);
+    HardwareKeyboard.instance.addHandler(_onKey);
     _initPin();
     _initBiometric();
+  }
+
+  // ------------------------------------------- blocare după inactivitate
+
+  Timer? _idle;
+
+  void _onPointer(PointerEvent e) {
+    if (e is PointerDownEvent || e is PointerScrollEvent) _activity();
+  }
+
+  bool _onKey(KeyEvent e) {
+    _activity();
+    return false;
+  }
+
+  void _activity() {
+    if (!_unlocked) return;
+    _idle?.cancel();
+    final minutes = context.read<AppSettings>().secretsAutoLockMinutes;
+    if (minutes <= 0) return;
+    _idle = Timer(Duration(minutes: minutes), _relock);
+  }
+
+  Future<void> _chooseAutoLock() async {
+    final settings = context.read<AppSettings>();
+    final v = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Blocare automată'),
+        children: [
+          for (final m in [1, 2, 5, 10, 15, 30, 0])
+            ListTile(
+              leading: Icon(
+                settings.secretsAutoLockMinutes == m
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+              ),
+              title: Text(
+                m == 0
+                    ? 'Doar la ieșirea din aplicație'
+                    : 'După $m ${m == 1 ? 'minut' : 'minute'} fără folosire',
+              ),
+              onTap: () => Navigator.pop(ctx, m),
+            ),
+        ],
+      ),
+    );
+    if (v == null) return;
+    settings.secretsAutoLockMinutes = v;
+    _activity();
   }
 
   Future<void> _initPin() async {
@@ -164,6 +220,7 @@ class _SecretsScreenState extends State<SecretsScreen>
 
   /// Închide detaliile deschise și blochează din nou secțiunea.
   void _relock() {
+    _idle?.cancel();
     if (!mounted || !_unlocked) return;
     Navigator.of(context).popUntil((r) => r.isFirst);
     setState(() {
@@ -174,6 +231,9 @@ class _SecretsScreenState extends State<SecretsScreen>
 
   @override
   void dispose() {
+    _idle?.cancel();
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(_onPointer);
+    HardwareKeyboard.instance.removeHandler(_onKey);
     WidgetsBinding.instance.removeObserver(this);
     _password.dispose();
     _search.dispose();
@@ -334,6 +394,8 @@ class _SecretsScreenState extends State<SecretsScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Tocmai deblocat (sau setarea s-a schimbat): pornește numărătoarea.
+    if (_unlocked && _idle?.isActive != true) _activity();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Parole'),
@@ -370,6 +432,7 @@ class _SecretsScreenState extends State<SecretsScreen>
             PopupMenuButton<String>(
               onSelected: (v) {
                 if (v == 'import') _importCsv();
+                if (v == 'autolock') _chooseAutoLock();
                 if (v == 'health') {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -378,15 +441,29 @@ class _SecretsScreenState extends State<SecretsScreen>
                   );
                 }
               },
-              itemBuilder: (_) => const [
+              itemBuilder: (_) => [
                 PopupMenuItem(
+                  value: 'autolock',
+                  child: ListTile(
+                    leading: const Icon(Icons.timer_outlined),
+                    title: const Text('Blocare automată'),
+                    subtitle: Text(switch (context
+                        .read<AppSettings>()
+                        .secretsAutoLockMinutes) {
+                      0 => 'Doar la ieșirea din aplicație',
+                      1 => 'După 1 minut',
+                      final m => 'După $m minute',
+                    }),
+                  ),
+                ),
+                const PopupMenuItem(
                   value: 'health',
                   child: ListTile(
                     leading: Icon(Icons.health_and_safety_outlined),
                     title: Text('Verificare securitate'),
                   ),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   value: 'import',
                   child: ListTile(
                     leading: Icon(Icons.file_download_outlined),
