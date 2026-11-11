@@ -286,6 +286,28 @@ class AutofillBridge: NSObject, FlutterPlugin {
     case "clear":
       Self.clear()
       result(nil)
+    case "log":
+      let url = FileManager.default.containerURL(
+        forSecurityApplicationGroupIdentifier: Self.group)?.appendingPathComponent("autofill.log")
+      let text = url.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
+      let hasFile = Self.fileURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+      ASCredentialIdentityStore.shared.getState { state in
+        let enabled = state.isEnabled ? "da" : "NU"
+        let file = hasFile ? "da" : "NU"
+        let body = text.isEmpty ? "(jurnal gol)" : text
+        DispatchQueue.main.async {
+          result(
+            "Notițe activat ca furnizor: " + enabled + "\n" + "Fișier conturi: " + file + "\n\n"
+              + body)
+        }
+      }
+    case "clearLog":
+      if let url = FileManager.default.containerURL(
+        forSecurityApplicationGroupIdentifier: Self.group)?.appendingPathComponent("autofill.log")
+      {
+        try? FileManager.default.removeItem(at: url)
+      }
+      result(nil)
     case "status":
       ASCredentialIdentityStore.shared.getState { state in
         DispatchQueue.main.async { result(state.isEnabled) }
@@ -331,17 +353,23 @@ class AutofillBridge: NSObject, FlutterPlugin {
       add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
     }
     var status = SecItemAdd(add as CFDictionary, nil)
+    AutofillLog.write("aplicație: cheie în Keychain (Face ID) → \(status)")
     if status != errSecSuccess {
       // Telefon fără cod de blocare: fără Face ID posibil, doar „deblocat”.
       add.removeValue(forKey: kSecAttrAccessControl as String)
       add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
       status = SecItemAdd(add as CFDictionary, nil)
     }
-    guard status == errSecSuccess else { return false }
+    guard status == errSecSuccess else {
+      AutofillLog.write("aplicație: cheia NU s-a salvat (\(status))")
+      return false
+    }
     do {
       try blob.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+      AutofillLog.write("aplicație: \(logins.count) conturi scrise pentru extensie")
       return true
     } catch {
+      AutofillLog.write("aplicație: fișierul NU s-a scris: \(error.localizedDescription)")
       return false
     }
   }
@@ -349,7 +377,10 @@ class AutofillBridge: NSObject, FlutterPlugin {
   private static func updateIdentities(_ logins: [[String: Any]]) {
     let store = ASCredentialIdentityStore.shared
     store.getState { state in
-      guard state.isEnabled else { return }
+      guard state.isEnabled else {
+        AutofillLog.write("aplicație: Notițe NU e bifat în Completare automată")
+        return
+      }
       let ids: [ASPasswordCredentialIdentity] = logins.compactMap { l in
         guard let host = l["host"] as? String, !host.isEmpty,
           let user = l["user"] as? String,
@@ -359,8 +390,9 @@ class AutofillBridge: NSObject, FlutterPlugin {
           serviceIdentifier: ASCredentialServiceIdentifier(identifier: host, type: .domain),
           user: user, recordIdentifier: id)
       }
-      store.replaceCredentialIdentities(with: ids) { _, error in
-        if let error { NSLog("Notite AutoFill: \(error)") }
+      store.replaceCredentialIdentities(with: ids) { ok, error in
+        let outcome = ok ? "ok" : "eroare " + (error?.localizedDescription ?? "")
+        AutofillLog.write("aplicație: \(ids.count) conturi date lui iOS → " + outcome)
       }
     }
   }
@@ -372,3 +404,22 @@ class AutofillBridge: NSObject, FlutterPlugin {
   }
 }
 
+/// Jurnal de diagnostic comun (aplicație + extensie), în grupul de aplicații:
+/// fiecare pas al completării automate, fără date secrete. Max. ~300 rânduri.
+enum AutofillLog {
+  static func write(_ text: String) {
+    guard
+      let url = FileManager.default.containerURL(
+        forSecurityApplicationGroupIdentifier: "group.com.kappado.notite")?
+        .appendingPathComponent("autofill.log")
+    else { return }
+    let f = DateFormatter()
+    f.dateFormat = "dd.MM HH:mm:ss"
+    let line = "\(f.string(from: Date())) \(text)\n"
+    var lines = (try? String(contentsOf: url, encoding: .utf8))?
+      .split(separator: "\n", omittingEmptySubsequences: true).map(String.init) ?? []
+    lines.append(line.trimmingCharacters(in: .newlines))
+    if lines.count > 300 { lines.removeFirst(lines.count - 300) }
+    try? (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+  }
+}

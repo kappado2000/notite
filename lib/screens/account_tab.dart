@@ -17,6 +17,7 @@ import '../widgets/pickers.dart';
 import 'secrets/pin_setup.dart';
 import 'shell.dart';
 import '../widgets/mfa.dart';
+import '../services/ios_autofill.dart';
 
 /// Contul, securitatea și aspectul aplicației.
 class AccountTab extends StatefulWidget {
@@ -159,6 +160,49 @@ class _AccountTabState extends State<AccountTab> {
             child: const Text('Am salvat codul'),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _autofillDiagnostic(BuildContext context) async {
+    await IosAutofill.instance.resync();
+    if (!context.mounted) return;
+    var text = await IosAutofill.log();
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Diagnostic completare automată'),
+          content: SizedBox(
+            width: 520,
+            height: 380,
+            child: SingleChildScrollView(
+              child: SelectableText(
+                text,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await IosAutofill.clearLog();
+                text = await IosAutofill.log();
+                setLocal(() {});
+              },
+              child: const Text('Golește'),
+            ),
+            TextButton(
+              onPressed: () => Clipboard.setData(ClipboardData(text: text)),
+              child: const Text('Copiază'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Închide'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -325,6 +369,16 @@ class _AccountTabState extends State<AccountTab> {
                     context,
                   ).push(MaterialPageRoute(builder: (_) => const MfaScreen())),
                 ),
+                if (IosAutofill.supported)
+                  ListTile(
+                    leading: const Icon(Icons.bug_report_outlined),
+                    title: const Text('Diagnostic completare automată'),
+                    subtitle: const Text(
+                      'Ce s-a întâmplat la ultima completare a unei parole',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _autofillDiagnostic(context),
+                  ),
                 ListTile(
                   leading: const Icon(Icons.key_outlined),
                   title: const Text('Cod de recuperare nou'),

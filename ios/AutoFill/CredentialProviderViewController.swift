@@ -30,9 +30,16 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   private let search = UISearchBar()
   private let message = UILabel()
 
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    AutofillLog.write("extensie: pornită")
+  }
+
   // MARK: - Lista de conturi (din bara de deasupra tastaturii → „Parole”)
 
   override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
+    AutofillLog.write(
+      "extensie: listă pentru \(serviceIdentifiers.map(\.identifier).joined(separator: ", "))")
     serviceHosts = serviceIdentifiers.map { Self.host(of: $0.identifier) }.filter { !$0.isEmpty }
     buildUI()
     unlock { [weak self] ok in
@@ -46,13 +53,38 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   override func provideCredentialWithoutUserInteraction(
     for credentialIdentity: ASPasswordCredentialIdentity
   ) {
+    AutofillLog.write("extensie: cerere directă (veche) → cer Face ID")
     // Fără Face ID nu dăm nicio parolă.
     extensionContext.cancelRequest(withError: ASExtensionError(.userInteractionRequired))
+  }
+
+  // iOS 17+: aceleași cereri, prin funcțiile noi.
+  @available(iOS 17.0, *)
+  override func provideCredentialWithoutUserInteraction(for credentialRequest: ASCredentialRequest) {
+    AutofillLog.write("extensie: cerere directă (nouă) → cer Face ID")
+    extensionContext.cancelRequest(withError: ASExtensionError(.userInteractionRequired))
+  }
+
+  @available(iOS 17.0, *)
+  override func prepareInterfaceToProvideCredential(for credentialRequest: ASCredentialRequest) {
+    AutofillLog.write("extensie: cerere cu interfață (nouă)")
+    guard let identity = credentialRequest.credentialIdentity as? ASPasswordCredentialIdentity
+    else {
+      AutofillLog.write("extensie: cerere care nu e de parolă — anulată")
+      extensionContext.cancelRequest(withError: ASExtensionError(.credentialIdentityNotFound))
+      return
+    }
+    showCredential(identity)
   }
 
   override func prepareInterfaceToProvideCredential(
     for credentialIdentity: ASPasswordCredentialIdentity
   ) {
+    AutofillLog.write("extensie: cerere cu interfață (veche)")
+    showCredential(credentialIdentity)
+  }
+
+  private func showCredential(_ credentialIdentity: ASPasswordCredentialIdentity) {
     buildUI()
     showMessage("Se deschide seiful…")
     unlock { [weak self] ok in
@@ -60,9 +92,11 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
       guard ok,
         let login = self.logins.first(where: { $0.id == credentialIdentity.recordIdentifier })
       else {
+        AutofillLog.write(ok ? "extensie: contul nu e în listă" : "extensie: seiful nu s-a deschis")
         self.showMessage(ok ? "Contul nu mai există în Notițe." : Self.lockedText)
         return
       }
+      AutofillLog.write("extensie: parolă dată")
       self.complete(login)
     }
   }
@@ -281,14 +315,43 @@ enum AutofillVault {
       kSecUseAuthenticationContext as String: context,
     ]
     var out: CFTypeRef?
-    guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess,
-      let keyData = out as? Data,
-      let url = fileURL,
-      let blob = try? Data(contentsOf: url),
-      let box = try? AES.GCM.SealedBox(combined: blob),
+    let status = SecItemCopyMatching(query as CFDictionary, &out)
+    guard status == errSecSuccess, let keyData = out as? Data else {
+      AutofillLog.write("extensie: cheia din Keychain — eroare \(status)")
+      return nil
+    }
+    guard let url = fileURL, let blob = try? Data(contentsOf: url) else {
+      AutofillLog.write("extensie: fișierul cu conturi lipsește")
+      return nil
+    }
+    guard let box = try? AES.GCM.SealedBox(combined: blob),
       let clear = try? AES.GCM.open(box, using: SymmetricKey(data: keyData)),
       let list = try? JSONSerialization.jsonObject(with: clear) as? [[String: Any]]
-    else { return nil }
+    else {
+      AutofillLog.write("extensie: decriptarea a eșuat")
+      return nil
+    }
+    AutofillLog.write("extensie: seif deschis, \(list.count) conturi")
     return list
+  }
+}
+
+/// Jurnal de diagnostic comun (aplicație + extensie), în grupul de aplicații:
+/// fiecare pas al completării automate, fără date secrete. Max. ~300 rânduri.
+enum AutofillLog {
+  static func write(_ text: String) {
+    guard
+      let url = FileManager.default.containerURL(
+        forSecurityApplicationGroupIdentifier: "group.com.kappado.notite")?
+        .appendingPathComponent("autofill.log")
+    else { return }
+    let f = DateFormatter()
+    f.dateFormat = "dd.MM HH:mm:ss"
+    let line = "\(f.string(from: Date())) \(text)\n"
+    var lines = (try? String(contentsOf: url, encoding: .utf8))?
+      .split(separator: "\n", omittingEmptySubsequences: true).map(String.init) ?? []
+    lines.append(line.trimmingCharacters(in: .newlines))
+    if lines.count > 300 { lines.removeFirst(lines.count - 300) }
+    try? (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
   }
 }

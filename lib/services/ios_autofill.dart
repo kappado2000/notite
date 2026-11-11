@@ -70,6 +70,29 @@ class IosAutofill {
     }
   }
 
+  /// Jurnalul de diagnostic (aplicație + extensie), fără date secrete.
+  static Future<String> log() async {
+    if (!supported) return 'Doar pe iPhone / iPad.';
+    try {
+      return (await _channel.invokeMethod<String>('log')) ?? '';
+    } catch (e) {
+      return 'Eroare: $e';
+    }
+  }
+
+  static Future<void> clearLog() async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod('clearLog');
+    } catch (_) {}
+  }
+
+  /// Rescrie acum lista pentru extensie (chiar dacă nu s-a schimbat nimic).
+  Future<void> resync() async {
+    _lastSig = '';
+    await _push();
+  }
+
   void _changed() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(seconds: 2), _push);
