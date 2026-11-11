@@ -22,7 +22,8 @@
     "scripts": [
       "background.js"
     ],
-    "type": "module"
+    "type": "module",
+    "persistent": false
   },
   "permissions": [
     "storage",
