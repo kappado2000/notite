@@ -78,6 +78,9 @@ function render() {
       if (i.hasPassword) {
         btn('🔑', 'Copiază parola (se șterge după 30 s)', () => copy(i.id, 'password'));
       }
+      if (i.hasTotp) {
+        btn('🔢', 'Copiază codul 2FA', () => copy(i.id, 'totp'));
+      }
       return row;
     }),
   );
@@ -88,7 +91,13 @@ async function copy(id, field) {
     const v = await send({ type: 'reveal', id, field });
     if (v == null) return say('Nu am găsit intrarea.', true);
     await navigator.clipboard.writeText(v);
-    say(field === 'password' ? 'Parola a fost copiată (se șterge după 30 s).' : 'Utilizatorul a fost copiat.');
+    say(
+      field === 'password'
+        ? 'Parola a fost copiată (se șterge după 30 s).'
+        : field === 'totp'
+          ? `Codul 2FA ${v} a fost copiat.`
+          : 'Utilizatorul a fost copiat.',
+    );
   } catch (e) {
     say(e.message, true);
   }

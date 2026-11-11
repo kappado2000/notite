@@ -21,6 +21,7 @@ import {
 } from './lib/crypto.js';
 import * as fb from './lib/firebase.js';
 import { matches, siteTitle, hostOf } from './lib/domain.js';
+import { totpCode } from './lib/totp.js';
 
 const LOCK_AFTER_MS = 15 * 60 * 1000;
 const CLIPBOARD_CLEAR_MS = 30 * 1000;
@@ -328,6 +329,7 @@ function publicItem(i, url) {
     username: i.username || '',
     url: i.url || '',
     hasPassword: !!i.password,
+    hasTotp: !!(i.totp || '').trim(),
     match: url ? matches(i, url) : false,
   };
 }
@@ -465,6 +467,10 @@ async function handle(msg, sender) {
       const i = all?.find((x) => x.id === msg.id);
       if (!i) return null;
       await touch();
+      if (msg.field === 'totp') {
+        await scheduleClipboardClear();
+        return (await totpCode(i.totp))?.code ?? null;
+      }
       if (msg.field === 'password') await scheduleClipboardClear();
       return msg.field === 'password' ? i.password : i.username;
     }
@@ -536,6 +542,21 @@ async function handle(msg, sender) {
           .filter((i) => i.type === 'login' && matches(i, tabUrl))
           .map((i) => publicItem(i, tabUrl)),
       };
+    }
+    case 'pageTotp': {
+      // codul 2FA doar pentru site-ul lui, prin HTTPS, cadrul principal
+      if (sender.frameId !== 0 || !pageAllowed(tabUrl)) return null;
+      const st = await status();
+      if (!st.unlocked) return { locked: true, loggedIn: st.loggedIn, items: [] };
+      const all = (await items()) ?? [];
+      const out = [];
+      for (const i of all) {
+        if (!(i.totp || '').trim() || !matches(i, tabUrl)) continue;
+        const r = await totpCode(i.totp);
+        if (r) out.push({ id: i.id, title: i.title, username: i.username, ...r });
+      }
+      if (out.length) await touch();
+      return { locked: false, items: out };
     }
     case 'fill': {
       // parola merge DOAR spre site-ul ei, prin HTTPS, cadrul principal

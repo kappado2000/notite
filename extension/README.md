@@ -20,6 +20,9 @@ site-urile lor. Aceleași date ca în aplicație (Parole → Conturi).
 - **Completează**: la câmpul de utilizator / parolă îți propune conturile
   salvate pentru acel site.
 - **Generează** parole puternice pe paginile de înregistrare.
+- **Coduri 2FA**: la câmpul pentru codul de verificare îți propune codul de 6
+  cifre al contului (dacă are cheia 2FA salvată în Notițe); în iconiță, 🔢 îl
+  copiază.
 - **Caută și copiază** din iconița extensiei; parola copiată se șterge din
   clipboard după 30 de secunde.
 
@@ -38,5 +41,10 @@ site-urile lor. Aceleași date ca în aplicație (Parole → Conturi).
 ## Teste
 
 - `node --test extension/test/domain.test.mjs` — cine primește parola.
+- `node --test extension/test/totp.test.mjs` — codurile 2FA (vectorii RFC 6238).
+
+## Actualizare
+
+După o versiune nouă: `chrome://extensions` → pe cardul Notițe apasă ↻.
 - `flutter test test/extension_crypto_test.dart` — extensia citește și scrie
   exact ca aplicația.

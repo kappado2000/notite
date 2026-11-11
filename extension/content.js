@@ -48,6 +48,37 @@
     return ac && visible(ac) ? ac : null;
   }
 
+  /// Câmpul pentru codul 2FA (6–8 cifre)?
+  function isOtpField(el) {
+    if (!(el instanceof HTMLInputElement) || el.type === 'password') return false;
+    if (el.autocomplete === 'one-time-code') return true;
+    const hint = `${el.name} ${el.id} ${el.placeholder} ${el.getAttribute('aria-label') || ''}`.toLowerCase();
+    const max = Number(el.maxLength);
+    return (
+      /otp|2fa|mfa|totp|one.?time|verification|verificare|authenticat|security.?code|cod(ul)? de|token|pin/.test(hint) &&
+      (!max || max < 0 || (max >= 6 && max <= 10))
+    );
+  }
+
+  async function showOtpMenu(field) {
+    const r = await send({ type: 'pageTotp' });
+    if (!r || r.locked || !r.items.length) return;
+    menu.innerHTML =
+      '<div class="head">🔑 Notițe · cod 2FA</div>' +
+      r.items
+        .map(
+          (i) =>
+            `<div class="item" tabindex="0" data-otp="${esc(i.code)}"><span class="t">${esc(i.code.replace(/(\d{3})(?=\d)/g, '$1 '))}</span><span class="s">${esc(i.username || i.title)} · încă ${i.remaining} s</span></div>`,
+        )
+        .join('');
+    const rect = field.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - 350))}px`;
+    menu.style.top = `${Math.min(rect.bottom + 6, innerHeight - 60)}px`;
+    attach();
+    menu.hidden = false;
+    menuFor = field;
+  }
+
   /// Înregistrare / schimbare de parolă (nu logare)?
   function isSignup(pw) {
     if (pw.autocomplete === 'new-password') return true;
@@ -198,6 +229,11 @@
   menu.addEventListener('click', async (e) => {
     const it = e.target.closest('.item');
     if (!it) return;
+    if (it.dataset.otp) {
+      if (menuFor) setValue(menuFor, it.dataset.otp);
+      hideMenu();
+      return;
+    }
     if (it.dataset.gen) {
       const pass = generate();
       const pws = passwordFields(menuFor?.form ?? document);
@@ -217,6 +253,10 @@
     (e) => {
       const el = e.target;
       if (!(el instanceof HTMLInputElement)) return;
+      if (isOtpField(el)) {
+        showOtpMenu(el);
+        return;
+      }
       const isPw = el.type === 'password';
       const isUser = !isPw && el.matches(USER_SEL) && (passwordFields().length > 0 || /user|mail|login|email/i.test(`${el.name} ${el.id} ${el.autocomplete}`));
       if (isPw || isUser) showMenu(el);
