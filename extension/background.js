@@ -5,7 +5,8 @@
 // - cheia de date și parolele decriptate stau DOAR în chrome.storage.session
 //   (în memorie, șterse la închiderea browserului) și sunt accesibile doar
 //   paginilor extensiei, nu și paginilor web;
-// - seiful se blochează singur după 15 minute fără folosire;
+// - seiful rămâne deschis până la închiderea browserului; opțional se
+//   blochează singur după N minute fără folosire (Setări);
 // - pe disc rămâne doar conectarea la cont (uid + jetonul de reîmprospătare,
 //   ca aplicația de pe telefon), ca după repornirea browserului să ceară
 //   doar parola Notițe; fără parolă nu se poate decripta nimic;
@@ -26,7 +27,14 @@ import * as fb from './lib/firebase.js';
 import { matches, siteTitle, hostOf } from './lib/domain.js';
 import { totpCode } from './lib/totp.js';
 
-const LOCK_AFTER_MS = 15 * 60 * 1000;
+/// Blocare automată după atâtea minute fără folosire; 0 = niciodată
+/// (doar la închiderea browserului).
+const LOCK_CHOICES = [0, 15, 60, 240];
+
+async function lockAfterMs() {
+  const { lockMinutes = 0 } = await L.get('lockMinutes');
+  return lockMinutes > 0 ? lockMinutes * 60 * 1000 : Infinity;
+}
 const CLIPBOARD_CLEAR_MS = 30 * 1000;
 const LOGIN_TYPES = new Set(['login', 'subscription']);
 
@@ -48,8 +56,12 @@ async function touch() {
 }
 
 async function settings() {
-  const { email = '', autoSave = true } = await L.get(['email', 'autoSave']);
-  return { email, autoSave };
+  const {
+    email = '',
+    autoSave = true,
+    lockMinutes = 0,
+  } = await L.get(['email', 'autoSave', 'lockMinutes']);
+  return { email, autoSave, lockMinutes };
 }
 
 /// Conectarea ținută minte pe disc: doar uid și jetonul de reîmprospătare.
@@ -91,7 +103,7 @@ async function authSession({ force = false } = {}) {
 async function dataKey() {
   const { dataKey: k, lastUsed = 0 } = await getS('dataKey', 'lastUsed');
   if (!k) return null;
-  if (Date.now() - lastUsed > LOCK_AFTER_MS) {
+  if (Date.now() - lastUsed > (await lockAfterMs())) {
     await lock();
     return null;
   }
@@ -109,15 +121,16 @@ async function status() {
     'dataKey',
     'lastUsed',
   );
-  const unlocked = !!k && Date.now() - lastUsed <= LOCK_AFTER_MS;
+  const unlocked = !!k && Date.now() - lastUsed <= (await lockAfterMs());
   if (k && !unlocked) await lock();
-  const { email, autoSave } = await settings();
+  const { email, autoSave, lockMinutes } = await settings();
   const pending = await pendingLogin();
   return {
     loggedIn: !!session || !!(await savedAccount()),
     unlocked,
     email,
     autoSave,
+    lockMinutes,
     awaitingCode: pending ? pending.email : null,
   };
 }
@@ -525,6 +538,13 @@ async function handle(msg, sender) {
     case 'setAutoSave':
       if (!fromExtension(sender)) return null;
       await L.set({ autoSave: !!msg.value });
+      return status();
+    case 'setLockMinutes':
+      if (!fromExtension(sender)) return null;
+      if (LOCK_CHOICES.includes(Number(msg.value))) {
+        await S.set({ lastUsed: Date.now() });
+        await L.set({ lockMinutes: Number(msg.value) });
+      }
       return status();
     case 'list': {
       if (!fromExtension(sender)) return null;

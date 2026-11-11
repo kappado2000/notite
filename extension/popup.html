@@ -55,8 +55,16 @@
     <details>
       <summary>⚙️ Setări</summary>
       <label><input id="autoSave" type="checkbox"> Salvează automat parolele noi</label>
+      <label>Blocare automată
+        <select id="lockMinutes">
+          <option value="0">Niciodată (doar la închiderea browserului)</option>
+          <option value="15">După 15 minute fără folosire</option>
+          <option value="60">După 1 oră fără folosire</option>
+          <option value="240">După 4 ore fără folosire</option>
+        </select>
+      </label>
       <p class="muted small">Schimbările de parolă pentru conturile existente sunt confirmate mereu de tine.
-        Seiful se blochează singur după 15 minute fără folosire și la închiderea browserului.</p>
+        După repornirea browserului se cere doar parola Notițe.</p>
       <button id="logoutBtn2" class="link">Deconectează contul</button>
     </details>
   </section>

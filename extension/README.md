@@ -31,7 +31,8 @@ site-urile lor. Aceleași date ca în aplicație (Parole → Conturi).
 - Criptare end-to-end, aceeași ca în aplicație (AES-256-GCM, cheia
   protejată cu PBKDF2 din parola contului). În cloud ajunge doar text criptat.
 - Cheia și parolele decriptate stau doar în memoria browserului, nu pe disc;
-  dispar la închiderea browserului și după **15 minute** fără folosire.
+  dispar la închiderea browserului (opțional și după 15 min / 1 oră / 4 ore
+  fără folosire, din ⚙️ Setări).
 - Conectarea la cont rămâne ținută minte (ca în aplicația de pe telefon):
   după repornirea browserului ceri doar parola Notițe, fără email și cod 2FA.
   „Deconectează-te” o șterge.

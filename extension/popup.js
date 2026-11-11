@@ -188,6 +188,7 @@ $('genCopy').addEventListener('click', async () => {
 async function refresh() {
   const st = await send({ type: 'status' });
   $('autoSave').checked = st.autoSave;
+  $('lockMinutes').value = String(st.lockMinutes ?? 0);
   if (!st.loggedIn && st.awaitingCode) {
     // conectarea așteaptă doar codul (parola e ținută minte câteva minute)
     $('email').value = st.awaitingCode;
@@ -286,6 +287,10 @@ for (const id of ['logoutBtn', 'logoutBtn2']) {
 
 $('autoSave').addEventListener('change', (e) =>
   send({ type: 'setAutoSave', value: e.target.checked }),
+);
+
+$('lockMinutes').addEventListener('change', (e) =>
+  send({ type: 'setLockMinutes', value: Number(e.target.value) }),
 );
 
 $('q').addEventListener('input', render);
