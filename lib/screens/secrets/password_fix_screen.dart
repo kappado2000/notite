@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -540,23 +542,71 @@ class _ChangeSheetState extends State<_ChangeSheet> {
   late final _pass = TextEditingController(text: _gen());
   bool _show = true;
 
+  /// Confirmarea copierii, chiar în fereastră (un SnackBar ar rămâne
+  /// ascuns în spatele ei).
+  bool _copied = false;
+  Timer? _copiedTimer;
+
+  /// Cât rămâne parola nouă în clipboard: timp să te conectezi pe site și
+  /// să ajungi la „Parolă nouă”.
+  static const _keepFor = Duration(minutes: 3);
+
+  Future<void> _copy() async {
+    await SecureClipboard.copy(_pass.text, keepFor: _keepFor);
+    if (!mounted) return;
+    setState(() => _copied = true);
+    _copiedTimer?.cancel();
+    _copiedTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
   static String _gen() => PasswordGenerator.generate(length: 20);
 
   @override
   void dispose() {
+    _copiedTimer?.cancel();
     _pass.dispose();
     super.dispose();
   }
 
   /// Adresa standard de schimbare a parolei (RFC „change-password”);
   /// site-urile care nu o au te duc pe pagina lor principală.
-  Uri? get _changeUrl {
+  String get _host {
     final i = widget.item;
-    var host = hostOf(i.url);
-    if (host.isEmpty) host = recognizeSite(i.title)?.domain ?? '';
-    if (host.isEmpty) return null;
-    return Uri.parse('https://$host/.well-known/change-password');
+    final h = hostOf(i.url);
+    return h.isNotEmpty ? h : (recognizeSite(i.title)?.domain ?? '');
   }
+
+  /// Pagina contului, așa cum e salvată (de obicei cea de logare) — merge
+  /// mereu; altfel pagina principală a site-ului.
+  Uri? get _siteUrl {
+    final u = widget.item.url.trim();
+    if (u.isNotEmpty) {
+      final parsed = Uri.tryParse(u.contains('://') ? u : 'https://$u');
+      if (parsed != null && parsed.host.isNotEmpty) return parsed;
+    }
+    return _host.isEmpty ? null : Uri.parse('https://$_host');
+  }
+
+  /// Adresa standard de schimbare a parolei — o au doar o parte dintre
+  /// site-uri (Google, Apple, Microsoft…); celelalte dau o pagină de eroare.
+  Uri? get _changeUrl => _host.isEmpty
+      ? null
+      : Uri.parse('https://$_host/.well-known/change-password');
+
+  Future<void> _open(Uri url) async {
+    final ok = await launchUrl(url, webOnlyWindowName: '_blank');
+    if (!ok && mounted) {
+      setState(
+        () => _openError =
+            'Nu am putut deschide ${url.host}. Deschide-l '
+            'manual în browser.',
+      );
+    }
+  }
+
+  String? _openError;
 
   Future<void> _save() async {
     final p = _pass.text;
@@ -574,6 +624,7 @@ class _ChangeSheetState extends State<_ChangeSheet> {
   Widget build(BuildContext context) {
     final i = widget.item;
     final url = _changeUrl;
+    final site = _siteUrl;
     final scheme = Theme.of(context).colorScheme;
     Widget step(String n, String text) => Padding(
       padding: const EdgeInsets.only(top: 14, bottom: 6),
@@ -644,17 +695,13 @@ class _ChangeSheetState extends State<_ChangeSheet> {
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: () async {
-                await SecureClipboard.copy(_pass.text);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Copiată (se șterge după 30 s).'),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.copy),
-              label: const Text('Copiază parola nouă'),
+              onPressed: _copy,
+              icon: Icon(_copied ? Icons.check_circle : Icons.copy),
+              label: Text(
+                _copied
+                    ? 'Copiată — o poți lipi pe site (Ctrl+V / Lipește)'
+                    : 'Copiază parola nouă',
+              ),
             ),
             step('2', 'Schimb-o pe site'),
             Text(
@@ -664,16 +711,23 @@ class _ChangeSheetState extends State<_ChangeSheet> {
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: url == null
-                  ? null
-                  : () => launchUrl(url, mode: LaunchMode.externalApplication),
+              onPressed: site == null ? null : () => _open(site),
               icon: const Icon(Icons.open_in_new),
               label: Text(
-                url == null
+                site == null
                     ? 'Site necunoscut — deschide-l manual'
-                    : 'Deschide pagina de schimbare (${url.host})',
+                    : 'Deschide site-ul (${site.host})',
               ),
             ),
+            if (url != null)
+              TextButton(
+                onPressed: () => _open(url),
+                child: const Text(
+                  'Încearcă direct pagina de schimbare a parolei',
+                ),
+              ),
+            if (_openError != null)
+              Text(_openError!, style: TextStyle(color: scheme.error)),
             step('3', 'Am schimbat-o pe site'),
             FilledButton.icon(
               onPressed: _save,

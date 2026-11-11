@@ -217,10 +217,10 @@ class SecureClipboard {
   static Timer? _timer;
   static const clearAfter = Duration(seconds: 30);
 
-  static Future<void> copy(String value) async {
+  static Future<void> copy(String value, {Duration? keepFor}) async {
     await Clipboard.setData(ClipboardData(text: value));
     _timer?.cancel();
-    _timer = Timer(clearAfter, () async {
+    _timer = Timer(keepFor ?? clearAfter, () async {
       try {
         // Ștergem doar dacă între timp nu s-a copiat altceva.
         final now = await Clipboard.getData(Clipboard.kTextPlain);

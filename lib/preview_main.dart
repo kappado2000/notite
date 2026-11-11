@@ -155,6 +155,7 @@ Future<void> _seedDemo(NotesStore store) async {
     ..totp = 'JBSWY3DPEHPK3PXP';
   final bank = store.newSecret(SecretType.login)
     ..title = 'Banca'
+    ..url = 'https://www.example.com/login'
     ..username = 'ion.popescu'
     ..password = 'parola123';
   final wifi = store.newSecret(SecretType.wifi)
