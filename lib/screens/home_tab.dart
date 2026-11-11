@@ -203,7 +203,7 @@ class _HomeTabState extends State<HomeTab> {
                     final nb = store.notebooks[i];
                     return _NotebookSection(
                       notebook: nb,
-                      tint: GroupTint.at(store.tintOf(nb)),
+                      tint: store.notebookTint(nb),
                       notes: _latest(store, nb.id),
                       count: store.notebookCount(nb.id),
                       onOpen: () => shell.openNotes(NotebookView(nb.id)),
@@ -447,7 +447,8 @@ class _NotebookSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    // scrisul în culoarea aleasă pentru carnet
+    final scheme = tint.scheme(context);
     final accent = tint.onContainer(context);
     final muted = TextStyle(fontSize: 13, color: scheme.onSurfaceVariant);
     return Card(

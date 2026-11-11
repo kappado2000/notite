@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -78,13 +80,31 @@ class AppColors {
   );
 }
 
+/// Culoarea scrisului pe un grup colorat.
+enum TintText {
+  auto('Automat'),
+  dark('Închis'),
+  light('Deschis');
+
+  const TintText(this.label);
+  final String label;
+}
+
 /// Nuanțele grupurilor: fiecare carnet și fiecare tip de parolă are una.
-/// Din culoarea de bază rezultă fundalul ușor colorat al cardurilor,
-/// fundalul iconiței și culoarea textului/iconiței, pe luminos și întunecat.
+/// Din culoarea de bază, [level] (intensitatea, 0…5) și [text] rezultă
+/// fundalul cardului, fundalul iconiței și culoarea scrisului, pe luminos
+/// și întunecat.
 class GroupTint {
-  const GroupTint._(this.name, this.base);
+  const GroupTint._(
+    this.name,
+    this.base, {
+    this.level = 1,
+    this.text = TintText.auto,
+  });
   final String name;
   final Color base;
+  final int level;
+  final TintText text;
 
   // Ordinea contează: carnetele noi le primesc pe rând, deci culorile
   // vecine sunt cât mai diferite.
@@ -99,26 +119,103 @@ class GroupTint {
     GroupTint._('Cafeniu', Color(0xFF8E6A4E)),
   ];
 
+  /// Numele treptelor de intensitate (1 = implicit).
+  static const levelNames = [
+    'Foarte pal',
+    'Pal',
+    'Mediu',
+    'Puternic',
+    'Intens',
+    'Plin',
+  ];
+  static const _lightMix = [0.04, 0.09, 0.18, 0.32, 0.5, 0.74];
+  static const _darkMix = [0.08, 0.16, 0.26, 0.38, 0.52, 0.7];
+
   static GroupTint at(int i) => all[i % all.length];
+
+  /// Aceeași culoare, cu altă intensitate / alt scris.
+  GroupTint styled({int? level, TintText? text}) => GroupTint._(
+    name,
+    base,
+    level: (level ?? this.level).clamp(0, levelNames.length - 1),
+    text: text ?? this.text,
+  );
 
   bool _dark(BuildContext c) => Theme.of(c).brightness == Brightness.dark;
 
-  /// Fundalul cardului / rândului — abia colorat.
+  /// Fundalul cardului / rândului.
   Color surface(BuildContext c) {
     final s = Theme.of(c).colorScheme;
-    final bg = _dark(c) ? s.surfaceContainerLow : s.surfaceContainerLowest;
-    return Color.lerp(bg, base, _dark(c) ? 0.16 : 0.09)!;
+    final dark = _dark(c);
+    final bg = dark ? s.surfaceContainerLow : s.surfaceContainerLowest;
+    return Color.lerp(bg, base, (dark ? _darkMix : _lightMix)[level])!;
   }
 
-  /// Fundalul iconiței / etichetei.
-  Color container(BuildContext c) => _dark(c)
-      ? Color.lerp(const Color(0xFF141712), base, 0.45)!
-      : Color.lerp(Colors.white, base, 0.24)!;
+  /// Fundalul iconiței / etichetei — puțin mai colorat decât cardul.
+  Color container(BuildContext c) =>
+      Color.lerp(surface(c), base, _dark(c) ? 0.35 : 0.17)!;
 
-  /// Iconița și textul de pe [container]; și bara colorată din stânga.
-  Color onContainer(BuildContext c) => _dark(c)
-      ? Color.lerp(Colors.white, base, 0.25)!
-      : Color.lerp(Colors.black, base, 0.62)!;
+  static double _contrast(Color a, Color b) {
+    final la = a.computeLuminance(), lb = b.computeLuminance();
+    return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+  }
+
+  static const _darkText = Color(0xFF22261F);
+  static const _lightTextColor = Color(0xFFF5F6F2);
+
+  /// Fundal închis → scris deschis (la „Automat”: varianta cu contrast
+  /// mai mare față de fundal).
+  bool _lightText(BuildContext c) => switch (text) {
+    TintText.light => true,
+    TintText.dark => false,
+    TintText.auto =>
+      _contrast(_lightTextColor, surface(c)) > _contrast(_darkText, surface(c)),
+  };
+
+  /// Titlurile, iconițele și marginile grupului: în nuanța grupului, dar
+  /// destul de închise (sau deschise) ca să se citească pe fundal.
+  Color onContainer(BuildContext c) {
+    final bg = surface(c);
+    final light = _lightText(c);
+    final end = light ? Colors.white : Colors.black;
+    // de la mult colorat spre alb/negru, până se citește bine
+    for (var f = light ? 0.25 : 0.62; f > 0; f -= 0.06) {
+      final col = Color.lerp(end, base, f)!;
+      if (_contrast(col, bg) >= 4.5) return col;
+    }
+    return end;
+  }
+
+  /// Scrisul obișnuit (titluri de notițe, text, date).
+  Color textColor(BuildContext c) =>
+      _lightText(c) ? _lightTextColor : _darkText;
+
+  /// Tema din interiorul grupului: scrisul și iconițele în culoarea aleasă.
+  ColorScheme scheme(BuildContext c) {
+    final fg = textColor(c);
+    return Theme.of(c).colorScheme.copyWith(
+      onSurface: fg,
+      onSurfaceVariant: fg.withValues(alpha: 0.72),
+      primary: onContainer(c),
+    );
+  }
+
+  Widget themed(BuildContext c, Widget child) {
+    final t = Theme.of(c);
+    final s = scheme(c);
+    return Theme(
+      data: t.copyWith(
+        colorScheme: s,
+        listTileTheme: t.listTileTheme.copyWith(
+          iconColor: s.onSurfaceVariant,
+          textColor: s.onSurface,
+        ),
+        iconTheme: t.iconTheme.copyWith(color: s.onSurfaceVariant),
+        dividerColor: onContainer(c).withValues(alpha: 0.18),
+      ),
+      child: child,
+    );
+  }
 }
 
 ThemeData buildTheme(Brightness brightness) {

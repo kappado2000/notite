@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../data/notes_store.dart';
 import '../models/notebook.dart';
 import '../theme.dart';
+import 'tint_picker.dart';
 
 /// Creare / redenumire carnet. Întoarce carnetul creat sau actualizat.
 Future<Notebook?> editNotebook(BuildContext context, {Notebook? notebook}) {
@@ -28,8 +29,21 @@ class _NotebookEditor extends StatefulWidget {
 class _NotebookEditorState extends State<_NotebookEditor> {
   late final _name = TextEditingController(text: widget.notebook?.name ?? '');
 
-  /// Nuanța aleasă (index în [GroupTint.all]); null = încă neatinsă.
-  int? _tint;
+  /// Nuanța aleasă: culoarea (index în [GroupTint.all]), intensitatea,
+  /// culoarea scrisului.
+  late int _color;
+  late int _level;
+  late TintText _text;
+
+  @override
+  void initState() {
+    super.initState();
+    final store = context.read<NotesStore>();
+    final nb = widget.notebook;
+    _color = nb == null ? store.freeTint() : store.tintOf(nb);
+    _level = nb?.intensity ?? 1;
+    _text = TintText.values[(nb?.textMode ?? 0) % 3];
+  }
 
   @override
   void dispose() {
@@ -44,15 +58,24 @@ class _NotebookEditorState extends State<_NotebookEditor> {
     final nav = Navigator.of(context);
     final existing = widget.notebook;
     if (existing == null) {
-      nav.pop(
-        await store.createNotebook(name, color: _tint == null ? 0 : _tint! + 1),
+      final nb = await store.createNotebook(name, color: _color + 1);
+      await store.updateNotebook(
+        nb,
+        name: name,
+        emoji: nb.emoji,
+        color: nb.color,
+        intensity: _level,
+        textMode: _text.index,
       );
+      nav.pop(nb);
     } else {
       await store.updateNotebook(
         existing,
         name: name,
         emoji: existing.emoji,
-        color: _tint == null ? existing.color : _tint! + 1,
+        color: _color + 1,
+        intensity: _level,
+        textMode: _text.index,
       );
       nav.pop(existing);
     }
@@ -60,10 +83,10 @@ class _NotebookEditorState extends State<_NotebookEditor> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         20,
-        0,
+        16,
         20,
         MediaQuery.of(context).viewInsets.bottom + 20,
       ),
@@ -78,24 +101,28 @@ class _NotebookEditorState extends State<_NotebookEditor> {
           const SizedBox(height: 16),
           TextField(
             controller: _name,
-            autofocus: true,
+            autofocus: widget.notebook == null,
             textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(
               hintText: 'Nume carnet',
               prefixIcon: Icon(Icons.book_outlined),
             ),
+            onChanged: (_) => setState(() {}),
             onSubmitted: (_) => _save(),
           ),
           const SizedBox(height: 16),
-          Text('Nuanță', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
-          _TintPicker(
-            selected:
-                _tint ??
-                (widget.notebook == null
-                    ? null
-                    : context.read<NotesStore>().tintOf(widget.notebook!)),
-            onSelected: (i) => setState(() => _tint = i),
+          TintPicker(
+            color: _color,
+            level: _level,
+            text: _text,
+            sampleTitle: _name.text.trim().isEmpty
+                ? 'Carnet'
+                : _name.text.trim(),
+            onChanged: (c, l, t) => setState(() {
+              _color = c;
+              _level = l;
+              _text = t;
+            }),
           ),
           const SizedBox(height: 20),
           SizedBox(
@@ -113,48 +140,6 @@ class _NotebookEditorState extends State<_NotebookEditor> {
   }
 }
 
-/// Rândul de cercuri colorate pentru alegerea nuanței.
-class _TintPicker extends StatelessWidget {
-  const _TintPicker({required this.selected, required this.onSelected});
-  final int? selected;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) => Wrap(
-    spacing: 10,
-    runSpacing: 10,
-    children: [
-      for (var i = 0; i < GroupTint.all.length; i++)
-        Tooltip(
-          message: GroupTint.all[i].name,
-          child: InkResponse(
-            onTap: () => onSelected(i),
-            radius: 24,
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: GroupTint.all[i].container(context),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: GroupTint.all[i].onContainer(context),
-                  width: selected == i ? 3 : 1,
-                ),
-              ),
-              child: selected == i
-                  ? Icon(
-                      Icons.check,
-                      size: 20,
-                      color: GroupTint.all[i].onContainer(context),
-                    )
-                  : null,
-            ),
-          ),
-        ),
-    ],
-  );
-}
-
 /// Iconița unui carnet, în nuanța lui.
 class NotebookBadge extends StatelessWidget {
   const NotebookBadge({super.key, required this.notebook, this.size = 36});
@@ -164,7 +149,7 @@ class NotebookBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tint = GroupTint.at(context.read<NotesStore>().tintOf(notebook));
+    final tint = context.read<NotesStore>().notebookTint(notebook);
     return Container(
       width: size,
       height: size,

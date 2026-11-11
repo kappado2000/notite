@@ -9,6 +9,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:notite/data/notes_store.dart';
 import 'package:notite/models/note_template.dart';
+import 'package:notite/models/notebook.dart';
 import 'package:notite/services/note_pdf.dart';
 import 'package:notite/theme.dart';
 
@@ -96,6 +97,30 @@ void main() {
       color: 6,
     );
     expect(store.tintOf(made.first), 5);
+  });
+
+  test('intensitatea și scrisul carnetului se păstrează', () async {
+    final store = await openStore('intens');
+    final nb = await store.createNotebook('Bonuri');
+    await store.updateNotebook(
+      nb,
+      name: 'Bonuri',
+      emoji: nb.emoji,
+      color: 5,
+      intensity: 5,
+      textMode: TintText.light.index,
+    );
+    final again = Notebook.fromMap(nb.toMap());
+    expect((again.color, again.intensity, again.textMode), (5, 5, 2));
+    final tint = store.notebookTint(nb);
+    expect((tint.level, tint.text), (5, TintText.light));
+    // carnetele vechi, fără câmpurile noi: intensitate implicită, scris automat
+    final old = Notebook.fromMap(
+      nb.toMap()
+        ..remove('intensity')
+        ..remove('textMode'),
+    );
+    expect((old.intensity, old.textMode), (1, 0));
   });
 
   test('notița blocată nu se găsește după conținut, doar după titlu', () async {

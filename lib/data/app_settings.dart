@@ -45,6 +45,25 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Nuanța aleasă pentru un tip de parole: (culoare, intensitate, scris)
+  /// sau null = cea implicită a tipului.
+  (int, int, int)? secretTypeTint(String type) {
+    final v = _box.get('secretTint.$type');
+    if (v is List && v.length == 3) {
+      return (v[0] as int, v[1] as int, v[2] as int);
+    }
+    return null;
+  }
+
+  void setSecretTypeTint(String type, (int, int, int)? v) {
+    if (v == null) {
+      _box.delete('secretTint.$type');
+    } else {
+      _box.put('secretTint.$type', [v.$1, v.$2, v.$3]);
+    }
+    notifyListeners();
+  }
+
   /// Ultimul email folosit la logare, precompletat data viitoare.
   String get lastEmail => (_box.get('lastEmail') as String?) ?? '';
   set lastEmail(String v) => _box.put('lastEmail', v);

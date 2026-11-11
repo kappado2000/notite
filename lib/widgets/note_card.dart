@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../data/notes_store.dart';
 import '../models/note.dart';
 import '../models/notebook.dart';
-import '../theme.dart';
 import '../utils/format.dart';
 
 /// Cardul unei notițe: titlu, fragment, imagine, carnet, etichete.
@@ -36,10 +35,13 @@ class NoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = context.read<NotesStore>();
-    final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final nb = store.notebook(note.notebookId);
-    final tint = nb == null ? null : GroupTint.at(store.tintOf(nb));
+    final tint = nb == null ? null : store.notebookTint(nb);
+    // scrisul în culoarea aleasă pentru carnet (deschis pe fundal închis)
+    final scheme = tint == null
+        ? Theme.of(context).colorScheme
+        : tint.scheme(context);
     final thumb = note.locked ? null : store.firstImageOf(note.id);
     final thumbBytes = thumb == null || !showImage
         ? null
@@ -277,7 +279,7 @@ class NoteRow extends StatelessWidget {
         : snippet(note.plainText, max: 260);
     final compact = body.isEmpty;
     final nb = showNotebook ? store.notebook(note.notebookId) : null;
-    final tint = nb == null ? null : GroupTint.at(store.tintOf(nb));
+    final tint = nb == null ? null : store.notebookTint(nb);
     final small = TextStyle(
       fontSize: 13.5,
       fontWeight: FontWeight.w400,
@@ -421,7 +423,7 @@ class NotebookGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = context.read<NotesStore>();
-    final tint = GroupTint.at(store.tintOf(notebook));
+    final tint = store.notebookTint(notebook);
     final accent = tint.onContainer(context);
     return Card(
       margin: EdgeInsets.zero,
@@ -491,7 +493,7 @@ class NotebookGroup extends StatelessWidget {
               endIndent: 16,
               color: accent.withValues(alpha: 0.18),
             ),
-            c,
+            tint.themed(context, c),
           ],
         ],
       ),

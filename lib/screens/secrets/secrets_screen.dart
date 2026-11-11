@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/app_settings.dart';
 import '../../data/notes_store.dart';
 import '../../models/secret_item.dart';
 import '../../services/biometric_service.dart';
@@ -237,8 +238,8 @@ class _SecretsScreenState extends State<SecretsScreen>
             for (final t in SecretType.values)
               ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: secretTint(t).container(ctx),
-                  foregroundColor: secretTint(t).onContainer(ctx),
+                  backgroundColor: secretTint(ctx, t).container(ctx),
+                  foregroundColor: secretTint(ctx, t).onContainer(ctx),
                   child: Icon(t.icon, size: 20),
                 ),
                 title: Text(t.label),
@@ -528,6 +529,7 @@ class _SecretsScreenState extends State<SecretsScreen>
 
   Widget _list() {
     final store = context.watch<NotesStore>();
+    context.watch<AppSettings>(); // culorile tipurilor
     final all = store.secrets;
     final scoped = all.where(
       (i) => (!_favorites || i.favorite) && (_type == null || i.type == _type),
@@ -592,7 +594,8 @@ class _SecretsScreenState extends State<SecretsScreen>
                   icon: t.icon,
                   label: _short(t),
                   count: all.where((i) => i.type == t).length,
-                  tint: secretTint(t),
+                  tint: secretTint(context, t),
+                  onLongPress: () => editSecretTypeTint(context, t),
                   selected: _type == t,
                   onTap: () => setState(() {
                     _favorites = false;
@@ -743,7 +746,7 @@ class _SecretsScreenState extends State<SecretsScreen>
   /// Secțiunea unui tip: antet colorat (nume, câte sunt, adaugă, deschide)
   /// și toate intrările lui, în ordine alfabetică.
   Widget _section(SecretType t, List<SecretItem> list) {
-    final tint = secretTint(t);
+    final tint = secretTint(context, t);
     final accent = tint.onContainer(context);
     final sorted = _alphabetical(list);
     void open() => setState(() => _type = t);
@@ -761,6 +764,7 @@ class _SecretsScreenState extends State<SecretsScreen>
         children: [
           InkWell(
             onTap: list.isEmpty ? () => _addType(t) : open,
+            onLongPress: () => editSecretTypeTint(context, t),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 4, 6),
               child: Row(
@@ -805,7 +809,11 @@ class _SecretsScreenState extends State<SecretsScreen>
                     icon: Icon(Icons.add, color: accent),
                     onPressed: () => _addType(t),
                   ),
-                  Icon(Icons.chevron_right, color: accent),
+                  IconButton(
+                    tooltip: 'Culoare',
+                    icon: Icon(Icons.palette_outlined, color: accent),
+                    onPressed: () => editSecretTypeTint(context, t),
+                  ),
                   const SizedBox(width: 6),
                 ],
               ),
@@ -818,7 +826,7 @@ class _SecretsScreenState extends State<SecretsScreen>
                 'Nimic salvat încă',
                 style: TextStyle(
                   fontSize: 13,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: tint.scheme(context).onSurfaceVariant,
                 ),
               ),
             ),
@@ -829,7 +837,7 @@ class _SecretsScreenState extends State<SecretsScreen>
               endIndent: 16,
               color: accent.withValues(alpha: 0.15),
             ),
-            _swipe(i, SecretTile(item: i, plain: true)),
+            tint.themed(context, _swipe(i, SecretTile(item: i, plain: true))),
           ],
         ],
       ),
@@ -856,6 +864,7 @@ class _SecretsScreenState extends State<SecretsScreen>
     required GroupTint? tint,
     required bool selected,
     required VoidCallback onTap,
+    VoidCallback? onLongPress,
   }) {
     final scheme = Theme.of(context).colorScheme;
     final fg = tint?.onContainer(context) ?? scheme.onPrimaryContainer;
@@ -874,6 +883,7 @@ class _SecretsScreenState extends State<SecretsScreen>
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
           child: Column(
@@ -946,7 +956,7 @@ class SecretTile extends StatelessWidget {
       SecretType.identity => (item.cnp, 'CNP copiat', true),
       SecretType.note => (item.notes, 'Nota copiată', true),
     };
-    final tint = secretTint(item.type);
+    final tint = secretTint(context, item.type);
     return Material(
       color: plain ? Colors.transparent : tint.surface(context),
       child: Container(
@@ -957,34 +967,46 @@ class SecretTile extends StatelessWidget {
                   left: BorderSide(color: tint.onContainer(context), width: 4),
                 ),
               ),
-        child: ListTile(
-          leading: SecretAvatar(item: item),
-          title: Row(
-            children: [
-              Flexible(
-                child: Text(item.displayTitle, overflow: TextOverflow.ellipsis),
-              ),
-              if (item.favorite) ...[
-                const SizedBox(width: 4),
-                Icon(Icons.star, size: 16, color: scheme.primary),
-              ],
-            ],
-          ),
-          subtitle: item.subtitle.isEmpty
-              ? null
-              : Text(item.subtitle, overflow: TextOverflow.ellipsis),
-          trailing: copy.isEmpty
-              ? null
-              : IconButton(
-                  tooltip: 'Copiază',
-                  icon: const Icon(Icons.copy),
-                  onPressed: () =>
-                      copyValue(context, copy, secret: secret, what: what),
+        child:
+            (plain ? (Widget w) => w : (Widget w) => tint.themed(context, w))(
+              ListTile(
+                leading: SecretAvatar(item: item),
+                title: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        item.displayTitle,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (item.favorite) ...[
+                      const SizedBox(width: 4),
+                      Icon(Icons.star, size: 16, color: scheme.primary),
+                    ],
+                  ],
                 ),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => SecretDetailScreen(id: item.id)),
-          ),
-        ),
+                subtitle: item.subtitle.isEmpty
+                    ? null
+                    : Text(item.subtitle, overflow: TextOverflow.ellipsis),
+                trailing: copy.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Copiază',
+                        icon: const Icon(Icons.copy),
+                        onPressed: () => copyValue(
+                          context,
+                          copy,
+                          secret: secret,
+                          what: what,
+                        ),
+                      ),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SecretDetailScreen(id: item.id),
+                  ),
+                ),
+              ),
+            ),
       ),
     );
   }

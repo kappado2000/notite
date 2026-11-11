@@ -11,6 +11,7 @@ import '../models/notebook.dart';
 import '../models/secret_item.dart';
 import '../services/encryption_key_service.dart';
 import '../services/reminder_service.dart';
+import '../theme.dart';
 
 enum NoteSort { updated, created, title }
 
@@ -257,8 +258,13 @@ class NotesStore extends ChangeNotifier {
 
   static const tintCount = 8;
 
+  /// Nuanța completă a carnetului: culoarea, intensitatea și scrisul.
+  GroupTint notebookTint(Notebook nb) =>
+      GroupTint.at(tintOf(nb))
+          .styled(level: nb.intensity, text: TintText.values[nb.textMode % 3]);
+
   /// Prima nuanță nefolosită de alt carnet (sau cea mai puțin folosită).
-  int _freeTint() {
+  int freeTint() {
     final used = List.filled(tintCount, 0);
     for (final nb in _notebooks.values) {
       used[tintOf(nb) % tintCount]++;
@@ -286,7 +292,7 @@ class NotesStore extends ChangeNotifier {
       createdAt: now,
       updatedAt: now,
       emoji: emoji,
-      color: color > 0 ? color : _freeTint() + 1,
+      color: color > 0 ? color : freeTint() + 1,
     );
     _notebooks[nb.id] = nb;
     await _notebooksBox.put(nb.id, nb.toMap());
@@ -300,11 +306,15 @@ class NotesStore extends ChangeNotifier {
     required String name,
     required String emoji,
     required int color,
+    int? intensity,
+    int? textMode,
   }) async {
     nb
       ..name = name.trim()
       ..emoji = emoji
       ..color = color
+      ..intensity = intensity ?? nb.intensity
+      ..textMode = textMode ?? nb.textMode
       ..updatedAt = DateTime.now();
     await _notebooksBox.put(nb.id, nb.toMap());
     sync?.notebookChanged(nb);
