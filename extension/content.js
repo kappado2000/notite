@@ -35,8 +35,31 @@
     return true;
   };
 
+  /// Textul care descrie un câmp: name, id, autocomplete, placeholder,
+  /// aria-label și eticheta (<label>) lui.
+  function hints(el) {
+    const labels = [...(el.labels ?? [])].map((l) => l.textContent).join(' ');
+    return `${el.name} ${el.id} ${el.autocomplete} ${el.placeholder} ${el.getAttribute('aria-label') || ''} ${labels}`.toLowerCase();
+  }
+
+  /// Câmp de parolă — și când e afișat în clar (butonul „Arată”/„Ascunde” îl
+  /// face type=text), recunoscut după nume / etichetă.
+  function isPasswordField(el) {
+    if (!(el instanceof HTMLInputElement)) return false;
+    if (el.type === 'password') return true;
+    if (!['text', ''].includes(el.getAttribute('type') ?? '')) return false;
+    return /pass|parol|pwd|passwd|mot de passe|kennwort/.test(hints(el));
+  }
+
+  /// Parola NOUĂ (sau confirmarea ei) dintr-un formular de schimbare.
+  const isNewPassword = (el) =>
+    el.autocomplete === 'new-password' ||
+    /\bnew|nou[aă]?\b|noua|confirm|repet|again|retype|din nou|verify/.test(hints(el));
+
   const passwordFields = (root = document) =>
-    [...root.querySelectorAll('input[type="password"]')].filter(visible);
+    [...root.querySelectorAll('input')].filter(
+      (el) => isPasswordField(el) && visible(el),
+    );
 
   const USER_SEL =
     'input[type="email"],input[type="text"],input[type="tel"],input:not([type])';
@@ -48,7 +71,7 @@
     const idx = all.indexOf(pw);
     for (let i = idx - 1; i >= 0; i--) {
       const el = all[i];
-      if (el.type !== 'password' && visible(el)) return el;
+      if (!isPasswordField(el) && visible(el)) return el;
     }
     const ac = scope.querySelector(
       'input[autocomplete="username"],input[autocomplete="email"],input[name*="user" i],input[name*="mail" i],input[id*="user" i],input[id*="mail" i]',
@@ -58,7 +81,7 @@
 
   /// Câmpul pentru codul 2FA (6–8 cifre)?
   function isOtpField(el) {
-    if (!(el instanceof HTMLInputElement) || el.type === 'password') return false;
+    if (!(el instanceof HTMLInputElement) || isPasswordField(el)) return false;
     if (el.autocomplete === 'one-time-code') return true;
     const hint = `${el.name} ${el.id} ${el.placeholder} ${el.getAttribute('aria-label') || ''}`.toLowerCase();
     const max = Number(el.maxLength);
@@ -112,10 +135,13 @@
   /// [target] = câmpul în care ai dat clic (dacă e unul de utilizator, emailul
   /// merge sigur acolo).
   function fill(username, password, target = null) {
-    const pws = passwordFields();
-    const pw = pws.find((p) => p === document.activeElement) ?? pws[0];
+    const all = passwordFields();
+    const current = all.filter((p) => !isNewPassword(p));
+    const pws = current.length ? current : all.slice(0, 1);
+    const pw =
+      pws.find((p) => p === target || p === document.activeElement) ?? pws[0];
     const userTarget =
-      target && target.type !== 'password' && visible(target) ? target : null;
+      target && !isPasswordField(target) && visible(target) ? target : null;
     if (pw) {
       const u = userTarget ?? userFieldFor(pw);
       if (u && username) setValue(u, username);
@@ -205,7 +231,7 @@
   }
 
   async function showMenu(field) {
-    const pw = field.type === 'password' ? field : passwordFields()[0];
+    const pw = isPasswordField(field) ? field : passwordFields()[0];
     const signup = pw ? isSignup(pw) : false;
     const r = await send({ type: 'pageLogins' });
     if (!r) return;
@@ -251,9 +277,12 @@
     if (it.dataset.gen) {
       const pass = generate();
       const pws = passwordFields(menuFor?.form ?? document);
-      for (const p of pws.filter((p) => !p.value || p.autocomplete === 'new-password' || pws.length >= 2)) {
-        setValue(p, pass);
-      }
+      // schimbare de parolă: doar câmpurile „nouă” / „confirmă”, nu cea actuală
+      const fresh = pws.filter(isNewPassword);
+      const targets = fresh.length
+        ? fresh
+        : pws.filter((p) => !p.value || pws.length === 1);
+      for (const p of targets) setValue(p, pass);
       hideMenu();
       return;
     }
@@ -271,7 +300,7 @@
         showOtpMenu(el);
         return;
       }
-      const isPw = el.type === 'password';
+      const isPw = isPasswordField(el);
       const isUser = !isPw && el.matches(USER_SEL) && (passwordFields().length > 0 || /user|mail|login|email/i.test(`${el.name} ${el.id} ${el.autocomplete}`));
       if (isPw || isUser) showMenu(el);
     },
@@ -294,8 +323,8 @@
       if (u) send({ type: 'usernameStep', username: u.value.trim() });
       return;
     }
-    // la înregistrare / schimbare: ultima parolă (cea nouă)
-    const pw = pws[pws.length - 1];
+    // la înregistrare / schimbare: parola nouă (sau, altfel, ultima)
+    const pw = pws.filter(isNewPassword).pop() ?? pws[pws.length - 1];
     const user = userFieldFor(pws[0]);
     send({
       type: 'captured',
