@@ -141,6 +141,7 @@ jobs:
           CERTIFICATE_PASSWORD: ${{ secrets.IOS_DIST_CERTIFICATE_PASSWORD }}
           APP_PROFILE_BASE64: ${{ secrets.IOS_APP_PROVISION_PROFILE_BASE64 }}
           AUTOFILL_PROFILE_BASE64: ${{ secrets.IOS_AUTOFILL_PROVISION_PROFILE_BASE64 }}
+          SAFARI_PROFILE_BASE64: ${{ secrets.IOS_SAFARI_PROVISION_PROFILE_BASE64 }}
         run: |
           CERT_PATH="$RUNNER_TEMP/distribution.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
@@ -164,11 +165,23 @@ jobs:
             exit 1
           fi
           echo -n "$AUTOFILL_PROFILE_BASE64" | base64 --decode -o "$PROFILE_DIR/notite_autofill.mobileprovision"
+          # Extensia Safari (salvarea parolelor pe site-uri)
+          if [ -z "$SAFARI_PROFILE_BASE64" ]; then
+            echo "::error::Lipsește secretul IOS_SAFARI_PROVISION_PROFILE_BASE64 (rulează set_profiles.py)."
+            exit 1
+          fi
+          echo -n "$SAFARI_PROFILE_BASE64" | base64 --decode -o "$PROFILE_DIR/notite_safari.mobileprovision"
 
       # Extensia AutoFill se adaugă în proiectul Xcode aici (pe Mac), cu
       # biblioteca xcodeproj (aceeași pe care o folosește CocoaPods).
-      - name: Add AutoFill extension to the Xcode project
+      - name: Add AutoFill and Safari extensions to the Xcode project
         run: |
+          # Extensia Safari = aceeași ca extensia de Chrome (extension/),
+          # cu manifestul pentru Safari.
+          R=ios/SafariExtension/Resources
+          mkdir -p "$R"
+          cp -R extension/background.js extension/content.js             extension/popup.html extension/popup.css extension/popup.js             extension/lib extension/icons "$R/"
+          cp ios/SafariExtension/manifest.safari.json "$R/manifest.json"
           gem list -i xcodeproj >/dev/null || sudo gem install xcodeproj --no-document
           ruby ios/scripts/add_autofill_target.rb
 
@@ -191,6 +204,8 @@ jobs:
               <string>Notite App Store</string>
               <key>com.kappado.notite.AutoFill</key>
               <string>Notite AutoFill AppStore</string>
+              <key>com.kappado.notite.Safari</key>
+              <string>Notite Safari AppStore</string>
             </dict>
           </dict>
           </plist>
