@@ -275,6 +275,20 @@ function newLogin(url, username, password) {
 }
 
 /// Contul existent pentru site + utilizator (dacă există).
+/// Dubluri (același utilizator pe același site, ex. un import vechi + unul
+/// salvat din browser): pe pagină arătăm doar contul cu parola cea mai nouă,
+/// ca să nu alegi din greșeală parola veche. Cele mai noi primele.
+function newestPerUser(list) {
+  const when = (i) => i.passwordChangedAt || i.updatedAt || i.createdAt || 0;
+  const best = new Map();
+  for (const i of list) {
+    const k = (i.username || '').trim().toLowerCase();
+    const b = best.get(k);
+    if (!b || when(i) > when(b)) best.set(k, i);
+  }
+  return [...best.values()].sort((a, b) => when(b) - when(a));
+}
+
 async function existingLogin(url, username, { change = false } = {}) {
   const all = (await items()) ?? [];
   const user = (username || '').trim().toLowerCase();
@@ -661,9 +675,9 @@ async function handle(msg, sender) {
       return {
         locked: false,
         secure: pageAllowed(tabUrl),
-        items: all
-          .filter((i) => i.type === 'login' && matches(i, tabUrl))
-          .map((i) => publicItem(i, tabUrl)),
+        items: newestPerUser(
+          all.filter((i) => i.type === 'login' && matches(i, tabUrl)),
+        ).map((i) => publicItem(i, tabUrl)),
       };
     }
     case 'pageTotp': {
