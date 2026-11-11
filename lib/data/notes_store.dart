@@ -811,6 +811,11 @@ class NotesStore extends ChangeNotifier {
         ].take(10).toList();
       }
     }
+    // parola nouă „în curs” a ajuns parola contului: schimbarea s-a încheiat
+    if (item.pendingPassword.isNotEmpty &&
+        item.pendingPassword == item.password) {
+      item.pendingPassword = '';
+    }
     item.updatedAt = DateTime.now();
     _secrets[item.id] = item;
     await _secretsBox.put(item.id, item.toMap());

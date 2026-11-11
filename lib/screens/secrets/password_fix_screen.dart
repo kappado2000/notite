@@ -36,11 +36,17 @@ class _Issue {
   /// Calculată o singură dată (recunoașterea site-ului e costisitoare).
   late final LoginCategory category = _categoryOf(item);
 
-  bool get any => breaches > 0 || weak || reusedWith > 0 || old;
+  bool get any =>
+      breaches > 0 ||
+      weak ||
+      reusedWith > 0 ||
+      old ||
+      item.pendingPassword.isNotEmpty;
 
   /// Ordinea: compromise, apoi email (resetează orice cont), bănci,
   /// parole repetate, slabe, vechi.
   int get score =>
+      (item.pendingPassword.isNotEmpty ? 20000 : 0) +
       (breaches > 0 ? 10000 : 0) +
       (category == LoginCategory.email ? 3000 : 0) +
       (category == LoginCategory.bank ? 2500 : 0) +
@@ -160,6 +166,7 @@ class _PasswordFixScreenState extends State<PasswordFixScreen> {
       of(i).old = true;
     }
     for (final i in all) {
+      if (i.pendingPassword.isNotEmpty) of(i);
       final n = _breaches[i.id] ?? 0;
       if (n > 0 && !i.ignoreHealth) of(i).breaches = n;
     }
@@ -507,6 +514,12 @@ class _IssueCard extends StatelessWidget {
                     scheme.secondaryContainer,
                     scheme.onSecondaryContainer,
                   ),
+                if (i.pendingPassword.isNotEmpty)
+                  chip(
+                    'Schimbare începută — confirmă',
+                    scheme.tertiaryContainer,
+                    scheme.onTertiaryContainer,
+                  ),
                 if (issue.weak)
                   chip(
                     'Slabă',
@@ -563,7 +576,30 @@ class _ChangeSheet extends StatefulWidget {
 }
 
 class _ChangeSheetState extends State<_ChangeSheet> {
-  late final _pass = TextEditingController(text: _gen());
+  // o schimbare începută (și întreruptă de blocare) continuă cu ACEEAȘI parolă
+  late final _pass = TextEditingController(
+    text: widget.item.pendingPassword.isNotEmpty
+        ? widget.item.pendingPassword
+        : _gen(),
+  );
+
+  /// Ține minte parola nouă în cont (criptat), înainte să pleci pe site.
+  Future<void> _remember() async {
+    final p = _pass.text;
+    if (p.isEmpty || widget.item.pendingPassword == p) return;
+    widget.item.pendingPassword = p;
+    await context.read<NotesStore>().saveSecret(
+      widget.item.copy()..pendingPassword = p,
+    );
+  }
+
+  Future<void> _discard() async {
+    final store = context.read<NotesStore>();
+    final nav = Navigator.of(context);
+    await store.saveSecret(widget.item.copy()..pendingPassword = '');
+    nav.pop(false);
+  }
+
   bool _show = true;
 
   /// Confirmarea copierii, chiar în fereastră (un SnackBar ar rămâne
@@ -597,6 +633,7 @@ class _ChangeSheetState extends State<_ChangeSheet> {
       _copiedOld = false;
     });
     await SecureClipboard.copy(_pass.text, keepFor: _keepFor);
+    await _remember();
     if (!mounted) return;
     _copiedTimer?.cancel();
     _copiedTimer = Timer(const Duration(seconds: 4), () {
@@ -639,6 +676,7 @@ class _ChangeSheetState extends State<_ChangeSheet> {
       : Uri.parse('https://$_host/.well-known/change-password');
 
   Future<void> _open(Uri url) async {
+    await _remember();
     final ok = await launchUrl(url, webOnlyWindowName: '_blank');
     if (!ok && mounted) {
       setState(
@@ -656,10 +694,13 @@ class _ChangeSheetState extends State<_ChangeSheet> {
     if (p.isEmpty) return;
     final store = context.read<NotesStore>();
     final nav = Navigator.of(context);
-    widget.item
-      ..password = p
-      ..ignoreHealth = false;
-    await store.saveSecret(widget.item);
+    // pe o copie: aplicația vede parola veche și o pune în istoric
+    await store.saveSecret(
+      widget.item.copy()
+        ..password = p
+        ..pendingPassword = ''
+        ..ignoreHealth = false,
+    );
     nav.pop(true);
   }
 
@@ -710,6 +751,34 @@ class _ChangeSheetState extends State<_ChangeSheet> {
                 i.username,
                 style: TextStyle(color: scheme.onSurfaceVariant),
               ),
+            if (i.pendingPassword.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Card(
+                color: scheme.secondaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Ai început deja schimbarea: mai jos e aceeași parolă '
+                        'nouă de data trecută. Dacă ai salvat-o pe site, '
+                        'apasă „Salvează parola nouă în Notițe”.',
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _discard,
+                          child: const Text(
+                            'N-am schimbat-o pe site — renunță',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             step('1', 'Copiază parola nouă'),
             TextField(
               controller: _pass,

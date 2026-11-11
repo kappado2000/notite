@@ -157,6 +157,7 @@ class SecretItem {
     this.favorite = false,
     this.category = '',
     this.ignoreHealth = false,
+    this.pendingPassword = '',
     required this.createdAt,
     required this.updatedAt,
     DateTime? passwordChangedAt,
@@ -224,6 +225,11 @@ class SecretItem {
 
   /// Scos din verificarea de securitate de user (cont neimportant / vechi).
   bool ignoreHealth;
+
+  /// Parola nouă generată în „Repară parolele”, încă neconfirmată (userul o
+  /// schimbă pe site). Păstrată ca să nu se piardă dacă aplicația se
+  /// blochează între timp.
+  String pendingPassword;
   final DateTime createdAt;
   DateTime updatedAt;
 
@@ -365,6 +371,7 @@ class SecretItem {
     'favorite': favorite,
     'category': category,
     'ignoreHealth': ignoreHealth,
+    'pendingPassword': pendingPassword,
     'createdAt': createdAt.millisecondsSinceEpoch,
     'updatedAt': updatedAt.millisecondsSinceEpoch,
     'passwordChangedAt': passwordChangedAt.millisecondsSinceEpoch,
@@ -423,6 +430,7 @@ class SecretItem {
       favorite: (m['favorite'] as bool?) ?? false,
       category: s('category'),
       ignoreHealth: (m['ignoreHealth'] as bool?) ?? false,
+      pendingPassword: s('pendingPassword'),
       createdAt: d('createdAt'),
       updatedAt: d('updatedAt'),
       passwordChangedAt: od('passwordChangedAt'),

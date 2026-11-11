@@ -205,6 +205,26 @@ void main() {
     expect(l.any((x) => x.values.contains('123')), isFalse);
   });
 
+  test('parola nouă în curs nu se pierde și se închide la salvare', () async {
+    final store = await openStore('pending');
+    final i = store.newSecret(SecretType.login)
+      ..title = 'Site'
+      ..username = 'ana@test.ro'
+      ..password = 'veche-1';
+    await store.addSecrets([i]);
+    // copiată / site deschis → ținută minte (sincronizată criptat)
+    await store.saveSecret(i.copy()..pendingPassword = 'Noua#Parola-2026');
+    final reloaded = SecretItem.fromMap(store.allSecrets.single.toMap());
+    expect(reloaded.pendingPassword, 'Noua#Parola-2026');
+    expect(reloaded.password, 'veche-1');
+    // userul o salvează (sau o lipește manual): schimbarea se încheie
+    final updated = store.allSecrets.single.copy()
+      ..password = 'Noua#Parola-2026';
+    await store.saveSecret(updated);
+    expect(store.allSecrets.single.pendingPassword, isEmpty);
+    expect(store.allSecrets.single.passwordHistory.first.password, 'veche-1');
+  });
+
   test('notița blocată nu se găsește după conținut, doar după titlu', () async {
     final store = await openStore('u1');
     final n = await store.createNote();

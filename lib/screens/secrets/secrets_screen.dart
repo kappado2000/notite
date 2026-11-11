@@ -698,6 +698,29 @@ class _SecretsScreenState extends State<SecretsScreen>
                 },
               ),
             ),
+            if (all.where((i) => i.pendingPassword.isNotEmpty).toList()
+                case final pending when pending.isNotEmpty)
+              Card(
+                margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                color: Theme.of(context).colorScheme.tertiaryContainer,
+                child: ListTile(
+                  leading: const Icon(Icons.pending_actions_outlined),
+                  title: Text(
+                    pending.length == 1
+                        ? 'Schimbare de parolă neterminată: ${pending.first.displayTitle}'
+                        : '${pending.length} schimbări de parolă neterminate',
+                  ),
+                  subtitle: const Text(
+                    'Ai salvat-o pe site? Confirm-o în „Repară parolele”.',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const PasswordFixScreen(),
+                    ),
+                  ),
+                ),
+              ),
             if (report.problems > 0)
               Card(
                 margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
