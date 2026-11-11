@@ -423,11 +423,16 @@ void main() {
       );
       expect(
         loginCategory(l('BT24', 'https://bt24.bancatransilvania.ro')),
-        LoginCategory.other,
+        LoginCategory.bank,
       );
       expect(
         loginCategory(l('Ceva', 'https://exemplu.ro')),
         LoginCategory.other,
+      );
+      expect(loginCategory(l('PayPal')), LoginCategory.bank);
+      expect(
+        loginCategory(l('Libra Internet Bank', 'https://www.librabank.ro')),
+        LoginCategory.bank,
       );
       final manual = l('Gmail')..category = LoginCategory.other.name;
       expect(loginCategory(manual), LoginCategory.other);
@@ -435,4 +440,57 @@ void main() {
       expect(SecretItem.fromMap(manual.toMap()).category, 'other');
     },
   );
+
+  test('toată gama de conturi ajunge în categoria potrivită', () {
+    LoginCategory c(String title, [String url = '']) => loginCategory(
+      _new()
+        ..title = title
+        ..url = url,
+    );
+    final cases = <(String, String, LoginCategory)>[
+      ('Proton Mail', 'https://account.proton.me', LoginCategory.email),
+      ('Webmail firmă', 'https://webmail.firma.ro', LoginCategory.email),
+      ('Discord', 'https://discord.com', LoginCategory.social),
+      ('Reddit', '', LoginCategory.social),
+      ('George BCR', 'https://george.bcr.ro', LoginCategory.bank),
+      ('Libra Internet Bank', 'https://librabank.ro', LoginCategory.bank),
+      ('Binance', 'https://www.binance.com', LoginCategory.bank),
+      ('Allianz-Țiriac', 'https://www.allianztiriac.ro', LoginCategory.bank),
+      ('Kaufland', 'https://www.kaufland.ro', LoginCategory.shopping),
+      ('Temu', '', LoginCategory.shopping),
+      ('FAN Courier', 'https://www.fancourier.ro', LoginCategory.shopping),
+      ('Autovit', 'https://www.autovit.ro', LoginCategory.shopping),
+      ('Antena Play', 'https://antenaplay.ro', LoginCategory.entertainment),
+      ('Superbet', 'https://superbet.ro', LoginCategory.entertainment),
+      (
+        'Epic Games',
+        'https://store.epicgames.com',
+        LoginCategory.entertainment,
+      ),
+      ('FlixBus', 'https://www.flixbus.ro', LoginCategory.travel),
+      ('Rovinieta', 'https://www.roviniete.ro', LoginCategory.travel),
+      (
+        'Hidroelectrica',
+        'https://www.hidroelectrica.ro',
+        LoginCategory.utilities,
+      ),
+      ('Apa Nova', 'https://www.apanovabucuresti.ro', LoginCategory.utilities),
+      ('e-bloc asociație', 'https://www.e-bloc.ro', LoginCategory.utilities),
+      ('Permis DRPCIV', 'https://www.drpciv.ro', LoginCategory.publicServices),
+      ('ROeID', 'https://roeid.ro', LoginCategory.publicServices),
+      ('Regina Maria', 'https://www.reginamaria.ro', LoginCategory.health),
+      ('Catena', 'https://www.catena.ro', LoginCategory.health),
+      ('World Class', 'https://worldclass.ro', LoginCategory.health),
+      ('Notion', 'https://www.notion.so', LoginCategory.tools),
+      ('SmartBill', 'https://cloud.smartbill.ro', LoginCategory.tools),
+      ('Router acasă', 'http://192.168.0.1', LoginCategory.tools),
+      // capcane: nu trebuie să se potrivească greșit
+      ('Profil personal', '', LoginCategory.other),
+      ('Leon', '', LoginCategory.other),
+      ('Concurent', '', LoginCategory.other),
+    ];
+    for (final (title, url, want) in cases) {
+      expect(c(title, url), want, reason: '$title $url');
+    }
+  });
 }

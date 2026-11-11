@@ -18,9 +18,14 @@ enum SecretType {
 enum LoginCategory {
   email('Email', Icons.mail_outline),
   social('Rețele sociale', Icons.forum_outlined),
-  shopping('Cumpărături', Icons.shopping_bag_outlined),
-  entertainment('Divertisment', Icons.movie_outlined),
-  publicServices('Servicii publice', Icons.account_balance_outlined),
+  bank('Bănci și asigurări', Icons.account_balance_outlined),
+  shopping('Cumpărături și livrări', Icons.shopping_bag_outlined),
+  entertainment('Divertisment și jocuri', Icons.movie_outlined),
+  travel('Călătorii și transport', Icons.flight_outlined),
+  utilities('Utilități și telefonie', Icons.bolt_outlined),
+  publicServices('Servicii publice', Icons.location_city_outlined),
+  health('Sănătate și sport', Icons.favorite_border),
+  tools('Muncă și unelte online', Icons.cloud_outlined),
   other('Altele', Icons.more_horiz);
 
   const LoginCategory(this.label, this.icon);
