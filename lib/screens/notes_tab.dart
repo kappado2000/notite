@@ -356,6 +356,8 @@ class _NotesTabState extends State<NotesTab> {
                 ? _Empty(view: _view, searching: _query.isNotEmpty)
                 : settings.notesGrid
                 ? _grid(notes)
+                : _grouped
+                ? _groupedList(notes)
                 : ListView.separated(
                     padding: EdgeInsets.only(bottom: bottomSpace(context)),
                     itemCount: notes.length,
@@ -375,6 +377,52 @@ class _NotesTabState extends State<NotesTab> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Mementourile și coșul rămân liste simple (ordinea lor contează);
+  /// restul se grupează pe carnete.
+  bool get _grouped => _view is! RemindersView && _view is! TrashView;
+
+  /// Câte un card pe carnet (ordinea carnetelor: alfabetic), cu notițele
+  /// lui în ordinea aleasă la sortare.
+  Widget _groupedList(List<Note> notes) {
+    final store = context.read<NotesStore>();
+    final byNotebook = <String, List<Note>>{};
+    for (final n in notes) {
+      (byNotebook[n.notebookId] ??= []).add(n);
+    }
+    final groups = [
+      for (final nb in store.notebooks)
+        if (byNotebook[nb.id] case final list?) (nb, list),
+    ];
+    return ListView.separated(
+      padding: EdgeInsets.fromLTRB(12, 12, 12, bottomSpace(context)),
+      itemCount: groups.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (_, g) {
+        final (nb, list) = groups[g];
+        return NotebookGroup(
+          notebook: nb,
+          count: list.length,
+          onOpen: _view is NotebookView
+              ? null
+              : () => _select(NotebookView(nb.id)),
+          onAdd: () => createAndOpenNote(context, notebookId: nb.id),
+          children: [
+            for (final n in list)
+              SwipeToDelete.note(
+                note: n,
+                child: NoteRow(
+                  note: n,
+                  showNotebook: false,
+                  onTap: () => openNote(context, n),
+                  onLongPress: () => showNoteActions(context, n),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 

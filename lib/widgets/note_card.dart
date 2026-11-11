@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../data/notes_store.dart';
 import '../models/note.dart';
+import '../models/notebook.dart';
 import '../theme.dart';
 import '../utils/format.dart';
 
@@ -177,6 +178,14 @@ class NoteCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       color: tint?.surface(context),
+      shape: tint == null
+          ? null
+          : RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(
+                color: tint.onContainer(context).withValues(alpha: 0.55),
+              ),
+            ),
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
@@ -212,14 +221,6 @@ class NoteCard extends StatelessWidget {
                   ),
               ],
             ),
-            if (tint != null)
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: 4,
-                child: ColoredBox(color: tint.onContainer(context)),
-              ),
           ],
         ),
       ),
@@ -244,8 +245,10 @@ class _Pill extends StatelessWidget {
   );
 }
 
-/// Rândul unei notițe în listă, în stilul Evernote: titlu mare și gros,
-/// 3 rânduri de text subțire, data jos, miniatura imaginii în dreapta.
+/// Rândul unei notițe în listă: titlu, până la 3 rânduri de text, data și
+/// carnetul, miniatura imaginii în dreapta. Fără fundal propriu — culoarea
+/// o dă grupul (cardul carnetului) în care stă. Notițele fără text sunt
+/// compacte: titlul și datele pe două rânduri scurte, miniatura mică.
 class NoteRow extends StatelessWidget {
   const NoteRow({
     super.key,
@@ -272,141 +275,225 @@ class NoteRow extends StatelessWidget {
     final body = note.locked
         ? '🔒 Notiță blocată'
         : snippet(note.plainText, max: 260);
+    final compact = body.isEmpty;
     final nb = showNotebook ? store.notebook(note.notebookId) : null;
-    final own = store.notebook(note.notebookId);
-    final tint = own == null ? null : GroupTint.at(store.tintOf(own));
-    // Tipografie după lista Evernote: titlu semi-îngroșat, text normal gri
-    // neutru, fără spațiere suplimentară între litere.
+    final tint = nb == null ? null : GroupTint.at(store.tintOf(nb));
     final small = TextStyle(
-      fontSize: 14,
+      fontSize: 13.5,
       fontWeight: FontWeight.w400,
       letterSpacing: 0,
       color: scheme.onSurface.withValues(alpha: 0.58),
     );
+    final thumbSize = compact ? 44.0 : 84.0;
 
-    return Material(
-      color: tint?.surface(context) ?? Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Container(
-          decoration: tint == null
-              ? null
-              : BoxDecoration(
-                  border: Border(
-                    left: BorderSide(
-                      color: tint.onContainer(context),
-                      width: 4,
+    return InkWell(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Padding(
+        padding: compact
+            ? const EdgeInsets.fromLTRB(16, 10, 16, 10)
+            : const EdgeInsets.fromLTRB(16, 14, 16, 12),
+        child: Row(
+          crossAxisAlignment: compact
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
+          children: [
+            if (leading != null)
+              Padding(padding: const EdgeInsets.only(right: 8), child: leading),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    note.displayTitle,
+                    maxLines: compact ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: compact ? 16 : 17.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                      height: 1.25,
+                      color: scheme.onSurface,
                     ),
                   ),
-                ),
-          padding: const EdgeInsets.fromLTRB(16, 18, 20, 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (leading != null)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: leading,
-                ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                  if (!compact) ...[
+                    const SizedBox(height: 3),
                     Text(
-                      note.displayTitle,
-                      maxLines: 2,
+                      body,
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.2,
-                        height: 1.25,
-                        color: scheme.onSurface,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 0,
+                        height: 1.3,
+                        color: scheme.onSurface.withValues(alpha: 0.74),
                       ),
-                    ),
-                    if (body.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        body,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w400,
-                          letterSpacing: 0,
-                          height: 1.3,
-                          color: scheme.onSurface.withValues(alpha: 0.74),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 26),
-                    Row(
-                      children: [
-                        Text(
-                          note.trashLabel ?? formatShortDate(note.updatedAt),
-                          style: note.isTrashed
-                              ? small.copyWith(color: scheme.error)
-                              : small,
-                        ),
-                        if (nb != null) ...[
-                          Text('  ·  ', style: small),
-                          Flexible(
-                            child: Text(
-                              nb.name,
-                              style: small.copyWith(
-                                color: tint?.onContainer(context),
-                                fontWeight: FontWeight.w600,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                        if (note.pinned) ...[
-                          const SizedBox(width: 8),
-                          Icon(Icons.push_pin, size: 14, color: scheme.primary),
-                        ],
-                        if (note.hasReminder) ...[
-                          const SizedBox(width: 8),
-                          Icon(
-                            note.reminderDone
-                                ? Icons.check_circle
-                                : Icons.alarm,
-                            size: 14,
-                            color: small.color,
-                          ),
-                        ],
-                        if (attCount > 0) ...[
-                          const SizedBox(width: 8),
-                          Icon(Icons.attach_file, size: 14, color: small.color),
-                        ],
-                      ],
                     ),
                   ],
+                  SizedBox(height: compact ? 3 : 8),
+                  Row(
+                    children: [
+                      Text(
+                        note.trashLabel ?? formatShortDate(note.updatedAt),
+                        style: note.isTrashed
+                            ? small.copyWith(color: scheme.error)
+                            : small,
+                      ),
+                      if (nb != null) ...[
+                        Text('  ·  ', style: small),
+                        Flexible(
+                          child: Text(
+                            nb.name,
+                            style: small.copyWith(
+                              color: tint?.onContainer(context),
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                      if (note.pinned) ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.push_pin, size: 14, color: scheme.primary),
+                      ],
+                      if (note.hasReminder) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          note.reminderDone ? Icons.check_circle : Icons.alarm,
+                          size: 14,
+                          color: small.color,
+                        ),
+                      ],
+                      if (attCount > 0) ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.attach_file, size: 14, color: small.color),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (thumbBytes != null) ...[
+              const SizedBox(width: 12),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: scheme.outlineVariant),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: Image.memory(
+                    thumbBytes,
+                    width: thumbSize,
+                    height: thumbSize,
+                    fit: BoxFit.cover,
+                    cacheWidth: (thumbSize * 3).round(),
+                  ),
                 ),
               ),
-              if (thumbBytes != null) ...[
-                const SizedBox(width: 14),
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: scheme.outlineVariant),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(9),
-                    child: Image.memory(
-                      thumbBytes,
-                      width: 104,
-                      height: 104,
-                      fit: BoxFit.cover,
-                      cacheWidth: 312,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Un carnet ca grup: card în nuanța carnetului, cu margine subțire mai
+/// închisă, antet (nume, câte notițe) și rândurile notițelor lui.
+class NotebookGroup extends StatelessWidget {
+  const NotebookGroup({
+    super.key,
+    required this.notebook,
+    required this.children,
+    required this.count,
+    this.onOpen,
+    this.onAdd,
+  });
+
+  final Notebook notebook;
+  final List<Widget> children;
+  final int count;
+  final VoidCallback? onOpen;
+  final VoidCallback? onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.read<NotesStore>();
+    final tint = GroupTint.at(store.tintOf(notebook));
+    final accent = tint.onContainer(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      color: tint.surface(context),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: accent.withValues(alpha: 0.55)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: onOpen,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 6, 4, 4),
+              child: Row(
+                children: [
+                  Icon(Icons.book_outlined, size: 20, color: accent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      notebook.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: accent,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: tint.container(context),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: accent,
+                      ),
+                    ),
+                  ),
+                  if (onAdd != null)
+                    IconButton(
+                      tooltip: 'Notiță nouă în ${notebook.name}',
+                      icon: Icon(Icons.add, color: accent),
+                      onPressed: onAdd,
+                    )
+                  else
+                    const SizedBox(width: 12, height: 44),
+                ],
+              ),
+            ),
           ),
-        ),
+          for (final c in children) ...[
+            Divider(
+              height: 1,
+              indent: 16,
+              endIndent: 16,
+              color: accent.withValues(alpha: 0.18),
+            ),
+            c,
+          ],
+        ],
       ),
     );
   }

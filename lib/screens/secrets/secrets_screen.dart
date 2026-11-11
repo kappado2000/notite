@@ -695,6 +695,12 @@ class _SecretsScreenState extends State<SecretsScreen>
                       ),
                   ],
                 )
+              // un singur tip deschis: intrările lui, încadrate în cardul tipului
+              : _type != null
+              ? ListView(
+                  padding: EdgeInsets.fromLTRB(12, 4, 12, bottomSpace(context)),
+                  children: [_section(_type!, shownItems)],
+                )
               : ListView.builder(
                   padding: EdgeInsets.only(bottom: bottomSpace(context)),
                   itemCount: shownItems.length,
