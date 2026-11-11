@@ -137,8 +137,8 @@ async function openVault(password, session) {
   await updateBadge();
 }
 
-async function login(email, password) {
-  const session = await fb.signIn(email.trim(), password);
+async function login(email, password, code) {
+  const session = await fb.signIn(email.trim(), password, code);
   await S.set({ session });
   await L.set({ email: email.trim() });
   await openVault(password, session);
@@ -430,7 +430,12 @@ async function handle(msg, sender) {
       return status();
     case 'login':
       if (!fromExtension(sender)) return null;
-      await login(msg.email, msg.password);
+      try {
+        await login(msg.email, msg.password, msg.code);
+      } catch (e) {
+        if (e instanceof fb.MfaRequired) return { needCode: true };
+        throw e;
+      }
       return status();
     case 'unlock':
       if (!fromExtension(sender)) return null;

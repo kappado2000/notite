@@ -16,6 +16,7 @@ import '../widgets/identity_check.dart';
 import '../widgets/pickers.dart';
 import 'secrets/pin_setup.dart';
 import 'shell.dart';
+import '../widgets/mfa.dart';
 
 /// Contul, securitatea și aspectul aplicației.
 class AccountTab extends StatefulWidget {
@@ -184,7 +185,11 @@ class _AccountTabState extends State<AccountTab> {
     );
     if (password == null || !mounted) return;
     try {
-      await session.deleteAccount(auth, password);
+      await session.deleteAccount(
+        auth,
+        password,
+        askCode: (e) => askMfaCode(context, e),
+      );
     } on AuthError catch (e) {
       _toast(e.message);
     } catch (e) {
@@ -308,6 +313,17 @@ class _AccountTabState extends State<AccountTab> {
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _managePin,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.verified_user_outlined),
+                  title: const Text('Verificare în doi pași'),
+                  subtitle: const Text(
+                    'Cod din aplicația de autentificare la conectare',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => const MfaScreen())),
                 ),
                 ListTile(
                   leading: const Icon(Icons.key_outlined),

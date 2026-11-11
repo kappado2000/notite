@@ -3,6 +3,10 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+/// Cere utilizatorului codul de 6 cifre din aplicația de autentificare
+/// ([error] = mesajul de afișat după un cod greșit); `null` = a renunțat.
+typedef MfaCodePrompt = Future<String?> Function(String? error);
+
 /// Contul utilizatorului (Firebase Auth, email + parolă).
 /// Sesiunea rămâne salvată pe dispozitiv și funcționează și offline.
 class AuthService extends ChangeNotifier {
@@ -32,12 +36,19 @@ class AuthService extends ChangeNotifier {
     return p;
   }
 
-  Future<void> signIn(String email, String password) => _guard(() async {
+  Future<void> signIn(
+    String email,
+    String password, {
+    MfaCodePrompt? askCode,
+  }) => _guard(() async {
     _pendingPassword = password;
     try {
-      await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
+      await _withMfa(
+        () => _auth.signInWithEmailAndPassword(
+          email: email.trim(),
+          password: password,
+        ),
+        askCode,
       );
     } catch (_) {
       _pendingPassword = null;
@@ -75,12 +86,100 @@ class AuthService extends ChangeNotifier {
   Future<void> signOut() => _auth.signOut();
 
   /// Confirmă parola curentă — cerută de Firebase înainte de ștergerea contului.
-  Future<void> reauthenticate(String password) => _guard(() async {
-    final u = _auth.currentUser!;
-    await u.reauthenticateWithCredential(
-      EmailAuthProvider.credential(email: u.email!, password: password),
-    );
+  Future<void> reauthenticate(String password, {MfaCodePrompt? askCode}) =>
+      _guard(() async {
+        final u = _auth.currentUser!;
+        await _withMfa(
+          () => u.reauthenticateWithCredential(
+            EmailAuthProvider.credential(email: u.email!, password: password),
+          ),
+          askCode,
+        );
+      });
+
+  // ------------------------------------- autentificarea în doi pași (TOTP)
+
+  /// Contul are 2FA activ (un cod din aplicația de autentificare)?
+  Future<bool> mfaEnabled() async {
+    final u = _auth.currentUser;
+    if (u == null) return false;
+    return (await u.multiFactor.getEnrolledFactors()).isNotEmpty;
+  }
+
+  /// Pasul 1: cheia secretă nouă (pentru codul QR). Cere o logare recentă:
+  /// apelează întâi [reauthenticate].
+  Future<TotpSecret> startTotpEnrollment() async {
+    try {
+      final session = await _auth.currentUser!.multiFactor.getSession();
+      return await TotpMultiFactorGenerator.generateSecret(session);
+    } on FirebaseAuthException catch (e) {
+      throw AuthError(_message(e.code));
+    }
+  }
+
+  /// Pasul 2: primul cod din aplicație confirmă că a fost adăugată corect.
+  Future<void> finishTotpEnrollment(TotpSecret secret, String code) =>
+      _guard(() async {
+        final assertion =
+            await TotpMultiFactorGenerator.getAssertionForEnrollment(
+              secret,
+              code.trim(),
+            );
+        await _auth.currentUser!.multiFactor.enroll(
+          assertion,
+          displayName: 'Aplicație de autentificare',
+        );
+      });
+
+  /// Oprește 2FA (cere o logare recentă).
+  Future<void> disableMfa() => _guard(() async {
+    final mf = _auth.currentUser!.multiFactor;
+    for (final f in await mf.getEnrolledFactors()) {
+      await mf.unenroll(multiFactorInfo: f);
+    }
   });
+
+  /// Rulează [action]; dacă Firebase cere al doilea factor, întreabă codul
+  /// (până e corect sau userul renunță).
+  Future<void> _withMfa(
+    Future<Object?> Function() action,
+    MfaCodePrompt? askCode,
+  ) async {
+    try {
+      await action();
+    } on FirebaseAuthMultiFactorException catch (e) {
+      if (askCode == null) {
+        throw FirebaseAuthException(code: 'second-factor-required');
+      }
+      final hints = e.resolver.hints;
+      final hint = hints.firstWhere(
+        (h) => h is TotpMultiFactorInfo,
+        orElse: () => hints.first,
+      );
+      String? error;
+      while (true) {
+        final code = await askCode(error);
+        if (code == null) throw FirebaseAuthException(code: 'mfa-cancelled');
+        try {
+          final assertion =
+              await TotpMultiFactorGenerator.getAssertionForSignIn(
+                hint.uid,
+                code.trim(),
+              );
+          await e.resolver.resolveSignIn(assertion);
+          return;
+        } on FirebaseAuthException catch (x) {
+          if (x.code == 'invalid-verification-code' ||
+              x.code == 'invalid-credential' ||
+              x.code == 'missing-code') {
+            error = 'Cod greșit sau expirat. Încearcă din nou.';
+            continue;
+          }
+          rethrow;
+        }
+      }
+    }
+  }
 
   Future<void> deleteAccount() => _guard(() => _auth.currentUser!.delete());
 
@@ -110,6 +209,12 @@ class AuthService extends ChangeNotifier {
       'Din motive de securitate, introdu din nou parola.',
     'operation-not-allowed' =>
       'Logarea cu email și parolă nu este activată în Firebase.',
+    'mfa-cancelled' => 'Ai renunțat la codul de verificare.',
+    'second-factor-required' => 'Contul cere și codul de verificare.',
+    'invalid-verification-code' => 'Cod greșit sau expirat.',
+    'unverified-email' =>
+      'Confirmă întâi adresa de email (linkul primit pe email), apoi '
+          'activează verificarea în doi pași.',
     _ => 'A apărut o eroare ($code).',
   };
 

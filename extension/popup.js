@@ -223,8 +223,23 @@ async function busy(form, fn) {
 $('fLogin').addEventListener('submit', (e) => {
   e.preventDefault();
   busy(e.target, async () => {
-    await send({ type: 'login', email: $('email').value, password: $('pass').value });
+    const code = $('code').hidden ? undefined : $('code').value;
+    const r = await send({
+      type: 'login',
+      email: $('email').value,
+      password: $('pass').value,
+      code,
+    });
+    if (r?.needCode) {
+      // contul are verificare în doi pași: cerem codul (parola rămâne)
+      $('code').hidden = false;
+      $('code').required = true;
+      $('code').focus();
+      throw new Error('Scrie codul de 6 cifre din aplicația de autentificare.');
+    }
     $('pass').value = '';
+    $('code').value = '';
+    $('code').hidden = true;
   });
 });
 

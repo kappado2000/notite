@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_sync.dart';
 import '../services/vault.dart';
+import '../widgets/mfa.dart';
 
 /// Pregătește cheia de criptare end-to-end a contului:
 /// - cont nou → creează cheia și arată codul de recuperare;
@@ -136,7 +137,10 @@ class _KeyScreenState extends State<KeyScreen> {
       _error = null;
     });
     try {
-      await context.read<AuthService>().reauthenticate(pw);
+      await context.read<AuthService>().reauthenticate(
+        pw,
+        askCode: (e) => askMfaCode(context, e),
+      );
     } on AuthError catch (e) {
       setState(() {
         _step = _Step.password;

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../data/app_settings.dart';
 import '../services/auth_service.dart';
+import '../widgets/mfa.dart';
 
 /// Autentificare și creare cont (email + parolă).
 class LoginScreen extends StatefulWidget {
@@ -44,7 +45,11 @@ class _LoginScreenState extends State<LoginScreen> {
       if (_register) {
         await auth.register(_email.text, _password.text);
       } else {
-        await auth.signIn(_email.text, _password.text);
+        await auth.signIn(
+          _email.text,
+          _password.text,
+          askCode: (e) => askMfaCode(context, e),
+        );
       }
     } on AuthError catch (e) {
       if (mounted) setState(() => _error = e.message);

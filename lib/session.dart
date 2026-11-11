@@ -101,8 +101,12 @@ class Session extends ChangeNotifier {
   }
 
   /// Șterge definitiv contul: datele din cloud, de pe dispozitiv și contul.
-  Future<void> deleteAccount(AuthService auth, String password) async {
-    await auth.reauthenticate(password);
+  Future<void> deleteAccount(
+    AuthService auth,
+    String password, {
+    MfaCodePrompt? askCode,
+  }) async {
+    await auth.reauthenticate(password, askCode: askCode);
     await ReminderService.instance.cancelAll();
     await sync?.stop();
     await IosAutofill.instance.clear();

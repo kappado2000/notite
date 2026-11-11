@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
 import '../session.dart';
+import '../widgets/mfa.dart';
 
 /// Ecran de blocare: deblocare biometrică, cu parola contului ca rezervă.
 /// Stă deasupra navigatorului, deci nu folosește dialoguri.
@@ -52,7 +53,10 @@ class _LockScreenState extends State<LockScreen> {
       _error = null;
     });
     try {
-      await context.read<AuthService>().reauthenticate(_password.text);
+      await context.read<AuthService>().reauthenticate(
+        _password.text,
+        askCode: (e) => askMfaCode(context, e),
+      );
       if (mounted) context.read<Session>().unlock();
     } on AuthError catch (e) {
       if (mounted) setState(() => _error = e.message);

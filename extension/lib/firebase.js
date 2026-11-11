@@ -8,12 +8,22 @@ const DOCS = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/
 
 export class AuthError extends Error {}
 
+/// Contul are verificare în doi pași: trebuie și codul de 6 cifre.
+export class MfaRequired extends Error {
+  constructor() {
+    super('MFA_REQUIRED');
+  }
+}
+
 const MESSAGES = {
   EMAIL_NOT_FOUND: 'Email sau parolă greșite.',
   INVALID_PASSWORD: 'Email sau parolă greșite.',
   INVALID_LOGIN_CREDENTIALS: 'Email sau parolă greșite.',
   USER_DISABLED: 'Contul este dezactivat.',
   TOO_MANY_ATTEMPTS_TRY_LATER: 'Prea multe încercări. Încearcă mai târziu.',
+  INVALID_MFA_PENDING_CREDENTIAL: 'Sesiunea de conectare a expirat. Reîncearcă.',
+  INVALID_CODE: 'Cod de verificare greșit sau expirat.',
+  INVALID_VERIFICATION_CODE: 'Cod de verificare greșit sau expirat.',
 };
 
 async function postJson(url, body) {
@@ -30,12 +40,38 @@ async function postJson(url, body) {
   return data;
 }
 
-/// → { uid, idToken, refreshToken, expiresAt }
-export async function signIn(email, password) {
+function uidFromToken(idToken) {
+  const part = idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  const json = JSON.parse(atob(part + '='.repeat((4 - (part.length % 4)) % 4)));
+  return json.user_id || json.sub;
+}
+
+/// → { uid, idToken, refreshToken, expiresAt }. Dacă contul are verificare
+/// în doi pași: fără [code] aruncă MfaRequired; cu [code] îl verifică.
+export async function signIn(email, password, code) {
   const d = await postJson(
     `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`,
     { email, password, returnSecureToken: true },
   );
+  if (d.mfaPendingCredential) {
+    if (!code) throw new MfaRequired();
+    const factor =
+      (d.mfaInfo || []).find((f) => f.totpInfo) || (d.mfaInfo || [])[0];
+    const f = await postJson(
+      `https://identitytoolkit.googleapis.com/v2/accounts/mfaSignIn:finalize?key=${API_KEY}`,
+      {
+        mfaPendingCredential: d.mfaPendingCredential,
+        mfaEnrollmentId: factor?.mfaEnrollmentId,
+        totpVerificationInfo: { verificationCode: String(code).trim() },
+      },
+    );
+    return {
+      uid: uidFromToken(f.idToken),
+      idToken: f.idToken,
+      refreshToken: f.refreshToken,
+      expiresAt: Date.now() + 55 * 60 * 1000,
+    };
+  }
   return {
     uid: d.localId,
     idToken: d.idToken,
