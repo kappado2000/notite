@@ -214,10 +214,18 @@ jobs:
       # Numărul de build crește la fiecare rulare (TestFlight refuză dubluri).
       - name: Build signed IPA
         run: |
-          flutter build ipa --release \
+          # Jurnal complet într-un fișier; la eroare afișăm doar ce contează
+          # (ex. ce anume nu s-a putut semna).
+          if ! flutter build ipa --release -v \
             --build-name=${{ needs.check.outputs.name }} \
             --build-number=${{ github.run_number }} \
-            --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
+            --export-options-plist="$RUNNER_TEMP/ExportOptions.plist" \
+            > "$RUNNER_TEMP/build.log" 2>&1; then
+            grep -nE "error:|CodeSign |codesign|errSec|unsealed|bundle format|Provisioning profile" "$RUNNER_TEMP/build.log" | tail -80
+            tail -60 "$RUNNER_TEMP/build.log"
+            exit 1
+          fi
+          tail -5 "$RUNNER_TEMP/build.log"
 
       # Fără release public: repo-ul e public, IPA-ul merge doar în TestFlight.
       # Autentificare cu cheia API (fără 2FA), deci merge fără om.
