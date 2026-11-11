@@ -553,173 +553,204 @@ class _SecretsScreenState extends State<SecretsScreen>
     final shownItems = _query.trim().isEmpty ? _alphabetical(items) : items;
     final report = PasswordReport.of(all);
 
-    return Column(
-      children: [
-        if (_searchOpen)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-            child: SearchBar(
-              controller: _search,
-              hintText: 'Caută site, utilizator, card…',
-              leading: const Icon(Icons.search),
-              elevation: const WidgetStatePropertyAll(0),
-              autoFocus: true,
-              onChanged: (v) => setState(() => _query = v),
-            ),
-          ),
-        // Toate tipurile la vedere: grilă 4×2, pătrate egale.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-          child: GridView.count(
-            crossAxisCount: 4,
-            shrinkWrap: true,
-            padding: EdgeInsets.zero,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 1.25,
-            children: [
-              _typeTile(
-                icon: Icons.apps,
-                label: 'Toate',
-                count: all.length,
-                tint: null,
-                selected: _type == null && !_favorites,
-                onTap: () => setState(() {
-                  _type = null;
-                  _favorites = false;
-                }),
-              ),
-              for (final t in SecretType.values)
-                _typeTile(
-                  icon: t.icon,
-                  label: _short(t),
-                  count: all.where((i) => i.type == t).length,
-                  tint: secretTint(context, t),
-                  onLongPress: () => editSecretTypeTint(context, t),
-                  selected: _type == t,
-                  onTap: () => setState(() {
-                    _favorites = false;
-                    _type = _type == t ? null : t;
-                  }),
+    // pe ecrane late conținutul nu se întinde pe tot monitorul
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1100),
+        child: Column(
+          children: [
+            if (_searchOpen)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                child: SearchBar(
+                  controller: _search,
+                  hintText: 'Caută site, utilizator, card…',
+                  leading: const Icon(Icons.search),
+                  elevation: const WidgetStatePropertyAll(0),
+                  autoFocus: true,
+                  onChanged: (v) => setState(() => _query = v),
                 ),
-            ],
-          ),
-        ),
-        if (report.problems > 0)
-          Card(
-            margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-            color: Theme.of(context).colorScheme.errorContainer,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: BorderSide(
-                color: Theme.of(context).colorScheme.error
-                    .withValues(alpha: 0.55),
+              ),
+            // Toate tipurile la vedere: grilă 4×2, pătrate egale.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              // telefon: 4×2; ecran lat (PC, tabletă): un rând de 8, scund
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  final wide = box.maxWidth >= 640;
+                  final cols = wide ? 8 : 4;
+                  final tileW = (box.maxWidth - 8 * (cols - 1)) / cols;
+                  return GridView(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: cols,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      mainAxisExtent: wide ? 66 : (tileW / 1.25).clamp(60, 90),
+                    ),
+                    children: [
+                      _typeTile(
+                        icon: Icons.apps,
+                        label: 'Toate',
+                        count: all.length,
+                        tint: null,
+                        selected: _type == null && !_favorites,
+                        onTap: () => setState(() {
+                          _type = null;
+                          _favorites = false;
+                        }),
+                      ),
+                      for (final t in SecretType.values)
+                        _typeTile(
+                          icon: t.icon,
+                          label: _short(t),
+                          count: all.where((i) => i.type == t).length,
+                          tint: secretTint(context, t),
+                          onLongPress: () => editSecretTypeTint(context, t),
+                          selected: _type == t,
+                          onTap: () => setState(() {
+                            _favorites = false;
+                            _type = _type == t ? null : t;
+                          }),
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
-            child: ListTile(
-              leading: const Icon(Icons.health_and_safety_outlined),
-              title: Text(
-                '${report.problems} '
-                '${report.problems == 1 ? 'problemă' : 'probleme'} '
-                'de securitate',
+            if (report.problems > 0)
+              Card(
+                margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                color: Theme.of(context).colorScheme.errorContainer,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.error
+                        .withValues(alpha: 0.55),
+                  ),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.health_and_safety_outlined),
+                  title: Text(
+                    '${report.problems} '
+                    '${report.problems == 1 ? 'problemă' : 'probleme'} '
+                    'de securitate',
+                  ),
+                  subtitle: const Text('Parole slabe, repetate sau vechi'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const PasswordHealthScreen(),
+                    ),
+                  ),
+                ),
               ),
-              subtitle: const Text('Parole slabe, repetate sau vechi'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PasswordHealthScreen()),
+            if (soon.isNotEmpty && _type == null && _query.isEmpty)
+              Card(
+                margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.secondary
+                        .withValues(alpha: 0.55),
+                  ),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.event_busy_outlined),
+                  title: Text(
+                    soon.length == 1
+                        ? '${soon.first.displayTitle} expiră curând'
+                        : '${soon.length} intrări expiră curând',
+                  ),
+                  subtitle: Text(
+                    [
+                      for (final i in soon.take(3))
+                        '${i.displayTitle}: ${formatShortDate(i.expiresOn!)}',
+                    ].join('\n'),
+                  ),
+                  onTap: soon.length == 1
+                      ? () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                SecretDetailScreen(id: soon.first.id),
+                          ),
+                        )
+                      : null,
+                ),
               ),
-            ),
-          ),
-        if (soon.isNotEmpty && _type == null && _query.isEmpty)
-          Card(
-            margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-            color: Theme.of(context).colorScheme.secondaryContainer,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: BorderSide(
-                color: Theme.of(context).colorScheme.secondary
-                    .withValues(alpha: 0.55),
+            if (_type == SecretType.subscription && monthly.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                child: Text(
+                  'Pe lună: ${_money(monthly, 1)}\n'
+                  'Pe an: ${_money(monthly, 12)}',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
               ),
-            ),
-            child: ListTile(
-              leading: const Icon(Icons.event_busy_outlined),
-              title: Text(
-                soon.length == 1
-                    ? '${soon.first.displayTitle} expiră curând'
-                    : '${soon.length} intrări expiră curând',
-              ),
-              subtitle: Text(
-                [
-                  for (final i in soon.take(3))
-                    '${i.displayTitle}: ${formatShortDate(i.expiresOn!)}',
-                ].join('\n'),
-              ),
-              onTap: soon.length == 1
-                  ? () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => SecretDetailScreen(id: soon.first.id),
+            Expanded(
+              child: items.isEmpty && !grouped
+                  ? Center(
+                      child: Text(
+                        all.isEmpty
+                            ? 'Nicio parolă salvată.\nApasă „Adaugă” pentru prima.'
+                            : 'Niciun rezultat',
+                        textAlign: TextAlign.center,
                       ),
                     )
-                  : null,
-            ),
-          ),
-        if (_type == SecretType.subscription && monthly.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-            child: Text(
-              'Pe lună: ${_money(monthly, 1)}\n'
-              'Pe an: ${_money(monthly, 12)}',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-          ),
-        Expanded(
-          child: items.isEmpty && !grouped
-              ? Center(
-                  child: Text(
-                    all.isEmpty
-                        ? 'Nicio parolă salvată.\nApasă „Adaugă” pentru prima.'
-                        : 'Niciun rezultat',
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              : grouped
-              // „Toate”, fără căutare: câte o secțiune pe tip, în nuanța lui.
-              ? ListView(
-                  padding: EdgeInsets.fromLTRB(12, 4, 12, bottomSpace(context)),
-                  children: [
-                    // toate tipurile, mereu în aceeași ordine (și cele goale)
-                    for (final t in SecretType.values)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _section(
-                          t,
-                          items.where((i) => i.type == t).toList(),
-                        ),
+                  : grouped
+                  // „Toate”, fără căutare: câte o secțiune pe tip, în nuanța lui.
+                  ? ListView(
+                      padding: EdgeInsets.fromLTRB(
+                        12,
+                        4,
+                        12,
+                        bottomSpace(context),
                       ),
-                  ],
-                )
-              // un singur tip deschis: intrările lui, încadrate în cardul tipului
-              : _type != null
-              ? ListView(
-                  padding: EdgeInsets.fromLTRB(12, 4, 12, bottomSpace(context)),
-                  children: [
-                    _section(
-                      _type!,
-                      shownItems,
-                      // în „Conturi”: subgrupe Email, Rețele sociale…
-                      byCategory: _type == SecretType.login,
+                      children: [
+                        // toate tipurile, mereu în aceeași ordine (și cele goale)
+                        for (final t in SecretType.values)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _section(
+                              t,
+                              items.where((i) => i.type == t).toList(),
+                            ),
+                          ),
+                      ],
+                    )
+                  // un singur tip deschis: intrările lui, încadrate în cardul tipului
+                  : _type != null
+                  ? ListView(
+                      padding: EdgeInsets.fromLTRB(
+                        12,
+                        4,
+                        12,
+                        bottomSpace(context),
+                      ),
+                      children: [
+                        _section(
+                          _type!,
+                          shownItems,
+                          // în „Conturi”: subgrupe Email, Rețele sociale…
+                          byCategory: _type == SecretType.login,
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
+                      padding: EdgeInsets.only(bottom: bottomSpace(context)),
+                      itemCount: shownItems.length,
+                      itemBuilder: (_, i) => _swipe(
+                        shownItems[i],
+                        SecretTile(item: shownItems[i]),
+                      ),
                     ),
-                  ],
-                )
-              : ListView.builder(
-                  padding: EdgeInsets.only(bottom: bottomSpace(context)),
-                  itemCount: shownItems.length,
-                  itemBuilder: (_, i) =>
-                      _swipe(shownItems[i], SecretTile(item: shownItems[i])),
-                ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
