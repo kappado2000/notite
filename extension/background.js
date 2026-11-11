@@ -6,6 +6,9 @@
 //   (în memorie, șterse la închiderea browserului) și sunt accesibile doar
 //   paginilor extensiei, nu și paginilor web;
 // - seiful se blochează singur după 15 minute fără folosire;
+// - pe disc rămâne doar conectarea la cont (uid + jetonul de reîmprospătare,
+//   ca aplicația de pe telefon), ca după repornirea browserului să ceară
+//   doar parola Notițe; fără parolă nu se poate decripta nimic;
 // - o pagină web primește o parolă doar pentru propriul ei site, doar în
 //   cadrul principal și doar prin HTTPS (sau localhost);
 // - nimic din toate acestea nu ajunge în cloud necriptat.
@@ -49,12 +52,38 @@ async function settings() {
   return { email, autoSave };
 }
 
-async function authSession() {
+/// Conectarea ținută minte pe disc: doar uid și jetonul de reîmprospătare.
+async function savedAccount() {
+  const { account } = await L.get('account');
+  return account?.uid && account?.refreshToken ? account : null;
+}
+
+async function rememberAccount(session) {
+  await L.set({
+    account: { uid: session.uid, refreshToken: session.refreshToken },
+  });
+}
+
+async function authSession({ force = false } = {}) {
   let { session } = await getS('session');
-  if (!session) throw new fb.AuthError('Nu ești conectat.');
-  if (Date.now() > session.expiresAt) {
-    session = await fb.refresh(session);
+  if (!session) {
+    const account = await savedAccount();
+    if (!account) throw new fb.AuthError('Nu ești conectat.');
+    session = { ...account, idToken: '', expiresAt: 0 };
+  }
+  if (force || Date.now() > session.expiresAt) {
+    try {
+      session = await fb.refresh(session);
+    } catch (e) {
+      // jeton revocat (parolă schimbată, 2FA resetat…): conectare de la zero
+      if (e instanceof fb.AuthError) {
+        await S.remove('session');
+        await L.remove('account');
+      }
+      throw e;
+    }
     await S.set({ session });
+    await rememberAccount(session);
   }
   return session;
 }
@@ -85,7 +114,7 @@ async function status() {
   const { email, autoSave } = await settings();
   const pending = await pendingLogin();
   return {
-    loggedIn: !!session,
+    loggedIn: !!session || !!(await savedAccount()),
     unlocked,
     email,
     autoSave,
@@ -137,7 +166,15 @@ async function loadItems(key, session) {
 }
 
 async function openVault(password, session) {
-  const keys = await fb.getKeysDoc(session);
+  let keys;
+  try {
+    keys = await fb.getKeysDoc(session);
+  } catch (e) {
+    if (!/\(401\)/.test(e.message)) throw e;
+    // acces expirat/respins: îl reîmprospătăm o dată și reîncercăm
+    session = await authSession({ force: true });
+    keys = await fb.getKeysDoc(session);
+  }
   if (!keys?.password) {
     throw new Error(
       'Contul nu are încă seiful creat. Deschide o dată aplicația Notițe.',
@@ -162,6 +199,7 @@ async function openVault(password, session) {
 async function login(email, password, code) {
   const session = await fb.signIn(email.trim(), password, code);
   await S.set({ session });
+  await rememberAccount(session);
   await L.set({ email: email.trim() });
   await openVault(password, session);
 }
@@ -173,6 +211,7 @@ async function unlock(password) {
 
 async function logout() {
   await S.clear();
+  await L.remove('account');
   await updateBadge();
 }
 

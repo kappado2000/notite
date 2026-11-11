@@ -32,6 +32,9 @@ site-urile lor. Aceleași date ca în aplicație (Parole → Conturi).
   protejată cu PBKDF2 din parola contului). În cloud ajunge doar text criptat.
 - Cheia și parolele decriptate stau doar în memoria browserului, nu pe disc;
   dispar la închiderea browserului și după **15 minute** fără folosire.
+- Conectarea la cont rămâne ținută minte (ca în aplicația de pe telefon):
+  după repornirea browserului ceri doar parola Notițe, fără email și cod 2FA.
+  „Deconectează-te” o șterge.
 - Paginile web nu au acces la seif. Un site primește o parolă doar dacă e
   site-ul ei (un site fals, ex. `emag-login.xyz`, nu primește parola eMAG),
   doar prin HTTPS și doar când alegi tu contul.
