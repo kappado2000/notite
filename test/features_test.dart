@@ -10,6 +10,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:notite/data/notes_store.dart';
 import 'package:notite/models/note_template.dart';
 import 'package:notite/models/notebook.dart';
+import 'package:notite/services/ios_autofill.dart';
 import 'package:notite/services/note_pdf.dart';
 import 'package:notite/services/password_tools.dart';
 import 'package:notite/models/secret_item.dart';
@@ -177,6 +178,32 @@ void main() {
       expect(SecretItem.fromMap(weak.toMap()).ignoreHealth, isTrue);
     },
   );
+
+  test('iOS AutoFill primește doar conturile cu parolă, cu site-ul', () async {
+    final store = await openStore('autofill');
+    await store.addSecrets([
+      store.newSecret(SecretType.login)
+        ..title = 'eMAG'
+        ..url = 'https://www.emag.ro/user/login'
+        ..username = 'ion@test.ro'
+        ..password = 'p1',
+      store.newSecret(SecretType.login)
+        ..title = 'Netflix'
+        ..username = 'ion@test.ro'
+        ..password = 'p2',
+      store.newSecret(SecretType.login)..title = 'Fără parolă',
+      store.newSecret(SecretType.card)
+        ..cardNumber = '4111111111111111'
+        ..cardCvv = '123',
+    ]);
+    final l = IosAutofill.loginsFor(store.allSecrets);
+    expect(l, hasLength(2));
+    final hosts = {for (final x in l) x['title']: x['host']};
+    expect(hosts['eMAG'], 'emag.ro');
+    expect(hosts['Netflix'], 'netflix.com'); // din numele recunoscut
+    // cardurile nu ajung la completarea de parole
+    expect(l.any((x) => x.values.contains('123')), isFalse);
+  });
 
   test('notița blocată nu se găsește după conținut, doar după titlu', () async {
     final store = await openStore('u1');

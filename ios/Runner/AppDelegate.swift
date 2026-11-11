@@ -1,3 +1,5 @@
+import AuthenticationServices
+import CryptoKit
 import Flutter
 import Speech
 import UIKit
@@ -21,6 +23,9 @@ import UIKit
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PrivacyShield") {
       PrivacyShield.register(with: registrar)
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "AutofillBridge") {
+      AutofillBridge.register(with: registrar)
     }
   }
 }
@@ -252,3 +257,118 @@ class IncomingFilesPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegat
     return true
   }
 }
+
+/// Completarea automată iOS (canalul `notite/autofill`): aplicația scrie
+/// pentru extensia AutoFill conturile cu parolă, CRIPTATE (AES-GCM) cu o
+/// cheie nouă la fiecare actualizare. Cheia stă în Keychain-ul comun,
+/// protejată cu Face ID / codul telefonului; iOS primește doar perechile
+/// site – utilizator, ca să propună contul potrivit.
+class AutofillBridge: NSObject, FlutterPlugin {
+  static let group = "group.com.kappado.notite"
+  static let keychainGroup = "FUR5C9CYR8.com.kappado.notite.shared"
+  static let service = "notite.autofill"
+
+  static func register(with registrar: FlutterPluginRegistrar) {
+    let channel = FlutterMethodChannel(
+      name: "notite/autofill", binaryMessenger: registrar.messenger())
+    registrar.addMethodCallDelegate(AutofillBridge(), channel: channel)
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "sync":
+      let logins = (call.arguments as? [[String: Any]]) ?? []
+      DispatchQueue.global(qos: .utility).async {
+        let ok = Self.write(logins)
+        Self.updateIdentities(logins)
+        DispatchQueue.main.async { result(ok) }
+      }
+    case "clear":
+      Self.clear()
+      result(nil)
+    case "status":
+      ASCredentialIdentityStore.shared.getState { state in
+        DispatchQueue.main.async { result(state.isEnabled) }
+      }
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private static var fileURL: URL? {
+    FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)?
+      .appendingPathComponent("autofill.vault")
+  }
+
+  private static func keyQuery() -> [String: Any] {
+    [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecAttrAccount as String: "key",
+      kSecAttrAccessGroup as String: keychainGroup,
+    ]
+  }
+
+  /// Cheie nouă la fiecare scriere: aplicația nu trebuie să citească (și
+  /// deci să ceară Face ID) cheia veche.
+  private static func write(_ logins: [[String: Any]]) -> Bool {
+    guard let url = fileURL,
+      let json = try? JSONSerialization.data(withJSONObject: logins)
+    else { return false }
+    let key = SymmetricKey(size: .bits256)
+    guard let sealed = try? AES.GCM.seal(json, using: key), let blob = sealed.combined
+    else { return false }
+    let keyData = key.withUnsafeBytes { Data($0) }
+
+    SecItemDelete(keyQuery() as CFDictionary)
+    var add = keyQuery()
+    add[kSecValueData as String] = keyData
+    if let access = SecAccessControlCreateWithFlags(
+      nil, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly, .userPresence, nil)
+    {
+      add[kSecAttrAccessControl as String] = access
+    } else {
+      add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+    }
+    var status = SecItemAdd(add as CFDictionary, nil)
+    if status != errSecSuccess {
+      // Telefon fără cod de blocare: fără Face ID posibil, doar „deblocat”.
+      add.removeValue(forKey: kSecAttrAccessControl as String)
+      add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+      status = SecItemAdd(add as CFDictionary, nil)
+    }
+    guard status == errSecSuccess else { return false }
+    do {
+      try blob.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private static func updateIdentities(_ logins: [[String: Any]]) {
+    let store = ASCredentialIdentityStore.shared
+    store.getState { state in
+      guard state.isEnabled else { return }
+      let ids: [ASPasswordCredentialIdentity] = logins.compactMap { l in
+        guard let host = l["host"] as? String, !host.isEmpty,
+          let user = l["user"] as? String,
+          let id = l["id"] as? String
+        else { return nil }
+        return ASPasswordCredentialIdentity(
+          serviceIdentifier: ASCredentialServiceIdentifier(identifier: host, type: .domain),
+          user: user, recordIdentifier: id)
+      }
+      store.replaceCredentialIdentities(with: ids) { _, error in
+        if let error { NSLog("Notite AutoFill: \(error)") }
+      }
+    }
+  }
+
+  private static func clear() {
+    SecItemDelete(keyQuery() as CFDictionary)
+    if let url = fileURL { try? FileManager.default.removeItem(at: url) }
+    ASCredentialIdentityStore.shared.removeAllCredentialIdentities(nil)
+  }
+}
+

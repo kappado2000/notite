@@ -18,6 +18,7 @@ import 'screens/qr_scan_screen.dart';
 import 'services/firestore_sync.dart';
 import 'services/home_shortcuts.dart';
 import 'services/incoming_files.dart';
+import 'services/ios_autofill.dart';
 import 'services/reminder_service.dart';
 import 'screens/secrets/secrets_screen.dart';
 import 'services/vault.dart';
@@ -86,6 +87,7 @@ class Session extends ChangeNotifier {
       // Offline: modificările rămân în coada Firestore locală.
     }
     await sync?.stop();
+    await IosAutofill.instance.clear();
     await Vault.deleteLocal(uid);
     await auth.signOut();
   }
@@ -103,6 +105,7 @@ class Session extends ChangeNotifier {
     await auth.reauthenticate(password);
     await ReminderService.instance.cancelAll();
     await sync?.stop();
+    await IosAutofill.instance.clear();
     await FirestoreSync.deleteAllRemote(uid);
     await store.wipeLocal();
     await Vault.deleteLocal(uid);
@@ -196,6 +199,8 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
         });
       }
       ..attach(store);
+    // Parolele pentru completarea automată din iOS (criptate, cu Face ID).
+    IosAutofill.instance.attach(store);
     // Acțiunile rapide de pe iconiță (apăsare lungă).
     HomeShortcuts.init((shortcut) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {

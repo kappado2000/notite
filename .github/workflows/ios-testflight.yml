@@ -140,6 +140,7 @@ jobs:
           CERTIFICATE_BASE64: ${{ secrets.IOS_DIST_CERTIFICATE_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.IOS_DIST_CERTIFICATE_PASSWORD }}
           APP_PROFILE_BASE64: ${{ secrets.IOS_APP_PROVISION_PROFILE_BASE64 }}
+          AUTOFILL_PROFILE_BASE64: ${{ secrets.IOS_AUTOFILL_PROVISION_PROFILE_BASE64 }}
         run: |
           CERT_PATH="$RUNNER_TEMP/distribution.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
@@ -157,6 +158,19 @@ jobs:
 
           mkdir -p "$PROFILE_DIR"
           echo -n "$APP_PROFILE_BASE64" | base64 --decode -o "$PROFILE_DIR/notite.mobileprovision"
+          # Extensia „Completare automată” (parolele în iOS)
+          if [ -z "$AUTOFILL_PROFILE_BASE64" ]; then
+            echo "::error::Lipsește secretul IOS_AUTOFILL_PROVISION_PROFILE_BASE64 (rulează set_profiles.py)."
+            exit 1
+          fi
+          echo -n "$AUTOFILL_PROFILE_BASE64" | base64 --decode -o "$PROFILE_DIR/notite_autofill.mobileprovision"
+
+      # Extensia AutoFill se adaugă în proiectul Xcode aici (pe Mac), cu
+      # biblioteca xcodeproj (aceeași pe care o folosește CocoaPods).
+      - name: Add AutoFill extension to the Xcode project
+        run: |
+          gem list -i xcodeproj >/dev/null || sudo gem install xcodeproj --no-document
+          ruby ios/scripts/add_autofill_target.rb
 
       - name: Write export options plist
         run: |
@@ -175,6 +189,8 @@ jobs:
             <dict>
               <key>com.kappado.notite</key>
               <string>Notite App Store</string>
+              <key>com.kappado.notite.AutoFill</key>
+              <string>Notite AutoFill AppStore</string>
             </dict>
           </dict>
           </plist>

@@ -1,0 +1,294 @@
+import AuthenticationServices
+import CryptoKit
+import LocalAuthentication
+import UIKit
+
+/// Extensia „Completare automată” a Notițe: furnizează parolele salvate în
+/// Notițe în orice aplicație și în Safari.
+///
+/// Siguranță: aplicația Notițe scrie în grupul comun doar fișierul criptat
+/// (AES-GCM) cu conturile; cheia stă în Keychain, protejată cu Face ID /
+/// codul telefonului. Fără deblocare, extensia nu vede nici măcar lista.
+final class CredentialProviderViewController: ASCredentialProviderViewController,
+  UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate
+{
+  private struct Login: Decodable {
+    let id: String
+    let title: String
+    let url: String
+    let host: String
+    let user: String
+    let password: String
+  }
+
+  private var logins: [Login] = []
+  private var shown: [Login] = []
+  private var matching = Set<String>()
+  private var serviceHosts: [String] = []
+
+  private let table = UITableView(frame: .zero, style: .insetGrouped)
+  private let search = UISearchBar()
+  private let message = UILabel()
+
+  // MARK: - Lista de conturi (din bara de deasupra tastaturii → „Parole”)
+
+  override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
+    serviceHosts = serviceIdentifiers.map { Self.host(of: $0.identifier) }.filter { !$0.isEmpty }
+    buildUI()
+    unlock { [weak self] ok in
+      guard let self else { return }
+      if ok { self.filter("") } else { self.showMessage(Self.lockedText) }
+    }
+  }
+
+  // MARK: - Contul propus direct de iOS
+
+  override func provideCredentialWithoutUserInteraction(
+    for credentialIdentity: ASPasswordCredentialIdentity
+  ) {
+    // Fără Face ID nu dăm nicio parolă.
+    extensionContext.cancelRequest(withError: ASExtensionError(.userInteractionRequired))
+  }
+
+  override func prepareInterfaceToProvideCredential(
+    for credentialIdentity: ASPasswordCredentialIdentity
+  ) {
+    buildUI()
+    showMessage("Se deschide seiful…")
+    unlock { [weak self] ok in
+      guard let self else { return }
+      guard ok,
+        let login = self.logins.first(where: { $0.id == credentialIdentity.recordIdentifier })
+      else {
+        self.showMessage(ok ? "Contul nu mai există în Notițe." : Self.lockedText)
+        return
+      }
+      self.complete(login)
+    }
+  }
+
+  // MARK: - Activarea din Setări
+
+  override func prepareInterfaceForExtensionConfiguration() {
+    buildUI()
+    search.isHidden = true
+    showMessage(
+      "Notițe completează acum parolele.\n\nDeschide o dată aplicația Notițe, "
+        + "ca lista conturilor să ajungă la iOS.")
+    navigationItemDone {
+      self.extensionContext.completeExtensionConfigurationRequest()
+    }
+  }
+
+  // MARK: - Deblocare și citire
+
+  private static let lockedText =
+    "Seiful nu s-a deschis.\n\nDeschide o dată aplicația Notițe și încearcă din nou."
+
+  /// Citește cheia din Keychain (iOS cere Face ID / codul) și decriptează.
+  private func unlock(_ done: @escaping (Bool) -> Void) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      let list = AutofillVault.read(reason: "Deblochează parolele din Notițe")
+      DispatchQueue.main.async {
+        if let list {
+          self.logins = list.compactMap {
+            try? JSONDecoder().decode(Login.self, from: JSONSerialization.data(withJSONObject: $0))
+          }
+          done(true)
+        } else {
+          done(false)
+        }
+      }
+    }
+  }
+
+  private func complete(_ login: Login) {
+    extensionContext.completeRequest(
+      withSelectedCredential: ASPasswordCredential(user: login.user, password: login.password),
+      completionHandler: nil)
+  }
+
+  // MARK: - Interfață
+
+  private func buildUI() {
+    guard table.superview == nil else { return }
+    view.backgroundColor = .systemGroupedBackground
+
+    let bar = UINavigationBar()
+    bar.translatesAutoresizingMaskIntoConstraints = false
+    let item = UINavigationItem(title: "Notițe – Parole")
+    item.leftBarButtonItem = UIBarButtonItem(
+      barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
+    bar.items = [item]
+    view.addSubview(bar)
+
+    search.translatesAutoresizingMaskIntoConstraints = false
+    search.placeholder = "Caută cont, site, utilizator"
+    search.searchBarStyle = .minimal
+    search.delegate = self
+    view.addSubview(search)
+
+    table.translatesAutoresizingMaskIntoConstraints = false
+    table.dataSource = self
+    table.delegate = self
+    table.register(UITableViewCell.self, forCellReuseIdentifier: "c")
+    view.addSubview(table)
+
+    message.translatesAutoresizingMaskIntoConstraints = false
+    message.numberOfLines = 0
+    message.textAlignment = .center
+    message.textColor = .secondaryLabel
+    message.isHidden = true
+    view.addSubview(message)
+
+    NSLayoutConstraint.activate([
+      bar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+      bar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      bar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      search.topAnchor.constraint(equalTo: bar.bottomAnchor),
+      search.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+      search.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
+      table.topAnchor.constraint(equalTo: search.bottomAnchor),
+      table.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      table.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      table.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      message.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+      message.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
+      message.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32),
+    ])
+  }
+
+  private func navigationItemDone(_ action: @escaping () -> Void) {
+    doneAction = action
+    if let bar = view.subviews.compactMap({ $0 as? UINavigationBar }).first {
+      bar.items?.first?.leftBarButtonItem = nil
+      bar.items?.first?.rightBarButtonItem = UIBarButtonItem(
+        barButtonSystemItem: .done, target: self, action: #selector(done))
+    }
+  }
+
+  private var doneAction: (() -> Void)?
+  @objc private func done() { doneAction?() }
+
+  @objc private func cancel() {
+    extensionContext.cancelRequest(withError: ASExtensionError(.userCanceled))
+  }
+
+  private func showMessage(_ text: String) {
+    message.text = text
+    message.isHidden = false
+    table.isHidden = true
+  }
+
+  private func filter(_ query: String) {
+    message.isHidden = true
+    table.isHidden = false
+    let q = query.lowercased().trimmingCharacters(in: .whitespaces)
+    matching = Set(
+      logins.filter { l in
+        serviceHosts.contains { Self.sameSite($0, l.host) }
+      }.map(\.id))
+    shown =
+      logins
+      .filter {
+        q.isEmpty
+          || "\($0.title) \($0.user) \($0.host)".lowercased().contains(q)
+      }
+      .sorted {
+        let a = matching.contains($0.id), b = matching.contains($1.id)
+        if a != b { return a }
+        return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+      }
+    table.reloadData()
+    if logins.isEmpty {
+      showMessage("Nicio parolă încă.\n\nDeschide aplicația Notițe o dată, ca să se încarce.")
+    }
+  }
+
+  func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+    filter(searchText)
+  }
+
+  func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    shown.count
+  }
+
+  func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+    let l = shown[indexPath.row]
+    cell.textLabel?.text = l.title.isEmpty ? l.host : l.title
+    cell.detailTextLabel?.text = l.user
+    cell.detailTextLabel?.textColor = .secondaryLabel
+    cell.imageView?.image = UIImage(
+      systemName: matching.contains(l.id) ? "key.fill" : "key")
+    cell.imageView?.tintColor = matching.contains(l.id) ? .systemGreen : .secondaryLabel
+    return cell
+  }
+
+  func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    complete(shown[indexPath.row])
+  }
+
+  // MARK: - Site-uri
+
+  static func host(of identifier: String) -> String {
+    var s = identifier.lowercased()
+    if !s.contains("://") { s = "https://" + s }
+    var h = URL(string: s)?.host ?? ""
+    if h.hasPrefix("www.") { h.removeFirst(4) }
+    return h
+  }
+
+  private static let twoPart: Set<String> = [
+    "co.uk", "com.ro", "org.ro", "info.ro", "com.au", "co.nz", "com.br", "com.tr",
+  ]
+
+  static func base(_ host: String) -> String {
+    let p = host.split(separator: ".").map(String.init)
+    guard p.count > 2 else { return host }
+    let last2 = p.suffix(2).joined(separator: ".")
+    return twoPart.contains(last2) ? p.suffix(3).joined(separator: ".") : last2
+  }
+
+  static func sameSite(_ a: String, _ b: String) -> Bool {
+    !a.isEmpty && !b.isEmpty && base(a) == base(b)
+  }
+}
+
+/// Fișierul criptat comun (grupul de aplicații) + cheia din Keychain.
+/// Aceeași logică există și în aplicație (AppDelegate.swift).
+enum AutofillVault {
+  static let group = "group.com.kappado.notite"
+  static let keychainGroup = "FUR5C9CYR8.com.kappado.notite.shared"
+  static let service = "notite.autofill"
+  static let fileName = "autofill.vault"
+
+  static var fileURL: URL? {
+    FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)?
+      .appendingPathComponent(fileName)
+  }
+
+  /// Cheia (cere Face ID / codul), apoi decriptarea listei de conturi.
+  static func read(reason: String) -> [[String: Any]]? {
+    let context = LAContext()
+    context.localizedReason = reason
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecAttrAccount as String: "key",
+      kSecAttrAccessGroup as String: keychainGroup,
+      kSecReturnData as String: true,
+      kSecUseAuthenticationContext as String: context,
+    ]
+    var out: CFTypeRef?
+    guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess,
+      let keyData = out as? Data,
+      let url = fileURL,
+      let blob = try? Data(contentsOf: url),
+      let box = try? AES.GCM.SealedBox(combined: blob),
+      let clear = try? AES.GCM.open(box, using: SymmetricKey(data: keyData)),
+      let list = try? JSONSerialization.jsonObject(with: clear) as? [[String: Any]]
+    else { return nil }
+    return list
+  }
+}
