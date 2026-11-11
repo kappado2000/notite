@@ -215,6 +215,13 @@ class _SecretsScreenState extends State<SecretsScreen>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
       _relock();
+    } else if (state == AppLifecycleState.resumed &&
+        mounted &&
+        !_unlocked &&
+        _bioAvailable &&
+        (ModalRoute.of(context)?.isCurrent ?? true)) {
+      // revenire în aplicație pe Parole: Face ID pornește singur
+      _unlockBiometric();
     }
   }
 
