@@ -31,7 +31,7 @@ def embed_phase(runner)
   phase
 end
 
-def add_extension(project, runner, name:, bundle_id:, profile:, swift:,
+def add_extension(project, runner, ios_dir, name:, bundle_id:, profile:, swift:,
                   entitlements: nil, resources: nil)
   return if project.targets.any? { |t| t.name == name }
 
@@ -47,9 +47,16 @@ def add_extension(project, runner, name:, bundle_id:, profile:, swift:,
   xcconfig = group.new_reference("#{name}.xcconfig")
   ext.add_file_references([source])
   if resources
-    folder = group.new_reference(resources)
-    folder.last_known_file_type = 'folder'
-    ext.resources_build_phase.add_file_reference(folder, true)
+    # Fișierele direct în rădăcina extensiei (manifest.json trebuie să fie
+    # acolo); subfolderele (lib/, icons/) ca foldere. Un folder „Resources”
+    # în pachet strică semnătura pe iOS.
+    dir = File.join(ios_dir, name, resources)
+    Dir.children(dir).sort.each do |entry|
+      next if entry.start_with?('.')
+      ref = group.new_reference(File.join(resources, entry))
+      ref.last_known_file_type = 'folder' if File.directory?(File.join(dir, entry))
+      ext.resources_build_phase.add_file_reference(ref, true)
+    end
   end
 
   ext.build_configurations.each do |c|
@@ -86,7 +93,7 @@ def add_extension(project, runner, name:, bundle_id:, profile:, swift:,
   file.settings = { 'ATTRIBUTES' => ['RemoveHeadersOnCopy'] }
 end
 
-add_extension(project, runner,
+add_extension(project, runner, ios,
               name: 'AutoFill',
               bundle_id: 'com.kappado.notite.AutoFill',
               profile: 'Notite AutoFill AppStore',
@@ -94,7 +101,7 @@ add_extension(project, runner,
               entitlements: 'AutoFill.entitlements')
 
 if File.directory?(File.join(ios, 'SafariExtension', 'Resources'))
-  add_extension(project, runner,
+  add_extension(project, runner, ios,
                 name: 'SafariExtension',
                 bundle_id: 'com.kappado.notite.Safari',
                 profile: 'Notite Safari AppStore',
