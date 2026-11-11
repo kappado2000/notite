@@ -42,9 +42,9 @@ site-urile lor. Aceleași date ca în aplicație (Parole → Conturi).
 
 - `node --test extension/test/domain.test.mjs` — cine primește parola.
 - `node --test extension/test/totp.test.mjs` — codurile 2FA (vectorii RFC 6238).
+- `flutter test test/extension_crypto_test.dart` — extensia citește și scrie
+  exact ca aplicația.
 
 ## Actualizare
 
 După o versiune nouă: `chrome://extensions` → pe cardul Notițe apasă ↻.
-- `flutter test test/extension_crypto_test.dart` — extensia citește și scrie
-  exact ca aplicația.
