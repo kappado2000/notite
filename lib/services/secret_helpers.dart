@@ -681,14 +681,22 @@ const knownSites = [
 ];
 
 String _norm(String s) {
-  const from = 'ăâîșşțţ';
-  const to = 'aaisstt';
-  var r = s.toLowerCase().trim();
-  for (var i = 0; i < from.length; i++) {
-    r = r.replaceAll(from[i], to[i]);
-  }
-  return r;
+  final r = s.toLowerCase().trim();
+  // fără diacritice (într-o singură trecere)
+  if (!_diacritics.hasMatch(r)) return r;
+  return r.replaceAllMapped(_diacritics, (m) => _plain[m[0]]!);
 }
+
+final _diacritics = RegExp('[ăâîșşțţ]');
+const _plain = {
+  'ă': 'a',
+  'â': 'a',
+  'î': 'i',
+  'ș': 's',
+  'ş': 's',
+  'ț': 't',
+  'ţ': 't',
+};
 
 /// Domeniul dintr-un URL sau text („https://www.emag.ro/x” → „emag.ro”).
 String hostOf(String url) {
@@ -710,11 +718,19 @@ KnownSite? recognizeSite(String text) {
       return s;
     }
   }
-  for (final s in knownSites) {
-    if (_norm(s.name) == q || s.aliases.any((a) => _norm(a) == q)) return s;
-  }
-  return null;
+  return _byName[q];
 }
+
+/// Numele și aliasurile site-urilor cunoscute, normalizate o singură dată.
+final Map<String, KnownSite> _byName = () {
+  final m = <String, KnownSite>{};
+  for (final s in knownSites) {
+    for (final n in [s.name, ...s.aliases]) {
+      m.putIfAbsent(_norm(n), () => s);
+    }
+  }
+  return m;
+}();
 
 /// Sugestii pentru câmpul „Nume” pe măsură ce scrii (prefix).
 List<KnownSite> suggestSites(String text, {int max = 4}) {
@@ -1427,7 +1443,8 @@ const _genericKeywords = {
   'router',
 };
 
-String _squash(String s) => _norm(s).replaceAll(RegExp(r'\s+'), '');
+final _spaces = RegExp(r'\s+');
+String _squash(String s) => _norm(s).replaceAll(_spaces, '');
 
 /// Categoria automată a unui cont, după site / nume.
 LoginCategory autoLoginCategory(SecretItem i) {
@@ -1440,19 +1457,26 @@ LoginCategory autoLoginCategory(SecretItem i) {
   final host = hostOf(i.url);
   final title = _squash(i.title);
   final hay = '$host ${_norm(i.url)} $title ${_norm(i.title)}';
-  bool hit(String k) =>
-      hay.contains(k) || (!k.contains(' ') && title.contains(k));
   // întâi numele de firme / site-uri, apoi cuvintele generice
-  // (ex. „store.epicgames.com” e joc, nu magazin)
-  for (final generic in [false, true]) {
-    for (final e in _categoryKeywords.entries) {
-      for (final k in e.value) {
-        if (_genericKeywords.contains(k) == generic && hit(k)) return e.key;
-      }
+  // (ex. „store.epicgames.com” e joc, nu magazin); o singură căutare pe
+  // categorie (expresii pregătite o dată), în ordinea categoriilor.
+  for (final pass in [_specificPatterns, _genericPatterns]) {
+    for (final (category, pattern) in pass) {
+      if (pattern.hasMatch(hay)) return category;
     }
   }
   return LoginCategory.other;
 }
+
+List<(LoginCategory, RegExp)> _patterns({required bool generic}) => [
+  for (final e in _categoryKeywords.entries)
+    if (e.value.where((k) => _genericKeywords.contains(k) == generic).toList()
+        case final words when words.isNotEmpty)
+      (e.key, RegExp(words.map(RegExp.escape).join('|'))),
+];
+
+final _specificPatterns = _patterns(generic: false);
+final _genericPatterns = _patterns(generic: true);
 
 /// Categoria contului: cea aleasă de user, altfel cea automată.
 LoginCategory loginCategory(SecretItem i) =>

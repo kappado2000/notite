@@ -14,6 +14,15 @@ import '../shell.dart';
 import 'secret_detail_screen.dart';
 import 'secret_widgets.dart';
 
+/// Categoriile calculate, pe cont și versiunea lui (recunoașterea site-ului
+/// e costisitoare, iar ecranul se reface des în timpul verificării).
+final _categoryCache = <String, LoginCategory>{};
+
+LoginCategory _categoryOf(SecretItem i) => _categoryCache.putIfAbsent(
+  '${i.id}:${i.updatedAt.millisecondsSinceEpoch}:${i.category}',
+  () => loginCategory(i),
+);
+
 /// O problemă de securitate a unui cont, cu scorul de risc.
 class _Issue {
   _Issue(this.item);
@@ -22,7 +31,9 @@ class _Issue {
   bool weak = false;
   int reusedWith = 0; // pe câte alte conturi e aceeași parolă
   bool old = false;
-  LoginCategory get category => loginCategory(item);
+
+  /// Calculată o singură dată (recunoașterea site-ului e costisitoare).
+  late final LoginCategory category = _categoryOf(item);
 
   bool get any => breaches > 0 || weak || reusedWith > 0 || old;
 
@@ -96,16 +107,28 @@ class _PasswordFixScreenState extends State<PasswordFixScreen> {
       _total = byPassword.length;
     });
     final check = BreachCheck();
+    final entries = byPassword.entries.toList();
+    var lastPaint = DateTime.now();
     try {
-      for (final e in byPassword.entries) {
-        final n = await check.timesPwned(e.key);
+      // câte 8 parole deodată; ecranul se reface de max. ~3 ori pe secundă
+      for (var k = 0; k < entries.length; k += 8) {
+        final batch = entries.skip(k).take(8).toList();
+        final counts = await Future.wait(
+          batch.map((e) => check.timesPwned(e.key)),
+        );
         if (!mounted) return;
-        setState(() {
-          for (final i in e.value) {
-            _breaches[i.id] = n;
+        for (var j = 0; j < batch.length; j++) {
+          for (final i in batch[j].value) {
+            _breaches[i.id] = counts[j];
           }
-          _done++;
-        });
+        }
+        _done += batch.length;
+        final now = DateTime.now();
+        if (now.difference(lastPaint).inMilliseconds > 300 ||
+            k + 8 >= entries.length) {
+          lastPaint = now;
+          setState(() {});
+        }
       }
     } catch (_) {
       if (mounted) {

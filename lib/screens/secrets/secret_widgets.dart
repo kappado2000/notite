@@ -90,13 +90,10 @@ Future<void> copyValue(
   required bool secret,
   String? what,
 }) async {
-  if (secret) {
-    await SecureClipboard.copy(value);
-  } else {
-    await Clipboard.setData(ClipboardData(text: value));
-  }
-  if (!context.mounted) return;
-  ScaffoldMessenger.of(context)
+  // Semn imediat (vibrație scurtă + mesaj), apoi copierea propriu-zisă.
+  HapticFeedback.selectionClick();
+  final messenger = ScaffoldMessenger.of(context);
+  messenger
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
@@ -108,6 +105,11 @@ Future<void> copyValue(
         ),
       ),
     );
+  if (secret) {
+    await SecureClipboard.copy(value);
+  } else {
+    await Clipboard.setData(ClipboardData(text: value));
+  }
 }
 
 /// Atașamentele unei intrări din „Parole” (poze cu actul, contracte…),

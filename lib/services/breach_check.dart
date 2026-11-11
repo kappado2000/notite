@@ -12,7 +12,10 @@ class BreachCheck {
   BreachCheck({http.Client? client}) : _client = client ?? http.Client();
 
   final http.Client _client;
-  final _cache = <String, Map<String, int>>{};
+
+  /// Comun tuturor verificărilor, cât rulează aplicația (doar în memorie):
+  /// a doua deschidere a „Repară parolele” nu mai întreabă serviciul.
+  static final _cache = <String, Map<String, int>>{};
 
   static String sha1Hex(String password) =>
       sha1.convert(utf8.encode(password)).toString().toUpperCase();
