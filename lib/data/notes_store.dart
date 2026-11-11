@@ -849,7 +849,8 @@ class NotesStore extends ChangeNotifier {
 
   DateTime? secretUpdatedAt(String id) => _secrets[id]?.updatedAt;
 
-  /// Unește conturile identice (același site, utilizator și parolă).
+  /// Unește dublurile: același site și utilizator (parola cea mai nouă
+  /// rămâne, celelalte intră în istoric).
   /// Grupurile în care mai multe intrări au atașamente sunt lăsate așa.
   /// Întoarce câte intrări au fost șterse.
   Future<int> mergeDuplicateSecrets() async {

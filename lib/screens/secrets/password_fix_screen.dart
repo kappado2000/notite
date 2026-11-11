@@ -197,9 +197,10 @@ class _PasswordFixScreenState extends State<PasswordFixScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Unești dublurile?'),
         content: Text(
-          '$extra ${extra == 1 ? 'intrare identică' : 'intrări identice'} '
-          '(același site, utilizator și parolă). Păstrez câte una, cu '
-          'toate notițele, câmpurile și istoricul adunate.',
+          '$extra ${extra == 1 ? 'intrare în plus' : 'intrări în plus'} '
+          '(același site și utilizator). Păstrez câte una, cu parola cea '
+          'mai nouă; parolele vechi intră în istoric, iar notițele și '
+          'câmpurile se adună.',
         ),
         actions: [
           TextButton(
@@ -351,8 +352,7 @@ class _PasswordFixScreenState extends State<PasswordFixScreen> {
                   child: ListTile(
                     leading: const Icon(Icons.merge_type),
                     title: Text(
-                      '$dupExtra ${dupExtra == 1 ? 'dublură' : 'dubluri'} '
-                      'din importuri',
+                      '$dupExtra ${dupExtra == 1 ? 'dublură' : 'dubluri'}',
                     ),
                     subtitle: const Text(
                       'Același cont salvat de mai multe ori',

@@ -155,14 +155,21 @@ void main() {
       final router = login('Router', 'http://192.168.0.1', 'admin', 'admin');
       await store.addSecrets([a, b, c, router]);
 
+      // c = același cont cu parola schimbată mai târziu
+      c.passwordChangedAt = DateTime.now().add(const Duration(minutes: 5));
+      await store.saveSecret(c);
       expect(duplicateGroups(store.allSecrets), hasLength(1));
-      expect(await store.mergeDuplicateSecrets(), 1);
-      final left = store.allSecrets.where((i) => i.password == 'parola1');
+      expect(await store.mergeDuplicateSecrets(), 2);
+      final left = store.allSecrets
+          .where((i) => i.username.toLowerCase() == 'adi@test.ro')
+          .toList();
       expect(left, hasLength(1));
+      // rămâne parola cea mai nouă; cea veche e în istoric
+      expect(left.single.password, 'alta-parola');
+      expect(left.single.passwordHistory.map((p) => p.password), ['parola1']);
       expect(left.single.favorite, isTrue);
       expect(left.single.notes, 'din LastPass');
-      // cel cu altă parolă nu e dublură
-      expect(store.allSecrets, hasLength(3));
+      expect(store.allSecrets, hasLength(2));
 
       // routerul (rețeaua de acasă) nu se numără, deși parola e slabă
       expect(isLocalAccount(router), isTrue);
@@ -170,7 +177,9 @@ void main() {
       expect(report.weak.any((i) => i.id == router.id), isFalse);
 
       // un cont ignorat iese din verificare
-      final weak = store.allSecrets.firstWhere((i) => i.password == 'parola1');
+      final weak = store.allSecrets.firstWhere(
+        (i) => i.password == 'alta-parola',
+      );
       expect(PasswordReport.of(store.allSecrets).weak, contains(weak));
       weak.ignoreHealth = true;
       await store.saveSecret(weak);

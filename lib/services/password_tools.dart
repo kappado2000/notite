@@ -153,7 +153,11 @@ String _dupKey(SecretItem i) {
   final site = hostOf(i.url).isNotEmpty
       ? hostOf(i.url)
       : i.title.trim().toLowerCase();
-  return '$site|${i.username.trim().toLowerCase()}|${i.password}';
+  final user = i.username.trim().toLowerCase();
+  // același site + același utilizator = același cont, chiar dacă parolele
+  // diferă (o copie veche, ex. din import). Fără utilizator nu putem ști,
+  // deci atunci doar parola identică le face dubluri.
+  return user.isEmpty ? '$site||${i.password}' : '$site|$user';
 }
 
 /// Grupurile de conturi identice (de obicei din importuri repetate).
@@ -208,6 +212,25 @@ List<List<SecretItem>> duplicateGroups(Iterable<SecretItem> items) {
       }
     }
   }
+  // parola valabilă = cea schimbată cel mai recent; celelalte → istoric
+  final newest = [...group]
+    ..sort((a, b) => b.passwordChangedAt.compareTo(a.passwordChangedAt));
+  final current = newest.first;
+  if (keep.password != current.password) {
+    keep.password = current.password;
+    keep.passwordChangedAt = current.passwordChangedAt;
+  }
+  for (final o in newest.skip(1)) {
+    if (o.password != keep.password &&
+        !keep.passwordHistory.any((k) => k.password == o.password)) {
+      keep.passwordHistory.add(
+        PasswordVersion(o.password, current.passwordChangedAt),
+      );
+    }
+  }
+  keep.passwordHistory
+    ..removeWhere((p) => p.password == keep.password)
+    ..sort((a, b) => b.until.compareTo(a.until));
   keep.passwordHistory = keep.passwordHistory.take(10).toList();
   return (keep: keep, remove: sorted.skip(1).toList());
 }
