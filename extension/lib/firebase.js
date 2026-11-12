@@ -132,6 +132,28 @@ export async function getKeysDoc(session) {
   return fromFields((await r.json()).fields ?? {});
 }
 
+/// Versiunea parolelor (`keys/secretsVersion`): crește la orice schimbare,
+/// din aplicație sau din extensie. O citire în loc de sute.
+export async function getSecretsVersion(session) {
+  const r = await fetch(`${DOCS}/users/${session.uid}/keys/secretsVersion`, {
+    headers: auth(session),
+  });
+  if (r.status === 404) return 0;
+  if (!r.ok) throw new Error(`Nu am putut citi versiunea (${r.status}).`);
+  const f = fromFields((await r.json()).fields ?? {});
+  return Number(f.v ?? 0);
+}
+
+export async function bumpSecretsVersion(session) {
+  const v = Date.now();
+  const r = await fetch(`${DOCS}/users/${session.uid}/keys/secretsVersion`, {
+    method: 'PATCH',
+    headers: { ...auth(session), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { v: { integerValue: String(v) } } }),
+  });
+  return r.ok ? v : 0;
+}
+
 /// Toate documentele din `users/<uid>/secrets`: [{ id, data }].
 export async function listSecrets(session) {
   const out = [];

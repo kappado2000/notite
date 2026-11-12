@@ -164,6 +164,7 @@ async function updateBadge() {
 // ------------------------------------------- conectare și deblocare
 
 async function loadItems(key, session) {
+  const version = await fb.getSecretsVersion(session).catch(() => 0);
   const docs = await fb.listSecrets(session);
   const items = [];
   for (const d of docs) {
@@ -175,7 +176,7 @@ async function loadItems(key, session) {
       // document stricat sau al altei chei: îl ignorăm
     }
   }
-  await S.set({ items, itemsAt: Date.now() });
+  await S.set({ items, itemsAt: Date.now(), itemsVersion: version, checkedAt: Date.now() });
   return items;
 }
 
@@ -232,15 +233,28 @@ async function logout() {
 async function items({ fresh = false } = {}) {
   const key = await dataKey();
   if (!key) return null;
-  const { items = [], itemsAt = 0 } = await getS('items', 'itemsAt');
-  if (fresh || Date.now() - itemsAt > 2 * 60 * 1000) {
-    try {
-      return await loadItems(key, await authSession());
-    } catch {
-      return items; // fără internet: ce avem
-    }
+  // Citim TOATE parolele doar dacă s-a schimbat ceva (versiunea din
+  // keys/secretsVersion), verificată cel mult o dată pe minut — altfel
+  // cota zilnică Firebase (50.000 de citiri) se termină repede.
+  const {
+    items = [],
+    itemsVersion = -1,
+    checkedAt = 0,
+    itemsAt = 0,
+  } = await getS('items', 'itemsVersion', 'checkedAt', 'itemsAt');
+  if (!fresh && Date.now() - checkedAt < 60 * 1000) return items;
+  try {
+    const session = await authSession();
+    const v = await fb.getSecretsVersion(session);
+    await S.set({ checkedAt: Date.now() });
+    // și o recitire completă la 6 ore (schimbări din versiuni vechi ale
+    // aplicației, care nu actualizează versiunea)
+    const recent = Date.now() - itemsAt < 6 * 60 * 60 * 1000;
+    if (v === itemsVersion && itemsVersion !== -1 && recent) return items;
+    return await loadItems(key, session);
+  } catch {
+    return items; // fără internet / cotă depășită: ce avem
   }
-  return items;
 }
 
 // -------------------------------------------------- salvare și anulare
@@ -249,6 +263,14 @@ async function writeItem(key, session, m) {
   await fb.putSecret(session, m.id, await encryptMap(key, m, `secrets/${m.id}`));
   const { items = [] } = await getS('items');
   await S.set({ items: [...items.filter((i) => i.id !== m.id), m] });
+  await bumpVersion(session);
+}
+
+/// După o scriere: anunță aplicația (versiune nouă) și ține copia locală
+/// la zi fără să recitim totul.
+async function bumpVersion(session) {
+  const v = await fb.bumpSecretsVersion(session).catch(() => 0);
+  if (v) await S.set({ itemsVersion: v, checkedAt: Date.now() });
 }
 
 function newLogin(url, username, password) {
@@ -469,6 +491,7 @@ async function undo(u) {
     await fb.deleteSecret(session, u.remove);
     const { items = [] } = await getS('items');
     await S.set({ items: items.filter((i) => i.id !== u.remove) });
+    await bumpVersion(session);
   } else if (u.restore) {
     await writeItem(key, session, { ...u.restore, updatedAt: Date.now() });
   }
@@ -798,9 +821,11 @@ async function handle(msg, sender) {
       if (!fromExtension(sender)) return null;
       const key = await dataKey();
       if (!key) return { error: 'Seiful e blocat.' };
-      await fb.deleteSecret(await authSession(), msg.id);
+      const sess = await authSession();
+      await fb.deleteSecret(sess, msg.id);
       const { items: list = [] } = await getS('items');
       await S.set({ items: list.filter((i) => i.id !== msg.id) });
+      await bumpVersion(sess);
       await touch();
       return { ok: true };
     }
