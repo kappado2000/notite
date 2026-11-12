@@ -24,7 +24,7 @@ import {
   uuid,
 } from './lib/crypto.js';
 import * as fb from './lib/firebase.js';
-import { matches, siteTitle, hostOf } from './lib/domain.js';
+import { matches, siteTitle, hostOf, baseDomain } from './lib/domain.js';
 import { totpCode } from './lib/totp.js';
 import { healthOf, sha1Hex, pwned } from './lib/health.js';
 
@@ -338,9 +338,21 @@ async function rememberGenerated(tabUrl, username, password) {
   // TOATE — e doar „neconfirmată”, nu înlocuiește nimic; o confirmi la cel
   // corect. Niciun cont pe site: cont nou cu parola generată.
   const all = (await items()) ?? [];
-  const targets = old
+  let targets = old
     ? [old]
     : all.filter((i) => i.type === 'login' && matches(i, tabUrl));
+  if (!targets.length) {
+    // același nume de site pe alt domeniu (aliexpress.us ↔ aliexpress.com):
+    // doar pentru a ține minte parola, nu pentru completare
+    const label = baseDomain(tabUrl).split('.')[0];
+    const nameOf = (i) =>
+      i.url
+        ? baseDomain(i.url).split('.')[0]
+        : (i.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    targets = all.filter(
+      (i) => i.type === 'login' && label.length >= 3 && nameOf(i) === label,
+    );
+  }
   if (!targets.length) {
     const m = {
       ...newLogin(tabUrl, (username || '').trim(), password),
@@ -902,6 +914,13 @@ async function handle(msg, sender) {
       await touch();
       await choose(tabUrl, i.id);
       return { username: i.username, password: i.password };
+    }
+    case 'generatedInPopup': {
+      // „Copiază” din generatorul ferestrei extensiei: o ținem minte pentru
+      // site-ul din fila deschisă
+      if (!fromExtension(sender) || !msg.password) return null;
+      if (!/^https?:/.test(msg.url || '')) return null;
+      return serial(() => rememberGenerated(msg.url, '', msg.password));
     }
     case 'generated':
       if (!tabUrl || sender.frameId !== 0 || !msg.password) return null;

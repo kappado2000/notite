@@ -370,8 +370,19 @@ $('genLen').addEventListener('input', newPassword);
 $('genSym').addEventListener('change', newPassword);
 $('genNew').addEventListener('click', newPassword);
 $('genCopy').addEventListener('click', async () => {
-  await navigator.clipboard.writeText($('genOut').textContent);
-  say('Parola generată a fost copiată.');
+  const password = $('genOut').textContent;
+  await navigator.clipboard.writeText(password);
+  // ținută minte imediat la contul site-ului deschis (neconfirmată)
+  const r = await send({
+    type: 'generatedInPopup',
+    url: await activeUrl(),
+    password,
+  }).catch(() => null);
+  say(
+    r?.result === 'kept'
+      ? 'Copiată și ținută minte în Notițe la contul acestui site (neconfirmată).'
+      : 'Parola generată a fost copiată.',
+  );
 });
 
 // ---------------------------------------------------------- acțiuni
