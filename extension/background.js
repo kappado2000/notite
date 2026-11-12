@@ -290,10 +290,32 @@ function newestPerUser(list) {
   return [...best.values()].sort((a, b) => when(b) - when(a));
 }
 
+/// Contul ales de tine pe site (din panoul Notițe sau „Completează”):
+/// parola generată / schimbată se salvează PE EL, nu pe alt cont al
+/// aceluiași site. Ținut minte 30 de minute, în memorie.
+const CHOSEN_MS = 30 * 60 * 1000;
+
+async function choose(url, id) {
+  const { chosen = {} } = await getS('chosen');
+  chosen[hostOf(url)] = { id, at: Date.now() };
+  await S.set({ chosen });
+}
+
+async function chosenFor(url) {
+  const { chosen = {} } = await getS('chosen');
+  const c = chosen[hostOf(url)];
+  return c && Date.now() - c.at < CHOSEN_MS ? c.id : null;
+}
+
 async function existingLogin(url, username, { change = false } = {}) {
   const all = (await items()) ?? [];
   const user = (username || '').trim().toLowerCase();
   const site = all.filter((i) => i.type === 'login' && matches(i, url));
+  const cid = await chosenFor(url);
+  const pick = cid && site.find((i) => i.id === cid);
+  if (pick && (!user || (pick.username || '').trim().toLowerCase() === user)) {
+    return pick;
+  }
   const exact = site.find(
     (i) => (i.username || '').trim().toLowerCase() === user,
   );
@@ -335,15 +357,8 @@ async function saveCredential(url, username, password) {
   const key = await dataKey();
   if (!key) return null;
   const session = await authSession();
-  const all = (await items()) ?? [];
   const user = (username || '').trim();
-  const same = all.filter(
-    (i) =>
-      i.type === 'login' &&
-      matches(i, url) &&
-      (i.username || '').trim().toLowerCase() === user.toLowerCase(),
-  );
-  const existing = same[0];
+  const existing = await existingLogin(url, user, { change: !user });
   if (existing) {
     if (existing.password === password) {
       return { result: 'same', id: existing.id };
@@ -675,6 +690,7 @@ async function handle(msg, sender) {
         return { error: 'Contul nu e pentru site-ul deschis.' };
       }
       await touch();
+      await choose(tab.url, i.id);
       await chrome.tabs.sendMessage(
         tab.id,
         { type: 'doFill', username: i.username, password: i.password },
@@ -751,6 +767,7 @@ async function handle(msg, sender) {
       const i = all?.find((x) => x.id === msg.id);
       if (!i || !matches(i, tabUrl)) return null;
       await touch();
+      await choose(tabUrl, i.id);
       return { username: i.username, password: i.password };
     }
     case 'generated':

@@ -207,6 +207,22 @@ List<List<SecretItem>> duplicateGroups(Iterable<SecretItem> items) {
     if (i.type != SecretType.login || i.password.isEmpty) continue;
     by.putIfAbsent(_dupKey(i), () => []).add(i);
   }
+  // Intrările fără utilizator (ex. salvate de pe o pagină de schimbare a
+  // parolei) se alătură contului site-ului, dacă site-ul are UN SINGUR cont
+  // cu utilizator.
+  final named = <String, List<String>>{}; // site → chei cu utilizator
+  for (final k in by.keys) {
+    final parts = k.split('|');
+    if (parts[1].isNotEmpty) named.putIfAbsent(parts[0], () => []).add(k);
+  }
+  for (final k in by.keys.toList()) {
+    final parts = k.split('|');
+    if (parts[1].isNotEmpty || parts[0].isEmpty) continue;
+    final owners = named[parts[0]];
+    if (owners != null && owners.length == 1) {
+      by[owners.single]!.addAll(by.remove(k)!);
+    }
+  }
   return by.values.where((g) => g.length > 1).toList();
 }
 
@@ -233,6 +249,7 @@ List<List<SecretItem>> duplicateGroups(Iterable<SecretItem> items) {
   final keep = sorted.first.copy();
   for (final o in sorted.skip(1)) {
     keep.favorite = keep.favorite || o.favorite;
+    if (keep.username.trim().isEmpty) keep.username = o.username;
     if (keep.totp.isEmpty) keep.totp = o.totp;
     if (keep.url.isEmpty) keep.url = o.url;
     if (keep.title.isEmpty) keep.title = o.title;

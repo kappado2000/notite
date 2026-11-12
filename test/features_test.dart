@@ -181,6 +181,15 @@ void main() {
       expect(store.allSecrets, hasLength(4));
       store.allSecrets.firstWhere((i) => i.id == other.id); // neatins
 
+      // account.pdf24.org fără utilizator + pdf24.org cu utilizator = unul
+      final p1 = login('pdf24.org', 'https://pdf24.org', 'ion@test.ro', 'v1');
+      final p2 = login('account', 'https://account.pdf24.org', '', 'v2')
+        ..passwordChangedAt = DateTime.now().add(const Duration(hours: 1));
+      await store.addSecrets([p1, p2]);
+      expect(await store.mergeDuplicateSecrets(), 1);
+      final pdf = store.allSecrets.where((i) => siteBase(i) == 'pdf24').single;
+      expect((pdf.username, pdf.password), ('ion@test.ro', 'v2'));
+
       // routerul (rețeaua de acasă) nu se numără, deși parola e slabă
       expect(isLocalAccount(router), isTrue);
       final report = PasswordReport.of(store.allSecrets);
