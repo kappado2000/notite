@@ -659,6 +659,66 @@ async function handle(msg, sender) {
             a.title.localeCompare(b.title, 'ro'),
         );
     }
+    case 'getItem': {
+      // editare din fereastra extensiei
+      if (!fromExtension(sender)) return null;
+      const all = await items();
+      const i = all?.find((x) => x.id === msg.id);
+      if (!i) return null;
+      await touch();
+      return {
+        id: i.id,
+        title: i.title || '',
+        username: i.username || '',
+        password: i.password || '',
+        url: i.url || '',
+      };
+    }
+    case 'updateItem': {
+      if (!fromExtension(sender)) return null;
+      const key = await dataKey();
+      if (!key) return { error: 'Seiful e blocat.' };
+      const all = (await items()) ?? [];
+      const i = all.find((x) => x.id === msg.id);
+      if (!i) return { error: 'Nu am găsit contul.' };
+      const now = Date.now();
+      const password = String(msg.password ?? '');
+      const changed = password !== (i.password || '');
+      const updated = {
+        ...i,
+        title: String(msg.title ?? '').trim(),
+        username: String(msg.username ?? '').trim(),
+        url: String(msg.url ?? '').trim(),
+        password,
+        updatedAt: now,
+        ...(changed
+          ? {
+              passwordChangedAt: now,
+              pendingPassword:
+                i.pendingPassword === password ? '' : i.pendingPassword ?? '',
+              passwordHistory: [
+                ...(i.password ? [{ password: i.password, until: now }] : []),
+                ...(i.passwordHistory ?? []).filter(
+                  (p) => p.password !== password,
+                ),
+              ].slice(0, 10),
+            }
+          : {}),
+      };
+      await writeItem(key, await authSession(), updated);
+      await touch();
+      return { ok: true };
+    }
+    case 'deleteItem': {
+      if (!fromExtension(sender)) return null;
+      const key = await dataKey();
+      if (!key) return { error: 'Seiful e blocat.' };
+      await fb.deleteSecret(await authSession(), msg.id);
+      const { items: list = [] } = await getS('items');
+      await S.set({ items: list.filter((i) => i.id !== msg.id) });
+      await touch();
+      return { ok: true };
+    }
     case 'reveal': {
       // doar pentru copiere din fereastra extensiei
       if (!fromExtension(sender)) return null;

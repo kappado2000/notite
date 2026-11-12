@@ -113,14 +113,117 @@ function render() {
         btn('👤', 'Copiază utilizatorul', () => copy(i.id, 'username'));
       }
       if (i.hasPassword) {
-        btn('🔑', 'Copiază parola (se șterge după 30 s)', () => copy(i.id, 'password'));
+        btn('🔑', 'Copiază parola și o arată 10 secunde', async () => {
+          const v = await copy(i.id, 'password');
+          if (v == null) return;
+          // vizibilă 10 secunde în locul utilizatorului
+          clearTimeout(s.hideTimer);
+          s.textContent = v;
+          s.classList.add('pw');
+          s.hideTimer = setTimeout(() => {
+            s.textContent = i.username || i.url;
+            s.classList.remove('pw');
+          }, 10000);
+        });
       }
       if (i.hasTotp) {
         btn('🔢', 'Copiază codul 2FA', () => copy(i.id, 'totp'));
       }
+      btn('✏️', 'Editează contul', () => editRow(row, i));
+      btn('🗑️', 'Șterge contul', () => confirmDelete(row, i));
       return row;
     }),
   );
+}
+
+/// Editare pe loc: nume, utilizator, parolă, site.
+async function editRow(row, i) {
+  const d = await send({ type: 'getItem', id: i.id });
+  if (!d) return say('Nu am găsit contul.', true);
+  const form = document.createElement('form');
+  form.className = 'edit';
+  const field = (label, name, value) => {
+    const l = document.createElement('label');
+    l.textContent = label;
+    const inp = document.createElement('input');
+    inp.name = name;
+    inp.value = value;
+    inp.autocomplete = 'off';
+    inp.spellcheck = false;
+    if (name === 'password') inp.className = 'mono';
+    l.append(inp);
+    form.append(l);
+    return inp;
+  };
+  field('Nume', 'title', d.title);
+  field('Utilizator / email', 'username', d.username);
+  const pw = field('Parolă', 'password', d.password);
+  field('Site', 'url', d.url);
+  const bar = document.createElement('div');
+  bar.className = 'row';
+  const gen = document.createElement('button');
+  gen.type = 'button';
+  gen.className = 'sec';
+  gen.textContent = '🎲 Generează';
+  gen.addEventListener('click', () => {
+    pw.value = generate(18, true);
+  });
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'sec';
+  cancel.textContent = 'Renunță';
+  cancel.addEventListener('click', () => render());
+  const save = document.createElement('button');
+  save.className = 'pri';
+  save.textContent = 'Salvează';
+  bar.append(gen, cancel, save);
+  form.append(bar);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(form);
+    const r = await send({
+      type: 'updateItem',
+      id: i.id,
+      title: f.get('title'),
+      username: f.get('username'),
+      password: f.get('password'),
+      url: f.get('url'),
+    });
+    if (r?.error) return say(r.error, true);
+    say(
+      f.get('password') !== d.password
+        ? 'Salvat. Parola veche a trecut în istoricul contului.'
+        : 'Salvat.',
+    );
+    await load(true);
+  });
+  row.replaceWith(form);
+  form.querySelector('input').focus();
+}
+
+function confirmDelete(row, i) {
+  const box = document.createElement('div');
+  box.className = 'pend';
+  const text = document.createElement('div');
+  text.textContent = `Ștergi contul ${i.title}${i.username ? ` (${i.username})` : ''}? Dispare și din aplicație.`;
+  const bar = document.createElement('div');
+  bar.className = 'row';
+  const no = document.createElement('button');
+  no.className = 'sec';
+  no.textContent = 'Nu';
+  no.addEventListener('click', () => render());
+  const yes = document.createElement('button');
+  yes.className = 'pri danger';
+  yes.textContent = 'Șterge';
+  yes.addEventListener('click', async () => {
+    const r = await send({ type: 'deleteItem', id: i.id });
+    if (r?.error) return say(r.error, true);
+    say('Contul a fost șters.');
+    await load(true);
+  });
+  bar.append(no, yes);
+  box.append(text, bar);
+  row.replaceWith(box);
 }
 
 async function copy(id, field) {
@@ -135,8 +238,10 @@ async function copy(id, field) {
           ? `Codul 2FA ${v} a fost copiat.`
           : 'Utilizatorul a fost copiat.',
     );
+    return v;
   } catch (e) {
     say(e.message, true);
+    return null;
   }
 }
 

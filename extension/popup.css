@@ -95,3 +95,11 @@ select {
 .it .txt.link { cursor: pointer; border-radius: 8px; padding: 2px 4px; margin: -2px -4px; }
 .it .txt.link:hover, .it .txt.link:focus { background: var(--accent-soft); outline: none; }
 .it .txt.link:hover .t { text-decoration: underline; }
+
+.it .s.pw { font-family: ui-monospace, Consolas, monospace; color: var(--text); font-size: 13px; user-select: all; }
+form.edit { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-top: 1px solid var(--border); background: var(--accent-soft); }
+form.edit label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+form.edit input { padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; font-size: 14px; }
+form.edit input.mono { font-family: ui-monospace, Consolas, monospace; }
+form.edit .row { display: flex; gap: 6px; justify-content: flex-end; }
+button.danger { background: #D93025 !important; color: #fff !important; }
