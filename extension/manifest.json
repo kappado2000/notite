@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Notițe – Parole",
   "short_name": "Notițe",
-  "version": "1.4.5",
+  "version": "1.5.0",
   "description": "Salvează automat parolele în seiful criptat Notițe și le completează pe site-urile lor.",
   "icons": {
     "16": "icons/16.png",
@@ -26,7 +26,8 @@
   "host_permissions": [
     "https://identitytoolkit.googleapis.com/*",
     "https://securetoken.googleapis.com/*",
-    "https://firestore.googleapis.com/*"
+    "https://firestore.googleapis.com/*",
+    "https://api.pwnedpasswords.com/*"
   ],
   "content_scripts": [
     {

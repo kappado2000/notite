@@ -26,6 +26,7 @@ import {
 import * as fb from './lib/firebase.js';
 import { matches, siteTitle, hostOf } from './lib/domain.js';
 import { totpCode } from './lib/totp.js';
+import { healthOf, sha1Hex, pwned } from './lib/health.js';
 
 /// Blocare automată după atâtea minute fără folosire; 0 = niciodată
 /// (doar la închiderea browserului).
@@ -431,8 +432,52 @@ function fromExtension(sender) {
   );
 }
 
-function publicItem(i, url) {
+// ------------------------------------------- starea parolelor (punct)
+
+/// id → 'red' | 'yellow' | 'green'. Se calculează din parola ACTUALĂ: după
+/// ce o înlocuiești cu una generată, avertizarea dispare singură.
+async function healthMap(list) {
+  const reuse = new Map();
+  for (const i of list) {
+    if (i.password) reuse.set(i.password, (reuse.get(i.password) ?? 0) + 1);
+  }
+  const { breaches = {} } = await getS('breaches');
+  const out = new Map();
+  for (const i of list) {
+    const h = i.password ? await sha1Hex(i.password) : '';
+    out.set(i.id, healthOf(i, reuse, breaches, h));
+  }
+  return out;
+}
+
+/// Verifică (în fundal, câte 8) parolele încă neverificate. Rezultatele
+/// (doar amprente SHA-1 → da/nu) stau în memorie, ca și seiful.
+let checking = null;
+function checkBreaches(list) {
+  if (checking) return checking;
+  checking = (async () => {
+    const { breaches = {} } = await getS('breaches');
+    const all = await Promise.all(
+      list.filter((i) => i.password).map((i) => sha1Hex(i.password)),
+    );
+    const todo = [...new Set(all)].filter((h) => !(h in breaches));
+    for (let k = 0; k < todo.length; k += 8) {
+      const part = todo.slice(k, k + 8);
+      const res = await Promise.all(part.map(pwned));
+      part.forEach((h, j) => {
+        if (res[j] !== null) breaches[h] = res[j];
+      });
+      await S.set({ breaches });
+    }
+  })()
+    .catch(() => {})
+    .finally(() => (checking = null));
+  return checking;
+}
+
+function publicItem(i, url, health = '') {
   return {
+    health,
     id: i.id,
     title: i.title || hostOf(i.url) || 'Fără titlu',
     username: i.username || '',
@@ -589,8 +634,10 @@ async function handle(msg, sender) {
       const all = await items({ fresh: !!msg.fresh });
       if (!all) return null;
       await touch();
+      checkBreaches(all);
+      const hm = await healthMap(all);
       return all
-        .map((i) => publicItem(i, msg.url))
+        .map((i) => publicItem(i, msg.url, hm.get(i.id)))
         .sort(
           (a, b) =>
             Number(b.match) - Number(a.match) ||
@@ -672,12 +719,14 @@ async function handle(msg, sender) {
       const st = await status();
       if (!st.unlocked) return { locked: true, loggedIn: st.loggedIn, items: [] };
       const all = (await items()) ?? [];
+      checkBreaches(all);
+      const hm = await healthMap(all);
       return {
         locked: false,
         secure: pageAllowed(tabUrl),
         items: newestPerUser(
           all.filter((i) => i.type === 'login' && matches(i, tabUrl)),
-        ).map((i) => publicItem(i, tabUrl)),
+        ).map((i) => publicItem(i, tabUrl, hm.get(i.id))),
       };
     }
     case 'pageTotp': {

@@ -86,3 +86,8 @@ select {
   color: var(--text);
   font: inherit;
 }
+
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+.dot.red { background: #D93025; }
+.dot.yellow { background: #E8A200; }
+.dot.green { background: #2E9E5B; }

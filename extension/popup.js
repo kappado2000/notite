@@ -34,6 +34,12 @@ async function activeUrl() {
 
 let all = [];
 
+const HEALTH_TIP = {
+  red: 'Compromisă: apare în scurgeri de date — schimb-o',
+  yellow: 'Slabă sau folosită și la alt cont',
+  green: 'În regulă',
+};
+
 function render() {
   const q = $('q').value.trim().toLowerCase();
   const list = $('list');
@@ -52,7 +58,13 @@ function render() {
       txt.className = 'txt';
       const t = document.createElement('div');
       t.className = 't';
-      t.textContent = i.title;
+      if (i.health) {
+        const dot = document.createElement('span');
+        dot.className = `dot ${i.health}`;
+        dot.title = HEALTH_TIP[i.health];
+        t.append(dot);
+      }
+      t.append(document.createTextNode(i.title));
       const s = document.createElement('div');
       s.className = 's';
       s.textContent = i.username || i.url;
@@ -146,6 +158,14 @@ async function renderPending() {
 async function load(fresh = false) {
   all = (await send({ type: 'list', url: await activeUrl(), fresh })) ?? [];
   render();
+  // verificarea scurgerilor rulează în fundal: culorile se actualizează
+  if (!fresh && !load.again) {
+    load.again = true;
+    setTimeout(async () => {
+      all = (await send({ type: 'list', url: await activeUrl() })) ?? all;
+      render();
+    }, 5000);
+  }
 }
 
 // ------------------------------------------------------- generator
