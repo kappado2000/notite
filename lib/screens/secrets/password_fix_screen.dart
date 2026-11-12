@@ -612,6 +612,9 @@ class _ChangeSheetState extends State<_ChangeSheet> {
   static const _keepFor = Duration(minutes: 3);
 
   bool _copiedOld = false;
+
+  /// Parola nouă a fost deja copiată / ținută minte: nu mai generăm alta.
+  bool get _locked => _copied || widget.item.pendingPassword.isNotEmpty;
   bool _showOld = true;
 
   Future<void> _copyOld() async {
@@ -790,10 +793,16 @@ class _ChangeSheetState extends State<_ChangeSheet> {
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // după copiere parola e „în lucru” (poate deja pe site):
+                    // alta doar după „Renunță”
                     IconButton(
-                      tooltip: 'Altă parolă',
+                      tooltip: _locked
+                          ? 'Parola e deja copiată — „Renunță” ca să generezi alta'
+                          : 'Altă parolă',
                       icon: const Icon(Icons.casino_outlined),
-                      onPressed: () => setState(() => _pass.text = _gen()),
+                      onPressed: _locked
+                          ? null
+                          : () => setState(() => _pass.text = _gen()),
                     ),
                     IconButton(
                       tooltip: _show ? 'Ascunde' : 'Arată',

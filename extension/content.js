@@ -253,6 +253,8 @@ const HEALTH_TIP = {
   green: 'În regulă',
 };
 
+  let lastGenerated = '';
+
   async function showMenu(field) {
     const pw = isPasswordField(field) ? field : passwordFields()[0];
     const signup = pw ? isSignup(pw) : false;
@@ -272,7 +274,16 @@ const HEALTH_TIP = {
           );
         }
       }
-      if (signup && pw) {
+      // o parolă generată e deja în câmpuri: NU mai oferim alta (ar înlocui-o
+      // pe cea pe care poate site-ul a acceptat-o deja)
+      const already =
+        lastGenerated &&
+        passwordFields().some((p) => p.value === lastGenerated);
+      if (signup && pw && already) {
+        parts.push(
+          `<div class="note">✓ Parola generată e deja pusă în câmp și ținută minte în Notițe. Apasă „Salvează” pe site.</div>`,
+        );
+      } else if (signup && pw) {
         parts.push(
           `<div class="item" tabindex="0" data-gen="1"><span class="t">🎲 Generează o parolă puternică</span><span class="s">O completez și o salvez în Notițe</span></div>`,
         );
@@ -310,6 +321,7 @@ const HEALTH_TIP = {
         ...targets.map((p) => (p.maxLength >= 8 ? p.maxLength : 18)),
       );
       const pass = generate(max);
+      lastGenerated = pass;
       for (const p of targets) setValue(p, pass);
       // ținută minte în Notițe imediat, înainte de „Salvează” pe site
       const u = clearUserField(menuFor?.form ?? document);
