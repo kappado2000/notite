@@ -456,6 +456,31 @@ class _PasswordHistory extends StatelessWidget {
   const _PasswordHistory({required this.item});
   final SecretItem item;
 
+  /// Parola aleasă devine cea actuală; cea actuală trece în istoric.
+  Future<void> _use(BuildContext context, PasswordVersion p) async {
+    final store = context.read<NotesStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final now = DateTime.now();
+    final updated = item.copy();
+    updated.passwordHistory = [
+      if (item.password.isNotEmpty) PasswordVersion(item.password, now),
+      ...item.passwordHistory.where((h) => h.password != p.password),
+    ].take(10).toList();
+    updated
+      ..password = p.password
+      ..passwordChangedAt = now
+      ..pendingPassword = '';
+    await store.saveSecret(updated);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Parola aleasă e acum cea actuală (se completează de acum '
+          'înainte). Cea de până acum a trecut în „Parole anterioare”.',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ExpansionTile(
@@ -463,12 +488,24 @@ class _PasswordHistory extends StatelessWidget {
       title: Text('Parole anterioare (${item.passwordHistory.length})'),
       shape: const Border(),
       children: [
-        for (final p in item.passwordHistory)
+        for (final p in item.passwordHistory) ...[
           _Field(
             'Folosită până la ${formatShortDate(p.until)}',
             p.password,
             secret: true,
           ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: TextButton.icon(
+                icon: const Icon(Icons.swap_vert, size: 18),
+                label: const Text('Folosește-o ca parolă actuală'),
+                onPressed: () => _use(context, p),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

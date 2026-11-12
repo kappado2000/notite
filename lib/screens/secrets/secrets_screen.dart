@@ -247,6 +247,29 @@ class _SecretsScreenState extends State<SecretsScreen>
     super.dispose();
   }
 
+  /// O dată pe pornire: același site + același utilizator = un singur cont.
+  /// Parola cea mai nouă rămâne actuală; celelalte intră în „Parole
+  /// anterioare”, de unde pot fi alese.
+  static bool _mergeChecked = false;
+
+  Future<void> _autoMerge() async {
+    final store = context.read<NotesStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final n = await store.mergeDuplicateSecrets();
+    if (n > 0) {
+      messenger.showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 6),
+          content: Text(
+            'Am unit $n ${n == 1 ? 'dublură' : 'dubluri'} (același site și '
+            'utilizator). Parolele vechi sunt în „Parole anterioare” la '
+            'fiecare cont.',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _unlockBiometric() async {
     if (_busy) return;
     setState(() => _busy = true);
@@ -403,6 +426,10 @@ class _SecretsScreenState extends State<SecretsScreen>
   Widget build(BuildContext context) {
     // Tocmai deblocat (sau setarea s-a schimbat): pornește numărătoarea.
     if (_unlocked && _idle?.isActive != true) _activity();
+    if (_unlocked && !_mergeChecked) {
+      _mergeChecked = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _autoMerge());
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Parole'),
