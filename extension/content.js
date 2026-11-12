@@ -316,7 +316,7 @@ const HEALTH_TIP = {
       send({ type: 'generated', password: pass, username: u?.value?.trim() ?? '' })
         .then((r) => {
           if (r?.result === 'kept') {
-            showToast({ result: 'generatedKept', site: location.hostname });
+            showToast({ result: 'generatedKept', site: location.hostname, count: r.count });
           }
         })
         .catch(() => {});
@@ -419,7 +419,7 @@ const HEALTH_TIP = {
       html = `Ai folosit altă parolă pentru <b>${esc(info.site)}</b>${who}. O actualizez în Notițe? <span style="opacity:.75">(Dacă logarea n-a reușit, alege „Nu”.)</span>
         <div class="row"><button class="sec" data-a="ok">Nu</button><button class="pri" data-a="save">Actualizează</button></div>`;
     } else if (info.result === 'generatedKept') {
-      html = `🔑 Parola generată e ținută minte în Notițe (la contul <b>${esc(info.site)}</b>). Dacă site-ul o acceptă, confirm-o la salvare.
+      html = `🔑 Parola generată e ținută minte în Notițe (${info.count > 1 ? `la cele ${info.count} conturi` : 'la contul'} <b>${esc(info.site)}</b>). După ce o salvezi pe site, confirm-o din iconița Notițe („Folosește-o”) sau din aplicație.
         <div class="row"><button class="pri" data-a="ok">OK</button></div>`;
     } else if (info.result === 'locked') {
       html = `🔒 Notițe e blocat. Parola pentru <b>${esc(info.site)}</b>${who} va fi salvată când îl deblochezi din iconița extensiei.

@@ -103,3 +103,5 @@ form.edit input { padding: 7px 9px; border: 1px solid var(--border); border-radi
 form.edit input.mono { font-family: ui-monospace, Consolas, monospace; }
 form.edit .row { display: flex; gap: 6px; justify-content: flex-end; }
 button.danger { background: #D93025 !important; color: #fff !important; }
+
+.pend .mono { font-family: ui-monospace, Consolas, monospace; word-break: break-all; user-select: all; }

@@ -131,7 +131,48 @@ function render() {
       }
       btn('✏️', 'Editează contul', () => editRow(row, i));
       btn('🗑️', 'Șterge contul', () => confirmDelete(row, i));
-      return row;
+      if (!i.pending) return row;
+      // parolă generată pe site și neconfirmată
+      const wrap = document.createElement('div');
+      const note = document.createElement('div');
+      note.className = 'pend';
+      const text = document.createElement('div');
+      text.textContent =
+        `⏳ ${i.title}: ai o parolă generată neconfirmată. Dacă ai salvat-o pe site, folosește-o.`;
+      const bar = document.createElement('div');
+      bar.className = 'row';
+      const show = document.createElement('button');
+      show.className = 'sec';
+      show.textContent = 'Arată';
+      show.addEventListener('click', async () => {
+        const d = await send({ type: 'getPending', id: i.id });
+        if (d) {
+          text.textContent = `⏳ Parola generată: ${d}`;
+          text.classList.add('mono');
+          await navigator.clipboard.writeText(d).catch(() => {});
+          say('Parola generată a fost copiată.');
+        }
+      });
+      const no = document.createElement('button');
+      no.className = 'sec';
+      no.textContent = 'Renunță';
+      no.addEventListener('click', async () => {
+        await send({ type: 'applyPending', id: i.id, keep: false });
+        await load(true);
+      });
+      const yes = document.createElement('button');
+      yes.className = 'pri';
+      yes.textContent = 'Folosește-o';
+      yes.addEventListener('click', async () => {
+        const r = await send({ type: 'applyPending', id: i.id, keep: true });
+        if (r?.error) return say(r.error, true);
+        say('Parola generată e acum cea actuală; cea veche e în istoric.');
+        await load(true);
+      });
+      bar.append(show, no, yes);
+      note.append(text, bar);
+      wrap.append(row, note);
+      return wrap;
     }),
   );
 }

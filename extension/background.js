@@ -332,14 +332,74 @@ async function existingLogin(url, username, { change = false } = {}) {
 async function rememberGenerated(tabUrl, username, password) {
   const key = await dataKey();
   if (!key) return { result: 'locked' };
+  const session = await authSession();
   const old = await existingLogin(tabUrl, username, { change: true });
-  if (!old) return { result: 'none' };
-  if (old.pendingPassword === password) return { result: 'kept' };
-  const updated = { ...old, pendingPassword: password, updatedAt: Date.now() };
+  // Nu știm sigur contul (mai multe conturi pe site): o ținem minte la
+  // TOATE — e doar „neconfirmată”, nu înlocuiește nimic; o confirmi la cel
+  // corect. Niciun cont pe site: cont nou cu parola generată.
+  const all = (await items()) ?? [];
+  const targets = old
+    ? [old]
+    : all.filter((i) => i.type === 'login' && matches(i, tabUrl));
+  if (!targets.length) {
+    const m = {
+      ...newLogin(tabUrl, (username || '').trim(), password),
+      pendingPassword: password,
+      notes:
+        'Parolă generată de extensia Notițe. Dacă site-ul a acceptat-o, ' +
+        'confirm-o; altfel șterge contul.',
+    };
+    await writeItem(key, session, m);
+    return { result: 'kept', id: m.id, count: 1 };
+  }
+  for (const t of targets) {
+    if (t.pendingPassword === password) continue;
+    await writeItem(key, session, {
+      ...t,
+      pendingPassword: password,
+      updatedAt: Date.now(),
+    });
+  }
+  return { result: 'kept', count: targets.length };
+}
+
+/// Parola generată și neconfirmată devine cea actuală (cea veche → istoric).
+async function applyPending(id, keep) {
+  const key = await dataKey();
+  if (!key) return { error: 'Seiful e blocat.' };
+  const all = (await items()) ?? [];
+  const i = all.find((x) => x.id === id);
+  if (!i?.pendingPassword) return { error: 'Nu mai există parola generată.' };
+  const now = Date.now();
+  const p = i.pendingPassword;
+  const updated = keep
+    ? {
+        ...i,
+        password: p,
+        pendingPassword: '',
+        updatedAt: now,
+        passwordChangedAt: now,
+        passwordHistory: [
+          ...(i.password ? [{ password: i.password, until: now }] : []),
+          ...(i.passwordHistory ?? []).filter((h) => h.password !== p),
+        ].slice(0, 10),
+      }
+    : { ...i, pendingPassword: '', updatedAt: now };
   await writeItem(key, await authSession(), updated);
-  const { items: list = [] } = await getS('items');
-  await S.set({ items: list.map((i) => (i.id === old.id ? updated : i)) });
-  return { result: 'kept', id: old.id };
+  // aceeași parolă ținută minte și la alte conturi ale site-ului: o scoatem
+  if (keep) {
+    for (const o of all) {
+      if (o.id !== id && o.pendingPassword === p) {
+        await writeItem(key, await authSession(), {
+          ...o,
+          pendingPassword: '',
+          updatedAt: now,
+        });
+      }
+    }
+  }
+  await touch();
+  return { ok: true };
 }
 
 /// Parolele prinse și nesalvate expiră după 30 de minute.
@@ -493,6 +553,7 @@ function checkBreaches(list) {
 function publicItem(i, url, health = '') {
   return {
     health,
+    pending: !!i.pendingPassword,
     id: i.id,
     title: i.title || hostOf(i.url) || 'Fără titlu',
     username: i.username || '',
@@ -709,6 +770,18 @@ async function handle(msg, sender) {
       await touch();
       return { ok: true };
     }
+    case 'getPending': {
+      if (!fromExtension(sender)) return null;
+      const all = await items();
+      const i = all?.find((x) => x.id === msg.id);
+      if (!i?.pendingPassword) return null;
+      await touch();
+      await scheduleClipboardClear();
+      return i.pendingPassword;
+    }
+    case 'applyPending':
+      if (!fromExtension(sender)) return null;
+      return applyPending(msg.id, !!msg.keep);
     case 'deleteItem': {
       if (!fromExtension(sender)) return null;
       const key = await dataKey();
