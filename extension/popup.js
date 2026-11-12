@@ -40,6 +40,18 @@ const HEALTH_TIP = {
   green: 'În regulă',
 };
 
+/// Adresa site-ului (doar http/https), sau null.
+function siteUrl(raw) {
+  const u = (raw || '').trim();
+  if (!u) return null;
+  try {
+    const url = new URL(u.includes('://') ? u : `https://${u}`);
+    return /^https?:$/.test(url.protocol) && url.hostname.includes('.') ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 function render() {
   const q = $('q').value.trim().toLowerCase();
   const list = $('list');
@@ -69,6 +81,19 @@ function render() {
       s.className = 's';
       s.textContent = i.username || i.url;
       txt.append(t, s);
+      // clic pe nume / email → deschide site-ul într-o filă nouă
+      const site = siteUrl(i.url);
+      if (site) {
+        txt.classList.add('link');
+        txt.title = `Deschide ${site.host.replace(/^www\./, '')}`;
+        txt.tabIndex = 0;
+        const open = () => {
+          chrome.tabs.create({ url: site.href });
+          window.close();
+        };
+        txt.addEventListener('click', open);
+        txt.addEventListener('keydown', (e) => e.key === 'Enter' && open());
+      }
       row.append(txt);
       const btn = (label, title, fn) => {
         const b = document.createElement('button');

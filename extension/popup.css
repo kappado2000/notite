@@ -91,3 +91,7 @@ select {
 .dot.red { background: #D93025; }
 .dot.yellow { background: #E8A200; }
 .dot.green { background: #2E9E5B; }
+
+.it .txt.link { cursor: pointer; border-radius: 8px; padding: 2px 4px; margin: -2px -4px; }
+.it .txt.link:hover, .it .txt.link:focus { background: var(--accent-soft); outline: none; }
+.it .txt.link:hover .t { text-decoration: underline; }
