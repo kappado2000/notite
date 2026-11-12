@@ -171,6 +171,16 @@ void main() {
       expect(left.single.notes, 'din LastPass');
       expect(store.allSecrets, hasLength(2));
 
+      // același cont Yahoo sub mai multe adrese / forme ale utilizatorului
+      final y1 = login('Yahoo', 'https://login.yahoo.com', 'dr_x', 'p1');
+      final y2 = login('Yahoo Mail', 'https://mail.yahoo.com', 'DR_X', 'p2');
+      final y3 = login('www.yahoo.com', '', 'dr_x@yahoo.com', 'p3');
+      final other = login('Gmail', 'https://gmail.com', 'dr_x@yahoo.com', 'p4');
+      await store.addSecrets([y1, y2, y3, other]);
+      expect(await store.mergeDuplicateSecrets(), 2);
+      expect(store.allSecrets, hasLength(4));
+      store.allSecrets.firstWhere((i) => i.id == other.id); // neatins
+
       // routerul (rețeaua de acasă) nu se numără, deși parola e slabă
       expect(isLocalAccount(router), isTrue);
       final report = PasswordReport.of(store.allSecrets);

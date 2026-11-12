@@ -612,6 +612,7 @@ class _ChangeSheetState extends State<_ChangeSheet> {
   static const _keepFor = Duration(minutes: 3);
 
   bool _copiedOld = false;
+  bool _showOld = true;
 
   Future<void> _copyOld() async {
     HapticFeedback.selectionClick();
@@ -823,7 +824,44 @@ class _ChangeSheetState extends State<_ChangeSheet> {
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 8),
-            if (widget.item.password.isNotEmpty)
+            if (widget.item.password.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: scheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Parola actuală (veche)',
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                          SelectableText(
+                            _showOld ? widget.item.password : '•' * 10,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: _showOld ? 'Ascunde' : 'Arată',
+                      icon: Icon(
+                        _showOld ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () => setState(() => _showOld = !_showOld),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: _copyOld,
                 icon: Icon(
@@ -835,6 +873,7 @@ class _ChangeSheetState extends State<_ChangeSheet> {
                       : 'Copiază parola actuală (pentru conectare)',
                 ),
               ),
+            ],
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: site == null ? null : () => _open(site),
@@ -842,7 +881,7 @@ class _ChangeSheetState extends State<_ChangeSheet> {
               label: Text(
                 site == null
                     ? 'Site necunoscut — deschide-l manual'
-                    : 'Deschide site-ul (${site.host})',
+                    : 'Deschide — ${site.host.replaceFirst(RegExp(r'^www\.'), '')}',
               ),
             ),
             if (url != null)

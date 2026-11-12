@@ -147,13 +147,53 @@ bool isLocalAccount(SecretItem i) {
       h.endsWith('.lan');
 }
 
-/// Cheia unui cont pentru dubluri: același site (sau nume), utilizator și
-/// parolă.
+/// Numele „de bază” al unui site: login.yahoo.com, mail.yahoo.com,
+/// yahoo.com, yahoo.co.uk → „yahoo”. Fără adresă: primul cuvânt din titlu
+/// („Yahoo Mail” → „yahoo”).
+String siteBase(SecretItem i) {
+  final host = hostOf(i.url).split(':').first;
+  if (host.isEmpty) {
+    final words = i.title
+        .toLowerCase()
+        .split(RegExp(r'[^a-z0-9ăâîșțşţ]+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    if (words.isEmpty) return '';
+    final w = words.first;
+    // „www”, „https” din titluri ca „www.yahoo.com”
+    return (w == 'www' || w == 'https' || w == 'http') && words.length > 1
+        ? words[1]
+        : w;
+  }
+  return _domainLabel(host);
+}
+
+String _domainLabel(String host) {
+  if (RegExp(r'^[\d.]+$').hasMatch(host)) return host; // adresă IP
+  final p = host.split('.');
+  if (p.length < 2) return host;
+  const second = {'com', 'co', 'org', 'net', 'gov', 'edu', 'ac', 'nom'};
+  if (p.length >= 3 && p.last.length == 2 && second.contains(p[p.length - 2])) {
+    return p[p.length - 3];
+  }
+  return p[p.length - 2];
+}
+
+/// Utilizatorul pentru comparare: „dr_monipop@yahoo.com” pe Yahoo e tot
+/// „dr_monipop”.
+String _userKey(String username, String site) {
+  final u = username.trim().toLowerCase();
+  final at = u.indexOf('@');
+  if (at > 0 && _domainLabel(u.substring(at + 1)) == site) {
+    return u.substring(0, at);
+  }
+  return u;
+}
+
+/// Cheia unui cont pentru dubluri: același site (de bază) și utilizator.
 String _dupKey(SecretItem i) {
-  final site = hostOf(i.url).isNotEmpty
-      ? hostOf(i.url)
-      : i.title.trim().toLowerCase();
-  final user = i.username.trim().toLowerCase();
+  final site = siteBase(i);
+  final user = _userKey(i.username, site);
   // același site + același utilizator = același cont, chiar dacă parolele
   // diferă (o copie veche, ex. din import). Fără utilizator nu putem ști,
   // deci atunci doar parola identică le face dubluri.
