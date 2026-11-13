@@ -254,15 +254,17 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     message.isHidden = true
     table.isHidden = false
     let q = query.lowercased().trimmingCharacters(in: .whitespaces)
-    matching = Set(
-      logins.filter { l in
-        serviceHosts.contains { Self.sameSite($0, l.host) }
-      }.map(\.id))
+    matching = Set(logins.filter(isMatch).map(\.id))
+    // Fără căutare: DOAR conturile site-ului (ca „Parole” din iOS), cu
+    // „Arată toate conturile” dedesubt. Cu căutare: în toată lista.
+    let onlySite = q.isEmpty && !matching.isEmpty && !showAll
     shown =
       logins
       .filter {
-        q.isEmpty
-          || "\($0.title) \($0.user) \($0.host)".lowercased().contains(q)
+        onlySite
+          ? matching.contains($0.id)
+          : q.isEmpty
+            || "\($0.title) \($0.user) \($0.host)".lowercased().contains(q)
       }
       .sorted {
         let a = matching.contains($0.id), b = matching.contains($1.id)
@@ -275,15 +277,50 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     }
   }
 
+  private var showAll = false
+
+  /// Contul e pentru site-ul cerut: același domeniu sau, la conturile fără
+  /// adresă, numele site-ului în titlu („Hidroelectrica” ↔ hidroelectrica.ro).
+  private func isMatch(_ l: Login) -> Bool {
+    if serviceHosts.contains(where: { Self.sameSite($0, l.host) }) { return true }
+    guard l.host.isEmpty else { return false }
+    let title = l.title.lowercased().filter { $0.isLetter || $0.isNumber }
+    return serviceHosts.contains { h in
+      let label = Self.base(h).split(separator: ".").first.map(String.init) ?? ""
+      return label.count >= 4 && title.contains(label)
+    }
+  }
+
+  /// Rândul „Arată toate conturile” (doar când lista arată conturile site-ului).
+  private var hasMoreRow: Bool {
+    !showAll && (search.text ?? "").isEmpty && !matching.isEmpty
+      && matching.count < logins.count
+  }
+
   func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
     filter(searchText)
   }
 
+  func numberOfSections(in tableView: UITableView) -> Int {
+    hasMoreRow ? 2 : 1
+  }
+
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-    shown.count
+    section == 0 ? shown.count : 1
+  }
+
+  func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+    section == 0 && hasMoreRow ? "Conturi pentru acest site" : nil
   }
 
   func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    if indexPath.section == 1 {
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.textLabel?.text = "Arată toate conturile (\(logins.count))"
+      cell.textLabel?.textColor = .systemBlue
+      cell.imageView?.image = UIImage(systemName: "list.bullet")
+      return cell
+    }
     let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
     let l = shown[indexPath.row]
     cell.textLabel?.text = l.title.isEmpty ? l.host : l.title
@@ -296,6 +333,11 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   }
 
   func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    if indexPath.section == 1 {
+      showAll = true
+      filter(search.text ?? "")
+      return
+    }
     complete(shown[indexPath.row])
   }
 
