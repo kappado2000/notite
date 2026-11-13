@@ -132,26 +132,61 @@ export async function getKeysDoc(session) {
   return fromFields((await r.json()).fields ?? {});
 }
 
-/// Versiunea parolelor (`keys/secretsVersion`): crește la orice schimbare,
-/// din aplicație sau din extensie. O citire în loc de sute.
-export async function getSecretsVersion(session) {
+/// Jurnalul schimbărilor (`keys/secretsVersion`): `c` = { idCont: momentul
+/// ultimei schimbări }. Aplicația și extensia îl completează la orice
+/// salvare / ștergere; extensia citește apoi DOAR conturile schimbate.
+/// Conține doar identificatori aleatorii, nimic despre conturi.
+export async function getChanges(session) {
   const r = await fetch(`${DOCS}/users/${session.uid}/keys/secretsVersion`, {
     headers: auth(session),
   });
-  if (r.status === 404) return 0;
+  if (r.status === 404) return {};
   if (!r.ok) throw new Error(`Nu am putut citi versiunea (${r.status}).`);
   const f = fromFields((await r.json()).fields ?? {});
-  return Number(f.v ?? 0);
+  return f.c && typeof f.c === 'object' ? f.c : {};
 }
 
-export async function bumpSecretsVersion(session) {
-  const v = Date.now();
-  const r = await fetch(`${DOCS}/users/${session.uid}/keys/secretsVersion`, {
+/// Notează schimbarea contului [id]; întoarce momentul notat (0 = eșec).
+export async function markChanged(session, id) {
+  const at = Date.now();
+  const path = `c.\`${id}\``;
+  const url =
+    `${DOCS}/users/${session.uid}/keys/secretsVersion` +
+    `?updateMask.fieldPaths=v&updateMask.fieldPaths=${encodeURIComponent(path)}`;
+  const r = await fetch(url, {
     method: 'PATCH',
     headers: { ...auth(session), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: { v: { integerValue: String(v) } } }),
+    body: JSON.stringify({
+      fields: {
+        v: { integerValue: String(at) },
+        c: { mapValue: { fields: { [id]: { integerValue: String(at) } } } },
+      },
+    }),
   });
-  return r.ok ? v : 0;
+  return r.ok ? at : 0;
+}
+
+/// Doar anumite documente din `secrets` (o citire pentru fiecare).
+export async function getSecrets(session, ids) {
+  const base = `projects/${PROJECT}/databases/(default)/documents/users/${session.uid}/secrets`;
+  const r = await fetch(`${DOCS}:batchGet`, {
+    method: 'POST',
+    headers: { ...auth(session), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ documents: ids.map((id) => `${base}/${id}`) }),
+  });
+  if (!r.ok) throw new Error(`Nu am putut citi parolele (${r.status}).`);
+  const out = [];
+  for (const x of await r.json()) {
+    if (x.found) {
+      out.push({
+        id: x.found.name.split('/').pop(),
+        data: fromFields(x.found.fields ?? {}),
+      });
+    } else if (x.missing) {
+      out.push({ id: x.missing.split('/').pop(), data: { deleted: true } });
+    }
+  }
+  return out;
 }
 
 /// Toate documentele din `users/<uid>/secrets`: [{ id, data }].

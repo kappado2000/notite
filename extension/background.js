@@ -163,22 +163,37 @@ async function updateBadge() {
 
 // ------------------------------------------- conectare și deblocare
 
+/// Documentul criptat → cont (doar tipurile cu parolă), sau null.
+async function openDoc(key, d) {
+  if (d.data.deleted || !d.data.enc) return null;
+  try {
+    const m = await decryptMap(key, d.data.enc, `secrets/${d.id}`);
+    return LOGIN_TYPES.has(m.type) ? m : null;
+  } catch {
+    return null; // document stricat sau al altei chei
+  }
+}
+
+/// Recitire completă (la deblocare, la 6 ore sau după multe schimbări).
 async function loadItems(key, session) {
-  const version = await fb.getSecretsVersion(session).catch(() => 0);
+  const changes = await fb.getChanges(session).catch(() => null);
   const docs = await fb.listSecrets(session);
   const items = [];
   for (const d of docs) {
-    if (d.data.deleted || !d.data.enc) continue;
-    try {
-      const m = await decryptMap(key, d.data.enc, `secrets/${d.id}`);
-      if (LOGIN_TYPES.has(m.type)) items.push(m);
-    } catch {
-      // document stricat sau al altei chei: îl ignorăm
-    }
+    const m = await openDoc(key, d);
+    if (m) items.push(m);
   }
-  await S.set({ items, itemsAt: Date.now(), itemsVersion: version, checkedAt: Date.now() });
+  await S.set({
+    items,
+    itemsAt: Date.now(),
+    seenChanges: changes,
+    checkedAt: Date.now(),
+  });
   return items;
 }
+
+/// Cel mult atâtea conturi schimbate citite unul câte unul; peste, recitim tot.
+const MAX_DELTA = 50;
 
 async function openVault(password, session) {
   let keys;
@@ -233,25 +248,41 @@ async function logout() {
 async function items({ fresh = false } = {}) {
   const key = await dataKey();
   if (!key) return null;
-  // Citim TOATE parolele doar dacă s-a schimbat ceva (versiunea din
-  // keys/secretsVersion), verificată cel mult o dată pe minut — altfel
-  // cota zilnică Firebase (50.000 de citiri) se termină repede.
+  // Cota zilnică Firebase (50.000 de citiri): cel mult o dată pe minut
+  // citim jurnalul schimbărilor (1 citire) și apoi DOAR conturile schimbate.
   const {
     items = [],
-    itemsVersion = -1,
+    seenChanges = null,
     checkedAt = 0,
     itemsAt = 0,
-  } = await getS('items', 'itemsVersion', 'checkedAt', 'itemsAt');
+  } = await getS('items', 'seenChanges', 'checkedAt', 'itemsAt');
   if (!fresh && Date.now() - checkedAt < 60 * 1000) return items;
   try {
     const session = await authSession();
-    const v = await fb.getSecretsVersion(session);
-    await S.set({ checkedAt: Date.now() });
-    // și o recitire completă la 6 ore (schimbări din versiuni vechi ale
-    // aplicației, care nu actualizează versiunea)
-    const recent = Date.now() - itemsAt < 6 * 60 * 60 * 1000;
-    if (v === itemsVersion && itemsVersion !== -1 && recent) return items;
-    return await loadItems(key, session);
+    // recitire completă la 6 ore (schimbări din versiuni vechi ale
+    // aplicației, care nu completează jurnalul)
+    if (!seenChanges || Date.now() - itemsAt > 6 * 60 * 60 * 1000) {
+      return await loadItems(key, session);
+    }
+    const now = await fb.getChanges(session);
+    const changed = Object.keys(now).filter(
+      (id) => now[id] !== seenChanges[id],
+    );
+    if (!changed.length) {
+      await S.set({ checkedAt: Date.now() });
+      return items;
+    }
+    if (changed.length > MAX_DELTA) return await loadItems(key, session);
+    const docs = await fb.getSecrets(session, changed);
+    const byId = new Map(items.map((i) => [i.id, i]));
+    for (const d of docs) {
+      const m = await openDoc(key, d);
+      if (m) byId.set(d.id, m);
+      else byId.delete(d.id);
+    }
+    const list = [...byId.values()];
+    await S.set({ items: list, seenChanges: now, checkedAt: Date.now() });
+    return list;
   } catch {
     return items; // fără internet / cotă depășită: ce avem
   }
@@ -263,14 +294,18 @@ async function writeItem(key, session, m) {
   await fb.putSecret(session, m.id, await encryptMap(key, m, `secrets/${m.id}`));
   const { items = [] } = await getS('items');
   await S.set({ items: [...items.filter((i) => i.id !== m.id), m] });
-  await bumpVersion(session);
+  await bumpVersion(session, m.id);
 }
 
-/// După o scriere: anunță aplicația (versiune nouă) și ține copia locală
-/// la zi fără să recitim totul.
-async function bumpVersion(session) {
-  const v = await fb.bumpSecretsVersion(session).catch(() => 0);
-  if (v) await S.set({ itemsVersion: v, checkedAt: Date.now() });
+/// După o scriere: o notează în jurnal (aplicația și celelalte browsere o
+/// află) și în copia noastră, ca să nu o recitim noi înșine.
+async function bumpVersion(session, id) {
+  const at = await fb.markChanged(session, id).catch(() => 0);
+  if (!at) return;
+  const { seenChanges } = await getS('seenChanges');
+  if (seenChanges) {
+    await S.set({ seenChanges: { ...seenChanges, [id]: at } });
+  }
 }
 
 function newLogin(url, username, password) {
@@ -491,7 +526,7 @@ async function undo(u) {
     await fb.deleteSecret(session, u.remove);
     const { items = [] } = await getS('items');
     await S.set({ items: items.filter((i) => i.id !== u.remove) });
-    await bumpVersion(session);
+    await bumpVersion(session, u.remove);
   } else if (u.restore) {
     await writeItem(key, session, { ...u.restore, updatedAt: Date.now() });
   }
@@ -825,7 +860,7 @@ async function handle(msg, sender) {
       await fb.deleteSecret(sess, msg.id);
       const { items: list = [] } = await getS('items');
       await S.set({ items: list.filter((i) => i.id !== msg.id) });
-      await bumpVersion(sess);
+      await bumpVersion(sess, msg.id);
       await touch();
       return { ok: true };
     }

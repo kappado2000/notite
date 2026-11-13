@@ -239,26 +239,31 @@ class FirestoreSync implements SyncSink {
   @override
   void secretChanged(SecretItem item) {
     _put('secrets', item.id, item.toMap());
-    _bumpSecretsVersion();
+    _bumpSecretsVersion(item.id);
   }
 
   @override
   void secretDeleted(String id) {
     _tombstone('secrets', id);
-    _bumpSecretsVersion();
+    _bumpSecretsVersion(id);
   }
 
-  /// `keys/secretsVersion`: extensia browserului citește doar acest document
-  /// ca să afle dacă s-a schimbat ceva, în loc să recitească toate parolele
-  /// (cota zilnică gratuită Firebase are 50.000 de citiri).
-  void _bumpSecretsVersion() {
+  /// `keys/secretsVersion` = jurnalul schimbărilor: `c` = {idCont: moment}.
+  /// Extensia browserului îl citește (1 citire) și apoi doar conturile
+  /// schimbate, în loc să recitească toate parolele (cota zilnică gratuită
+  /// Firebase are 50.000 de citiri). Conține doar identificatori aleatorii.
+  void _bumpSecretsVersion(String id) {
+    final at = _now;
     _enqueue(
       () => _db
           .collection('users')
           .doc(store.uid)
           .collection('keys')
           .doc('secretsVersion')
-          .set({'v': _now}),
+          .set({
+            'v': at,
+            'c': {id: at},
+          }, SetOptions(merge: true)),
     );
   }
 
