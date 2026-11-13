@@ -117,9 +117,7 @@
             `<div class="item" tabindex="0" data-otp="${esc(i.code)}"><span class="t">${esc(i.code.replace(/(\d{3})(?=\d)/g, '$1 '))}</span><span class="s">${esc(i.username || i.title)} · încă ${i.remaining} s</span></div>`,
         )
         .join('');
-    const rect = field.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - 350))}px`;
-    menu.style.top = `${Math.min(rect.bottom + 6, innerHeight - 60)}px`;
+    place(field);
     attach();
     menu.hidden = false;
     menuFor = field;
@@ -207,8 +205,9 @@
       * { box-sizing: border-box; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
       .menu { position: fixed; min-width: 260px; max-width: 340px; background: #fff; color: #22261F;
         border: 1px solid #b9c7bd; border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18);
-        padding: 6px; font-size: 14px; }
-      .head { display:flex; align-items:center; gap:6px; padding: 6px 8px 8px; font-size: 12px;
+        padding: 6px; font-size: 14px; overflow-y: auto; overscroll-behavior: contain; }
+      .head { position: sticky; top: -6px; background: inherit; z-index: 1;
+        display:flex; align-items:center; gap:6px; padding: 6px 8px 8px; font-size: 12px;
         font-weight: 700; color: #3F8F6B; letter-spacing: .3px; }
       .item { display:flex; flex-direction:column; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
       .item:hover, .item:focus { background: #E7F2EC; outline: none; }
@@ -241,6 +240,24 @@
     String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
   let menuFor = null;
+
+  /// Sub câmp (sau deasupra, dacă jos nu e loc), cât încape pe ecran;
+  /// lista lungă se derulează în interiorul panoului.
+  function place(field) {
+    const rect = field.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - 350))}px`;
+    const below = innerHeight - rect.bottom - 14;
+    const above = rect.top - 14;
+    if (below >= 220 || below >= above) {
+      menu.style.top = `${rect.bottom + 6}px`;
+      menu.style.bottom = '';
+      menu.style.maxHeight = `${Math.max(140, below)}px`;
+    } else {
+      menu.style.top = '';
+      menu.style.bottom = `${innerHeight - rect.top + 6}px`;
+      menu.style.maxHeight = `${Math.max(140, above)}px`;
+    }
+  }
 
   function hideMenu() {
     menu.hidden = true;
@@ -291,9 +308,7 @@ const HEALTH_TIP = {
     }
     if (!parts.length) return hideMenu();
     menu.innerHTML = `<div class="head">🔑 Notițe</div>${parts.join('')}`;
-    const rect = field.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - 350))}px`;
-    menu.style.top = `${Math.min(rect.bottom + 6, innerHeight - 60)}px`;
+    place(field);
     attach();
     menu.hidden = false;
     menuFor = field;
@@ -340,25 +355,36 @@ const HEALTH_TIP = {
     hideMenu();
   });
 
-  document.addEventListener(
-    'focusin',
+  function maybeShow(el) {
+    if (!(el instanceof HTMLInputElement)) return;
+    if (isOtpField(el)) {
+      showOtpMenu(el);
+      return;
+    }
+    const isPw = isPasswordField(el);
+    const isUser = !isPw && el.matches(USER_SEL) && (passwordFields().length > 0 || /user|mail|login|email/i.test(`${el.name} ${el.id} ${el.autocomplete}`));
+    if (isPw || isUser) showMenu(el);
+  }
+
+  document.addEventListener('focusin', (e) => maybeShow(e.target), true);
+  document.addEventListener('click', (e) => {
+    if (host.contains(e.target) || e.target === host) return;
+    // clic din nou în câmpul deja selectat: panoul reapare
+    if (e.target instanceof HTMLInputElement && menu.hidden) {
+      maybeShow(e.target);
+      return;
+    }
+    if (menuFor && e.target !== menuFor) hideMenu();
+  }, true);
+  // derularea paginii ascunde panoul; derularea ÎN panou (lista lungă), nu
+  addEventListener(
+    'scroll',
     (e) => {
-      const el = e.target;
-      if (!(el instanceof HTMLInputElement)) return;
-      if (isOtpField(el)) {
-        showOtpMenu(el);
-        return;
-      }
-      const isPw = isPasswordField(el);
-      const isUser = !isPw && el.matches(USER_SEL) && (passwordFields().length > 0 || /user|mail|login|email/i.test(`${el.name} ${el.id} ${el.autocomplete}`));
-      if (isPw || isUser) showMenu(el);
+      if (e.target === host || host.contains(e.target)) return;
+      hideMenu();
     },
     true,
   );
-  document.addEventListener('click', (e) => {
-    if (menuFor && e.target !== menuFor && !host.contains(e.target)) hideMenu();
-  }, true);
-  addEventListener('scroll', hideMenu, true);
 
   // ----------------------------------------------- prinderea parolei
 
