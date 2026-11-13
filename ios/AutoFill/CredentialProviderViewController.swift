@@ -254,7 +254,13 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     message.isHidden = true
     table.isHidden = false
     let q = query.lowercased().trimmingCharacters(in: .whitespaces)
-    matching = Set(logins.filter(isMatch).map(\.id))
+    // Aplicațiile fără domeniu web (ex. iHidro) nu spun ce cont caută:
+    // atunci arătăm conturile folosite recent în completarea automată.
+    let recent = serviceHosts.isEmpty ? Self.recentIds : []
+    matching =
+      serviceHosts.isEmpty
+      ? Set(recent).intersection(logins.map(\.id))
+      : Set(logins.filter(isMatch).map(\.id))
     // Fără căutare: DOAR conturile site-ului (ca „Parole” din iOS), cu
     // „Arată toate conturile” dedesubt. Cu căutare: în toată lista.
     let onlySite = q.isEmpty && !matching.isEmpty && !showAll
@@ -269,6 +275,9 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
       .sorted {
         let a = matching.contains($0.id), b = matching.contains($1.id)
         if a != b { return a }
+        if a, let i = recent.firstIndex(of: $0.id), let j = recent.firstIndex(of: $1.id) {
+          return i < j
+        }
         return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
       }
     table.reloadData()
@@ -310,7 +319,10 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   }
 
   func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-    section == 0 && hasMoreRow ? "Conturi pentru acest site" : nil
+    guard section == 0 && hasMoreRow else { return nil }
+    return serviceHosts.isEmpty
+      ? "Folosite recent (aplicația nu spune ce cont caută)"
+      : "Conturi pentru acest site"
   }
 
   func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -338,7 +350,22 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
       filter(search.text ?? "")
       return
     }
+    Self.rememberRecent(shown[indexPath.row].id)
     complete(shown[indexPath.row])
+  }
+
+  // MARK: - Folosite recent (doar identificatori, în grupul aplicației)
+
+  private static let recentKey = "autofill.recent"
+
+  static var recentIds: [String] {
+    UserDefaults(suiteName: AutofillVault.group)?.stringArray(forKey: recentKey) ?? []
+  }
+
+  static func rememberRecent(_ id: String) {
+    let d = UserDefaults(suiteName: AutofillVault.group)
+    let list = [id] + recentIds.filter { $0 != id }
+    d?.set(Array(list.prefix(10)), forKey: recentKey)
   }
 
   // MARK: - Site-uri
