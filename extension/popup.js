@@ -52,18 +52,48 @@ function siteUrl(raw) {
   }
 }
 
+/// Un cont deschis pentru editare / ștergere: actualizările din fundal nu
+/// redesenează lista (altfel formularul s-ar închide singur).
+let editing = false;
+let healthFilter = '';
+
+function renderFilters() {
+  const box = $('filters');
+  if (!box) return;
+  const red = all.filter((i) => i.health === 'red').length;
+  const yellow = all.filter((i) => i.health === 'yellow').length;
+  const chip = (value, label) => {
+    const b = document.createElement('button');
+    b.className = `chip${healthFilter === value ? ' on' : ''}`;
+    b.textContent = label;
+    b.addEventListener('click', () => {
+      healthFilter = healthFilter === value ? '' : value;
+      render();
+    });
+    return b;
+  };
+  box.replaceChildren(
+    ...(red ? [chip('red', `🔴 Compromise (${red})`)] : []),
+    ...(yellow ? [chip('yellow', `🟡 Slabe / refolosite (${yellow})`)] : []),
+  );
+}
+
 function render() {
+  editing = false;
+  renderFilters();
   const q = $('q').value.trim().toLowerCase();
   const list = $('list');
   const shown = all.filter(
-    (i) => !q || `${i.title} ${i.username} ${i.url}`.toLowerCase().includes(q),
+    (i) =>
+      (!healthFilter || i.health === healthFilter) &&
+      (!q || `${i.title} ${i.username} ${i.url}`.toLowerCase().includes(q)),
   );
   if (!shown.length) {
     list.innerHTML = `<div class="empty">${all.length ? 'Niciun rezultat' : 'Nicio parolă salvată încă.'}</div>`;
     return;
   }
   list.replaceChildren(
-    ...shown.slice(0, 200).map((i) => {
+    ...shown.map((i) => {
       const row = document.createElement('div');
       row.className = `it${i.match ? ' match' : ''}`;
       const txt = document.createElement('div');
@@ -179,7 +209,9 @@ function render() {
 
 /// Editare pe loc: nume, utilizator, parolă, site.
 async function editRow(row, i) {
+  editing = true; // înainte de așteptare: o actualizare din fundal nu-l mai închide
   const d = await send({ type: 'getItem', id: i.id });
+  if (!row.isConnected) return;
   if (!d) return say('Nu am găsit contul.', true);
   const form = document.createElement('form');
   form.className = 'edit';
@@ -238,6 +270,7 @@ async function editRow(row, i) {
     );
     await load(true);
   });
+  editing = true;
   row.replaceWith(form);
   form.querySelector('input').focus();
 }
@@ -264,6 +297,7 @@ function confirmDelete(row, i) {
   });
   bar.append(no, yes);
   box.append(text, bar);
+  editing = true;
   row.replaceWith(box);
 }
 
@@ -329,13 +363,18 @@ async function renderPending() {
 async function load(fresh = false) {
   all = (await send({ type: 'list', url: await activeUrl(), fresh })) ?? [];
   render();
-  // verificarea scurgerilor rulează în fundal: culorile se actualizează
+  // verificarea scurgerilor rulează în fundal (sute de conturi durează):
+  // culorile se actualizează de câteva ori, fără să închidă o editare
   if (!fresh && !load.again) {
     load.again = true;
-    setTimeout(async () => {
-      all = (await send({ type: 'list', url: await activeUrl() })) ?? all;
-      render();
-    }, 5000);
+    for (const ms of [4000, 12000, 30000, 60000]) {
+      setTimeout(async () => {
+        const next = await send({ type: 'list', url: await activeUrl() }).catch(() => null);
+        if (!next) return;
+        all = next;
+        if (!editing) render();
+      }, ms);
+    }
   }
 }
 

@@ -105,3 +105,8 @@ form.edit .row { display: flex; gap: 6px; justify-content: flex-end; }
 button.danger { background: #D93025 !important; color: #fff !important; }
 
 .pend .mono { font-family: ui-monospace, Consolas, monospace; word-break: break-all; user-select: all; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.filters:empty { display: none; }
+.chip { background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
+.chip.on { background: var(--accent-soft); border-color: var(--accent); }
