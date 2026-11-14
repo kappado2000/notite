@@ -270,6 +270,51 @@ class _SecretsScreenState extends State<SecretsScreen>
     }
   }
 
+  /// Lista celor care expiră curând; atingerea deschide intrarea.
+  void _showExpiring(List<SecretItem> soon) {
+    if (soon.length == 1) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => SecretDetailScreen(id: soon.first.id),
+        ),
+      );
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                'Expiră curând',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+            ),
+            for (final i in soon)
+              ListTile(
+                leading: SecretAvatar(item: i),
+                title: Text(i.displayTitle),
+                subtitle: Text('Expiră ${formatShortDate(i.expiresOn!)}'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => SecretDetailScreen(id: i.id),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _unlockBiometric() async {
     if (_busy) return;
     setState(() => _busy = true);
@@ -755,67 +800,48 @@ class _SecretsScreenState extends State<SecretsScreen>
                   ),
                 ),
               ),
-            if (report.problems > 0)
-              Card(
-                margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-                color: Theme.of(context).colorScheme.errorContainer,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  side: BorderSide(
-                    color: Theme.of(context).colorScheme.error
-                        .withValues(alpha: 0.55),
-                  ),
-                ),
-                child: ListTile(
-                  leading: const Icon(Icons.health_and_safety_outlined),
-                  title: Text(
-                    '${report.accounts} '
-                    '${report.accounts == 1 ? 'cont de reparat' : 'conturi de reparat'}',
-                  ),
-                  subtitle: const Text(
-                    'Parole slabe, repetate sau vechi · apasă ca să le '
-                    'repari pe rând',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const PasswordFixScreen(),
-                    ),
-                  ),
-                ),
-              ),
-            if (soon.isNotEmpty && _type == null && _query.isEmpty)
-              Card(
-                margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-                color: Theme.of(context).colorScheme.secondaryContainer,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  side: BorderSide(
-                    color: Theme.of(context).colorScheme.secondary
-                        .withValues(alpha: 0.55),
-                  ),
-                ),
-                child: ListTile(
-                  leading: const Icon(Icons.event_busy_outlined),
-                  title: Text(
-                    soon.length == 1
-                        ? '${soon.first.displayTitle} expiră curând'
-                        : '${soon.length} intrări expiră curând',
-                  ),
-                  subtitle: Text(
-                    [
-                      for (final i in soon.take(3))
-                        '${i.displayTitle}: ${formatShortDate(i.expiresOn!)}',
-                    ].join('\n'),
-                  ),
-                  onTap: soon.length == 1
-                      ? () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                SecretDetailScreen(id: soon.first.id),
+            if (report.problems > 0 ||
+                (soon.isNotEmpty && _type == null && _query.isEmpty))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (report.problems > 0)
+                      Expanded(
+                        child: _AlertCard(
+                          icon: Icons.health_and_safety_outlined,
+                          color: Theme.of(context).colorScheme.errorContainer,
+                          border: Theme.of(context).colorScheme.error,
+                          title:
+                              '${report.accounts} '
+                              '${report.accounts == 1 ? 'cont de reparat' : 'conturi de reparat'}',
+                          subtitle: 'Slabe, repetate, vechi',
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const PasswordFixScreen(),
+                            ),
                           ),
-                        )
-                      : null,
+                        ),
+                      ),
+                    if (soon.isNotEmpty && _type == null && _query.isEmpty)
+                      Expanded(
+                        child: _AlertCard(
+                          icon: Icons.event_busy_outlined,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .secondaryContainer,
+                          border: Theme.of(context).colorScheme.secondary,
+                          title: '${soon.length} expiră curând',
+                          subtitle: [
+                            '${soon.first.displayTitle} · '
+                                '${formatShortDate(soon.first.expiresOn!)}',
+                            if (soon.length > 1) '+${soon.length - 1}',
+                          ].join(' '),
+                          onTap: () => _showExpiring(soon),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             if (_type == SecretType.subscription && monthly.isNotEmpty)
@@ -1235,6 +1261,72 @@ class SecretTile extends StatelessWidget {
                 ),
               ),
             ),
+      ),
+    );
+  }
+}
+
+/// Card mic de avertizare (conturi de reparat / expiră curând); două încap
+/// pe un rând.
+class _AlertCard extends StatelessWidget {
+  const _AlertCard({
+    required this.icon,
+    required this.color,
+    required this.border,
+    required this.title,
+    required this.subtitle,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final Color border;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      color: color,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: border.withValues(alpha: 0.55)),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 14, 10, 14),
+          child: Row(
+            children: [
+              Icon(icon),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleSmall,
+                    ),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              if (onTap != null) const Icon(Icons.chevron_right, size: 20),
+            ],
+          ),
+        ),
       ),
     );
   }
