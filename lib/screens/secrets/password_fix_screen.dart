@@ -246,6 +246,9 @@ class _PasswordFixScreenState extends State<PasswordFixScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('„${i.displayTitle}” nu mai e verificat.'),
+        // cu buton „Anulează” Flutter îl ține altfel pe ecran până îl închizi
+        persist: false,
+        duration: const Duration(seconds: 5),
         action: SnackBarAction(
           label: 'Anulează',
           onPressed: () => _ignore(i, false),
