@@ -159,6 +159,9 @@ function render() {
       if (i.hasTotp) {
         btn('🔢', 'Copiază codul 2FA', () => copy(i.id, 'totp'));
       }
+      if (i.username || i.hasPassword) {
+        btn('📤', 'Trimite (WhatsApp, email, SMS)', () => shareRow(row, i));
+      }
       btn('✏️', 'Editează contul', () => editRow(row, i));
       btn('🗑️', 'Șterge contul', () => confirmDelete(row, i));
       if (!i.pending) return row;
@@ -273,6 +276,81 @@ async function editRow(row, i) {
   editing = true;
   row.replaceWith(form);
   form.querySelector('input').focus();
+}
+
+/// Trimite utilizatorul și parola pe WhatsApp, email sau SMS.
+async function shareRow(row, i) {
+  editing = true;
+  const d = await send({ type: 'getItem', id: i.id });
+  if (!d) return say('Nu am găsit contul.', true);
+  if (!row.isConnected) return;
+  const box = document.createElement('div');
+  box.className = 'pend share';
+  const opt = (label, checked) => {
+    const l = document.createElement('label');
+    const c = document.createElement('input');
+    c.type = 'checkbox';
+    c.checked = checked;
+    l.append(c, ` ${label}`);
+    box.append(l);
+    return c;
+  };
+  const title = document.createElement('div');
+  title.innerHTML = `<b></b>`;
+  title.firstChild.textContent = `Trimite „${d.title || i.title}”`;
+  box.append(title);
+  const withPw = d.password ? opt('Include parola', true) : { checked: false };
+  const withSite = d.url ? opt('Include site-ul', true) : { checked: false };
+  const preview = document.createElement('pre');
+  preview.className = 'mono';
+  const warn = document.createElement('div');
+  warn.className = 'warn';
+  warn.textContent =
+    'Mesajul pleacă necriptat. După ce a fost folosit, șterge-l din conversație la amândoi.';
+  const text = () =>
+    [
+      d.title || i.title,
+      withSite.checked && d.url ? `Site: ${d.url}` : '',
+      d.username ? `Utilizator: ${d.username}` : '',
+      withPw.checked && d.password ? `Parolă: ${d.password}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  const update = () => {
+    preview.textContent = text();
+    warn.hidden = !withPw.checked;
+  };
+  box.addEventListener('change', update);
+  update();
+  const bar = document.createElement('div');
+  bar.className = 'row';
+  const go = (label, url) => {
+    const b = document.createElement('button');
+    b.className = 'sec';
+    b.textContent = label;
+    b.addEventListener('click', () => {
+      chrome.tabs.create({ url: url(encodeURIComponent(text())) });
+      window.close();
+    });
+    bar.append(b);
+  };
+  go('WhatsApp', (t) => `https://wa.me/?text=${t}`);
+  go('Email', (t) => `mailto:?subject=${encodeURIComponent(d.title || i.title)}&body=${t}`);
+  go('SMS', (t) => `sms:?body=${t}`);
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'sec';
+  copyBtn.textContent = 'Copiază';
+  copyBtn.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(text());
+    say('Textul a fost copiat.');
+  });
+  const close = document.createElement('button');
+  close.className = 'pri';
+  close.textContent = 'Închide';
+  close.addEventListener('click', () => render());
+  bar.append(copyBtn, close);
+  box.append(preview, warn, bar);
+  row.replaceWith(box);
 }
 
 function confirmDelete(row, i) {

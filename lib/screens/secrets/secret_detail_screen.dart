@@ -12,6 +12,7 @@ import '../../services/totp.dart';
 import '../../utils/format.dart';
 import '../../widgets/pickers.dart';
 import 'secret_edit_screen.dart';
+import 'share_credentials.dart';
 import 'secret_widgets.dart';
 
 /// Un câmp afișat: etichetă, valoare, dacă e secret, ce se copiază.
@@ -129,6 +130,12 @@ class SecretDetailScreen extends StatelessWidget {
               store.saveSecret(copy);
             },
           ),
+          if (item.username.isNotEmpty || item.password.isNotEmpty)
+            IconButton(
+              tooltip: 'Trimite (WhatsApp, email, SMS)',
+              icon: const Icon(Icons.send_outlined),
+              onPressed: () => shareCredentials(context, item),
+            ),
           IconButton(
             tooltip: 'Editează',
             icon: const Icon(Icons.edit_outlined),
