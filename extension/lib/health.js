@@ -44,6 +44,8 @@ export async function pwned(hash) {
 /// 'red' | 'yellow' | 'green' pentru fiecare parolă dintr-o listă.
 export function healthOf(item, reuseCount, breaches, hash) {
   if (!item.password) return '';
+  // „Ignoră” din aplicație: nu mai e semnalat ca problemă
+  if (item.ignoreHealth) return 'ignored';
   if (hash && breaches[hash] === true) return 'red';
   if (isWeak(item.password) || (reuseCount.get(item.password) ?? 0) > 1) return 'yellow';
   return 'green';

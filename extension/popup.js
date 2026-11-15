@@ -38,6 +38,7 @@ const HEALTH_TIP = {
   red: 'Compromisă: apare în scurgeri de date — schimb-o',
   yellow: 'Slabă sau folosită și la alt cont',
   green: 'În regulă',
+  ignored: 'Ignorat în aplicație (nu mai e verificat)',
 };
 
 /// Adresa site-ului (doar http/https), sau null.

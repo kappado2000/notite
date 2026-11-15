@@ -62,6 +62,9 @@ class _SecretsScreenState extends State<SecretsScreen>
 
   /// null = toate; altfel un tip anume.
   SecretType? _type;
+
+  /// În „Conturi”: subcategoria deschisă (null = lista subcategoriilor).
+  LoginCategory? _category;
   bool _favorites = false;
 
   /// Codul de 6 cifre (pe acest dispozitiv).
@@ -756,6 +759,7 @@ class _SecretsScreenState extends State<SecretsScreen>
                         selected: _type == null && !_favorites,
                         onTap: () => setState(() {
                           _type = null;
+                          _category = null;
                           _favorites = false;
                         }),
                       ),
@@ -770,6 +774,7 @@ class _SecretsScreenState extends State<SecretsScreen>
                           onTap: () => setState(() {
                             _favorites = false;
                             _type = _type == t ? null : t;
+                            _category = null;
                           }),
                         ),
                     ],
@@ -955,7 +960,10 @@ class _SecretsScreenState extends State<SecretsScreen>
     final tint = secretTint(context, t);
     final accent = tint.onContainer(context);
     final sorted = _alphabetical(list);
-    void open() => setState(() => _type = t);
+    void open() => setState(() {
+      _type = t;
+      _category = null;
+    });
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
@@ -1046,53 +1054,113 @@ class _SecretsScreenState extends State<SecretsScreen>
               ),
               tint.themed(context, _swipe(i, SecretTile(item: i, plain: true))),
             ]
-          else
+          else if (_query.trim().isEmpty && _category == null)
+            // întâi subcategoriile (Email, Rețele sociale, Bănci…), cu câte
+            // conturi are fiecare; atingerea deschide subcategoria
             for (final c in LoginCategory.values)
-              if (sorted.where((i) => loginCategory(i) == c).toList()
-                  case final group when group.isNotEmpty) ...[
-                // titlul subgrupei: iconiță, nume, câte sunt
-                Container(
-                  color: tint.container(context).withValues(alpha: 0.55),
-                  padding: const EdgeInsets.fromLTRB(16, 9, 16, 7),
-                  child: Row(
+              if (sorted.where((i) => loginCategory(i) == c).length case final n
+                  when n > 0) ...[
+                Divider(
+                  height: 1,
+                  indent: 16,
+                  endIndent: 16,
+                  color: accent.withValues(alpha: 0.15),
+                ),
+                ListTile(
+                  leading: Icon(c.icon, color: accent),
+                  title: Text(
+                    c.label,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(c.icon, size: 17, color: accent),
-                      const SizedBox(width: 8),
                       Text(
-                        c.label.toUpperCase(),
+                        '$n',
                         style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
+                          fontWeight: FontWeight.w700,
                           color: accent,
                         ),
                       ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.chevron_right, color: accent),
+                    ],
+                  ),
+                  onTap: () => setState(() => _category = c),
+                ),
+              ] else
+                ...[]
+          else ...[
+            if (_category != null && _query.trim().isEmpty)
+              InkWell(
+                onTap: () => setState(() => _category = null),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 16, 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.arrow_back, size: 18, color: accent),
                       const SizedBox(width: 6),
                       Text(
-                        '${group.length}',
+                        'Toate categoriile',
                         style: TextStyle(
-                          fontSize: 12.5,
+                          color: accent,
                           fontWeight: FontWeight.w600,
-                          color: accent.withValues(alpha: 0.75),
                         ),
                       ),
                     ],
                   ),
                 ),
-                for (final (n, i) in group.indexed) ...[
-                  if (n > 0)
-                    Divider(
-                      height: 1,
-                      indent: 16,
-                      endIndent: 16,
-                      color: accent.withValues(alpha: 0.15),
+              ),
+            for (final c in LoginCategory.values)
+              if (_category == null ||
+                  _category == c ||
+                  _query.trim().isNotEmpty)
+                if (sorted.where((i) => loginCategory(i) == c).toList()
+                    case final group when group.isNotEmpty) ...[
+                  // titlul subgrupei: iconiță, nume, câte sunt
+                  Container(
+                    color: tint.container(context).withValues(alpha: 0.55),
+                    padding: const EdgeInsets.fromLTRB(16, 9, 16, 7),
+                    child: Row(
+                      children: [
+                        Icon(c.icon, size: 17, color: accent),
+                        const SizedBox(width: 8),
+                        Text(
+                          c.label.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                            color: accent,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${group.length}',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: accent.withValues(alpha: 0.75),
+                          ),
+                        ),
+                      ],
                     ),
-                  tint.themed(
-                    context,
-                    _swipe(i, SecretTile(item: i, plain: true)),
                   ),
+                  for (final (n, i) in group.indexed) ...[
+                    if (n > 0)
+                      Divider(
+                        height: 1,
+                        indent: 16,
+                        endIndent: 16,
+                        color: accent.withValues(alpha: 0.15),
+                      ),
+                    tint.themed(
+                      context,
+                      _swipe(i, SecretTile(item: i, plain: true)),
+                    ),
+                  ],
                 ],
-              ],
+          ],
         ],
       ),
     );

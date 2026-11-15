@@ -213,7 +213,7 @@
       .item:hover, .item:focus { background: #E7F2EC; outline: none; }
       .t { font-weight: 600; }
       .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:1px; }
-      .dot.red { background:#D93025; } .dot.yellow { background:#E8A200; } .dot.green { background:#2E9E5B; } .s { font-size: 12px; color: #5E6559; }
+      .dot.red { background:#D93025; } .dot.yellow { background:#E8A200; } .dot.green { background:#2E9E5B; } .dot.ignored { background:#9AA0A6; } .s { font-size: 12px; color: #5E6559; }
       .note { padding: 8px 10px; font-size: 13px; color: #5E6559; }
       .toast { position: fixed; top: 16px; right: 16px; width: 340px; background: #fff; color: #22261F;
         border: 1px solid #3F8F6B; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.2);
@@ -268,6 +268,7 @@ const HEALTH_TIP = {
   red: 'Compromisă: apare în scurgeri de date — schimb-o',
   yellow: 'Slabă sau folosită și la alt cont',
   green: 'În regulă',
+  ignored: 'Ignorat în aplicație (nu mai e verificat)',
 };
 
   let lastGenerated = '';
