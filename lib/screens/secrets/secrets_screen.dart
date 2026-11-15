@@ -494,6 +494,21 @@ class _SecretsScreenState extends State<SecretsScreen>
             ),
           if (_unlocked)
             IconButton(
+              tooltip: context.watch<AppSettings>().secretsHeaderHidden
+                  ? 'Arată cardurile de sus'
+                  : 'Ascunde cardurile de sus',
+              icon: Icon(
+                context.watch<AppSettings>().secretsHeaderHidden
+                    ? Icons.grid_view
+                    : Icons.grid_off,
+              ),
+              onPressed: () {
+                final s = context.read<AppSettings>();
+                s.secretsHeaderHidden = !s.secretsHeaderHidden;
+              },
+            ),
+          if (_unlocked)
+            IconButton(
               tooltip: _searchOpen ? 'Închide căutarea' : 'Caută',
               icon: Icon(_searchOpen ? Icons.search_off : Icons.search),
               onPressed: () => setState(() {
@@ -731,124 +746,179 @@ class _SecretsScreenState extends State<SecretsScreen>
                   onChanged: (v) => setState(() => _query = v),
                 ),
               ),
-            // Toate tipurile la vedere: grilă 4×2, pătrate egale.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-              // telefon: 4×2; ecran lat (PC, tabletă): un rând de 8, scund
-              child: LayoutBuilder(
-                builder: (context, box) {
-                  final wide = box.maxWidth >= 640;
-                  final cols = wide ? 8 : 4;
-                  final tileW = (box.maxWidth - 8 * (cols - 1)) / cols;
-                  return GridView(
-                    shrinkWrap: true,
-                    padding: EdgeInsets.zero,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: cols,
-                      mainAxisSpacing: 8,
-                      crossAxisSpacing: 8,
-                      mainAxisExtent: wide ? 66 : (tileW / 1.25).clamp(60, 90),
-                    ),
-                    children: [
-                      _typeTile(
-                        icon: Icons.apps,
-                        label: 'Toate',
-                        count: all.length,
-                        tint: null,
-                        selected: _type == null && !_favorites,
-                        onTap: () => setState(() {
-                          _type = null;
-                          _category = null;
-                          _favorites = false;
-                        }),
-                      ),
-                      for (final t in SecretType.values)
-                        _typeTile(
-                          icon: t.icon,
-                          label: _short(t),
-                          count: all.where((i) => i.type == t).length,
-                          tint: secretTint(context, t),
-                          onLongPress: () => editSecretTypeTint(context, t),
-                          selected: _type == t,
-                          onTap: () => setState(() {
-                            _favorites = false;
-                            _type = _type == t ? null : t;
-                            _category = null;
-                          }),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ),
-            if (all.where((i) => i.pendingPassword.isNotEmpty).toList()
-                case final pending when pending.isNotEmpty)
-              Card(
-                margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-                color: Theme.of(context).colorScheme.tertiaryContainer,
-                child: ListTile(
-                  leading: const Icon(Icons.pending_actions_outlined),
-                  title: Text(
-                    pending.length == 1
-                        ? 'Schimbare de parolă neterminată: ${pending.first.displayTitle}'
-                        : '${pending.length} schimbări de parolă neterminate',
-                  ),
-                  subtitle: const Text(
-                    'Ai salvat-o pe site? Confirm-o în „Repară parolele”.',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const PasswordFixScreen(),
-                    ),
+            // Cardurile de sus (tipuri, avertizări): se pot trage în lateral
+            // cu butonul de lângă titlu, ca să rămână tot ecranul pentru listă.
+            ClipRect(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, anim) => SizeTransition(
+                  sizeFactor: anim,
+                  alignment: Alignment.topCenter,
+                  child: SlideTransition(
+                    position: Tween(
+                      begin: const Offset(-1, 0),
+                      end: Offset.zero,
+                    ).animate(anim),
+                    child: child,
                   ),
                 ),
-              ),
-            if (report.problems > 0 ||
-                (soon.isNotEmpty && _type == null && _query.isEmpty))
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (report.problems > 0)
-                      Expanded(
-                        child: _AlertCard(
-                          icon: Icons.health_and_safety_outlined,
-                          color: Theme.of(context).colorScheme.errorContainer,
-                          border: Theme.of(context).colorScheme.error,
-                          title:
-                              '${report.accounts} '
-                              '${report.accounts == 1 ? 'cont de reparat' : 'conturi de reparat'}',
-                          subtitle: 'Slabe, repetate, vechi',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const PasswordFixScreen(),
+                child: context.watch<AppSettings>().secretsHeaderHidden
+                    ? const SizedBox(
+                        key: ValueKey('ascuns'),
+                        width: double.infinity,
+                      )
+                    : Column(
+                        key: const ValueKey('vizibil'),
+                        children: [
+                          // Toate tipurile la vedere: grilă 4×2, pătrate egale.
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                            // telefon: 4×2; ecran lat (PC, tabletă): un rând de 8, scund
+                            child: LayoutBuilder(
+                              builder: (context, box) {
+                                final wide = box.maxWidth >= 640;
+                                final cols = wide ? 8 : 4;
+                                final tileW =
+                                    (box.maxWidth - 8 * (cols - 1)) / cols;
+                                return GridView(
+                                  shrinkWrap: true,
+                                  padding: EdgeInsets.zero,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: cols,
+                                        mainAxisSpacing: 8,
+                                        crossAxisSpacing: 8,
+                                        mainAxisExtent: wide
+                                            ? 66
+                                            : (tileW / 1.25).clamp(60, 90),
+                                      ),
+                                  children: [
+                                    _typeTile(
+                                      icon: Icons.apps,
+                                      label: 'Toate',
+                                      count: all.length,
+                                      tint: null,
+                                      selected: _type == null && !_favorites,
+                                      onTap: () => setState(() {
+                                        _type = null;
+                                        _category = null;
+                                        _favorites = false;
+                                      }),
+                                    ),
+                                    for (final t in SecretType.values)
+                                      _typeTile(
+                                        icon: t.icon,
+                                        label: _short(t),
+                                        count: all
+                                            .where((i) => i.type == t)
+                                            .length,
+                                        tint: secretTint(context, t),
+                                        onLongPress: () =>
+                                            editSecretTypeTint(context, t),
+                                        selected: _type == t,
+                                        onTap: () => setState(() {
+                                          _favorites = false;
+                                          _type = _type == t ? null : t;
+                                          _category = null;
+                                        }),
+                                      ),
+                                  ],
+                                );
+                              },
                             ),
                           ),
-                        ),
+                          if (all
+                                  .where((i) => i.pendingPassword.isNotEmpty)
+                                  .toList()
+                              case final pending when pending.isNotEmpty)
+                            Card(
+                              margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .tertiaryContainer,
+                              child: ListTile(
+                                leading: const Icon(
+                                  Icons.pending_actions_outlined,
+                                ),
+                                title: Text(
+                                  pending.length == 1
+                                      ? 'Schimbare de parolă neterminată: ${pending.first.displayTitle}'
+                                      : '${pending.length} schimbări de parolă neterminate',
+                                ),
+                                subtitle: const Text(
+                                  'Ai salvat-o pe site? Confirm-o în „Repară parolele”.',
+                                ),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const PasswordFixScreen(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (report.problems > 0 ||
+                              (soon.isNotEmpty &&
+                                  _type == null &&
+                                  _query.isEmpty))
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (report.problems > 0)
+                                    Expanded(
+                                      child: _AlertCard(
+                                        icon: Icons.health_and_safety_outlined,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .errorContainer,
+                                        border: Theme.of(context)
+                                            .colorScheme
+                                            .error,
+                                        title:
+                                            '${report.accounts} '
+                                            '${report.accounts == 1 ? 'cont de reparat' : 'conturi de reparat'}',
+                                        subtitle: 'Slabe, repetate, vechi',
+                                        onTap: () => Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const PasswordFixScreen(),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  if (soon.isNotEmpty &&
+                                      _type == null &&
+                                      _query.isEmpty)
+                                    Expanded(
+                                      child: _AlertCard(
+                                        icon: Icons.event_busy_outlined,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .secondaryContainer,
+                                        border: Theme.of(context)
+                                            .colorScheme
+                                            .secondary,
+                                        title: '${soon.length} expiră curând',
+                                        subtitle: [
+                                          '${soon.first.displayTitle} · '
+                                              '${formatShortDate(soon.first.expiresOn!)}',
+                                          if (soon.length > 1)
+                                            '+${soon.length - 1}',
+                                        ].join(' '),
+                                        onTap: () => _showExpiring(soon),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
-                    if (soon.isNotEmpty && _type == null && _query.isEmpty)
-                      Expanded(
-                        child: _AlertCard(
-                          icon: Icons.event_busy_outlined,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .secondaryContainer,
-                          border: Theme.of(context).colorScheme.secondary,
-                          title: '${soon.length} expiră curând',
-                          subtitle: [
-                            '${soon.first.displayTitle} · '
-                                '${formatShortDate(soon.first.expiresOn!)}',
-                            if (soon.length > 1) '+${soon.length - 1}',
-                          ].join(' '),
-                          onTap: () => _showExpiring(soon),
-                        ),
-                      ),
-                  ],
-                ),
               ),
+            ),
             if (_type == SecretType.subscription && monthly.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),

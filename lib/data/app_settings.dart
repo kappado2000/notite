@@ -73,6 +73,15 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Cardurile de sus din Parole (tipuri, avertizări) ascunse, ca lista să
+  /// aibă tot ecranul. Ținut minte între porniri.
+  bool get secretsHeaderHidden =>
+      (_box.get('secretsHeaderHidden') as bool?) ?? false;
+  set secretsHeaderHidden(bool v) {
+    _box.put('secretsHeaderHidden', v);
+    notifyListeners();
+  }
+
   /// Ultimul email folosit la logare, precompletat data viitoare.
   String get lastEmail => (_box.get('lastEmail') as String?) ?? '';
   set lastEmail(String v) => _box.put('lastEmail', v);
