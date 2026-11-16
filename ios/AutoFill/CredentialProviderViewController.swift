@@ -372,6 +372,47 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     stageSave(savePasswordRequest)
   }
 
+  // MARK: - Parolă puternică de la Notițe (iOS 26.2+)
+  // La crearea unui cont, iOS oferă „Parolă puternică – Notițe”; după
+  // înregistrare cere salvarea ei tot în Notițe (vezi stageSave).
+
+  @available(iOS 26.2, *)
+  override func performWithoutUserInteraction(
+    generatePasswordsRequest: ASGeneratePasswordsRequest
+  ) {
+    completeGenerate()
+  }
+
+  @available(iOS 26.2, *)
+  override func prepareInterface(for generatePasswordsRequest: ASGeneratePasswordsRequest) {
+    completeGenerate()
+  }
+
+  @available(iOS 26.2, *)
+  private func completeGenerate() {
+    AutofillLog.write("extensie: parolă puternică generată")
+    extensionContext.completeGeneratePasswordRequest(
+      results: [
+        // simbolurile pe care le acceptă orice site (ca în aplicație)
+        ASGeneratedPassword(kind: .strong, value: Self.generate(18, symbols: true)),
+        ASGeneratedPassword(kind: .alphanumeric, value: Self.generate(18, symbols: false)),
+      ],
+      completionHandler: nil)
+  }
+
+  /// Ca generatorul din aplicație: litere mari, mici, cifre (+ ! * - _ .),
+  /// cel puțin câte una din fiecare, aleatoriu criptografic.
+  static func generate(_ length: Int, symbols: Bool) -> String {
+    var sets = ["ABCDEFGHJKLMNPQRSTUVWXYZ", "abcdefghijkmnopqrstuvwxyz", "23456789"]
+    if symbols { sets.append("!*-_.") }
+    let all = Array(sets.joined())
+    var rng = SystemRandomNumberGenerator()
+    var chars = sets.map { Array($0).randomElement(using: &rng)! }
+    while chars.count < length { chars.append(all.randomElement(using: &rng)!) }
+    chars.shuffle(using: &rng)
+    return String(chars)
+  }
+
   @available(iOS 26.2, *)
   private func stageSave(_ request: ASSavePasswordRequest) {
     let id = request.serviceIdentifier

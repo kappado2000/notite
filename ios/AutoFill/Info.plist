@@ -32,6 +32,8 @@
 				<true/>
 				<key>SupportsSavePasswordCredentials</key>
 				<true/>
+				<key>SupportsGeneratePasswordCredentials</key>
+				<true/>
 			</dict>
 			<key>ASCredentialProviderExtensionShowsConfigurationUI</key>
 			<true/>
