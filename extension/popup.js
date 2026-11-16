@@ -508,7 +508,7 @@ $('genCopy').addEventListener('click', async () => {
 async function refresh() {
   const st = await send({ type: 'status' });
   $('autoSave').checked = st.autoSave;
-  $('lockMinutes').value = String(st.lockMinutes ?? 0);
+  $('lockMinutes').value = String(st.lockMinutes ?? -1);
   if (!st.loggedIn && st.awaitingCode) {
     // conectarea așteaptă doar codul (parola e ținută minte câteva minute)
     $('email').value = st.awaitingCode;

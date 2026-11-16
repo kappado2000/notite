@@ -30,10 +30,13 @@ import { healthOf, sha1Hex, pwned } from './lib/health.js';
 
 /// Blocare automată după atâtea minute fără folosire; 0 = niciodată
 /// (doar la închiderea browserului).
-const LOCK_CHOICES = [0, 15, 60, 240];
+/// -1 = rămâne deblocat și după repornirea browserului (cheia ținută pe
+/// acest calculator, în profilul Chrome); 0 = până se închide browserul.
+const LOCK_CHOICES = [-1, 0, 15, 60, 240];
+const KEEP_UNLOCKED = -1;
 
 async function lockAfterMs() {
-  const { lockMinutes = 0 } = await L.get('lockMinutes');
+  const { lockMinutes = KEEP_UNLOCKED } = await L.get('lockMinutes');
   return lockMinutes > 0 ? lockMinutes * 60 * 1000 : Infinity;
 }
 const CLIPBOARD_CLEAR_MS = 30 * 1000;
@@ -60,7 +63,7 @@ async function settings() {
   const {
     email = '',
     autoSave = true,
-    lockMinutes = 0,
+    lockMinutes = KEEP_UNLOCKED,
   } = await L.get(['email', 'autoSave', 'lockMinutes']);
   return { email, autoSave, lockMinutes };
 }
@@ -101,7 +104,22 @@ async function authSession({ force = false } = {}) {
   return session;
 }
 
+/// „Rămâne deblocat pe acest calculator”: după repornirea browserului
+/// cheia se ia din profilul Chrome, fără parolă.
+async function restoreKey() {
+  const { dataKey: k } = await getS('dataKey');
+  if (k) return;
+  const { lockMinutes = KEEP_UNLOCKED, savedKey } = await L.get([
+    'lockMinutes',
+    'savedKey',
+  ]);
+  if (lockMinutes !== KEEP_UNLOCKED || !savedKey) return;
+  await S.set({ dataKey: savedKey, lastUsed: Date.now() });
+  await updateBadge();
+}
+
 async function dataKey() {
+  await restoreKey();
   const { dataKey: k, lastUsed = 0 } = await getS('dataKey', 'lastUsed');
   if (!k) return null;
   if (Date.now() - lastUsed > (await lockAfterMs())) {
@@ -113,10 +131,13 @@ async function dataKey() {
 
 async function lock() {
   await S.remove(['dataKey', 'items']);
+  // blocat de tine: la repornire se cere iar parola
+  await L.remove('savedKey');
   await updateBadge();
 }
 
 async function status() {
+  await restoreKey();
   const { session, dataKey: k, lastUsed = 0 } = await getS(
     'session',
     'dataKey',
@@ -221,6 +242,9 @@ async function openVault(password, session) {
     wrapped: keys.password,
     lastUsed: Date.now(),
   });
+  if ((await settings()).lockMinutes === KEEP_UNLOCKED) {
+    await L.set({ savedKey: b64encode(bytes) });
+  }
   await loadItems(await importDataKey(bytes), session);
   await savePending();
   await updateBadge();
@@ -241,7 +265,7 @@ async function unlock(password) {
 
 async function logout() {
   await S.clear();
-  await L.remove('account');
+  await L.remove(['account', 'savedKey']);
   await updateBadge();
 }
 
@@ -771,8 +795,12 @@ async function handle(msg, sender) {
     case 'setLockMinutes':
       if (!fromExtension(sender)) return null;
       if (LOCK_CHOICES.includes(Number(msg.value))) {
+        const v = Number(msg.value);
         await S.set({ lastUsed: Date.now() });
-        await L.set({ lockMinutes: Number(msg.value) });
+        await L.set({ lockMinutes: v });
+        const { dataKey: k } = await getS('dataKey');
+        if (v === KEEP_UNLOCKED && k) await L.set({ savedKey: k });
+        if (v !== KEEP_UNLOCKED) await L.remove('savedKey');
       }
       return status();
     case 'list': {

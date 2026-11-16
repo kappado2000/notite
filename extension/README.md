@@ -30,9 +30,13 @@ site-urile lor. Aceleași date ca în aplicație (Parole → Conturi).
 
 - Criptare end-to-end, aceeași ca în aplicație (AES-256-GCM, cheia
   protejată cu PBKDF2 din parola contului). În cloud ajunge doar text criptat.
-- Cheia și parolele decriptate stau doar în memoria browserului, nu pe disc;
-  dispar la închiderea browserului (opțional și după 15 min / 1 oră / 4 ore
-  fără folosire, din ⚙️ Setări).
+- Implicit („Blocare automată: Niciodată”) extensia rămâne deblocată pe
+  calculatorul tău și după repornirea browserului: cheia seifului e ținută în
+  profilul Chrome de pe acel calculator (nu în cloud). Oricine folosește
+  contul tău de Windows poate atunci vedea parolele — potrivit doar pentru
+  calculatoare personale. 🔒 o blochează și o șterge de pe disc; celelalte
+  opțiuni (la închiderea browserului, 15 min / 1 oră / 4 ore) o țin doar în
+  memorie.
 - Conectarea la cont rămâne ținută minte (ca în aplicația de pe telefon):
   după repornirea browserului ceri doar parola Notițe, fără email și cod 2FA.
   „Deconectează-te” o șterge.
