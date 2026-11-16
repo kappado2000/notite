@@ -190,6 +190,21 @@ String _userKey(String username, String site) {
   return u;
 }
 
+/// Contul existent pentru același site și utilizator (ca la dubluri), dacă
+/// există — folosit la parolele salvate din completarea automată iOS.
+SecretItem? findSameAccount(Iterable<SecretItem> items, SecretItem candidate) {
+  if (candidate.username.trim().isEmpty) return null;
+  final key = _dupKey(candidate);
+  for (final i in items) {
+    if (i.type == SecretType.login &&
+        i.id != candidate.id &&
+        _dupKey(i) == key) {
+      return i;
+    }
+  }
+  return null;
+}
+
 /// Cheia unui cont pentru dubluri: același site (de bază) și utilizator.
 String _dupKey(SecretItem i) {
   final site = siteBase(i);

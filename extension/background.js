@@ -62,7 +62,7 @@ async function touch() {
 async function settings() {
   const {
     email = '',
-    autoSave = true,
+    autoSave = false,
     lockMinutes = KEEP_UNLOCKED,
   } = await L.get(['email', 'autoSave', 'lockMinutes']);
   return { email, autoSave, lockMinutes };

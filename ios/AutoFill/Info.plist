@@ -30,6 +30,8 @@
 			<dict>
 				<key>ProvidesPasswords</key>
 				<true/>
+				<key>SupportsSavePasswordCredentials</key>
+				<true/>
 			</dict>
 			<key>ASCredentialProviderExtensionShowsConfigurationUI</key>
 			<true/>

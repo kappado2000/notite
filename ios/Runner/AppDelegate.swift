@@ -276,8 +276,15 @@ class AutofillBridge: NSObject, FlutterPlugin {
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
+    case "takeSaves":
+      // parolele pe care iOS le-a dat extensiei spre salvare
+      DispatchQueue.global(qos: .utility).async {
+        let list = SaveInbox.takeAll()
+        DispatchQueue.main.async { result(list) }
+      }
     case "sync":
       let logins = (call.arguments as? [[String: Any]]) ?? []
+      _ = SaveInbox.ensureKey()
       DispatchQueue.global(qos: .utility).async {
         let ok = Self.write(logins)
         Self.updateIdentities(logins)
@@ -425,5 +432,82 @@ enum AutofillLog {
     lines.append(line.trimmingCharacters(in: .newlines))
     if lines.count > 300 { lines.removeFirst(lines.count - 300) }
     try? (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+  }
+}
+
+
+/// Cutia poștală a extensiei AutoFill pentru parolele de salvat (iOS 26.2+).
+/// Aplicația ține cheia privată P-256 în Keychain-ul ei (nu în cel comun) și
+/// lasă cheia publică în grupul aplicației; extensia criptează cu ea fiecare
+/// parolă primită de la iOS. Aceeași schemă ca în extensie.
+enum SaveInbox {
+  private static let service = "notite.saveinbox"
+
+  private static var container: URL? {
+    FileManager.default.containerURL(
+      forSecurityApplicationGroupIdentifier: AutofillBridge.group)
+  }
+
+  private static func readKey() -> P256.KeyAgreement.PrivateKey? {
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecAttrAccount as String: "private",
+      kSecReturnData as String: true,
+    ]
+    var out: CFTypeRef?
+    guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess,
+      let data = out as? Data
+    else { return nil }
+    return try? P256.KeyAgreement.PrivateKey(rawRepresentation: data)
+  }
+
+  /// Cheia (o creează la prima folosire) + cheia publică pentru extensie.
+  @discardableResult
+  static func ensureKey() -> P256.KeyAgreement.PrivateKey? {
+    var key = readKey()
+    if key == nil {
+      let fresh = P256.KeyAgreement.PrivateKey()
+      let add: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: service,
+        kSecAttrAccount as String: "private",
+        kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        kSecValueData as String: fresh.rawRepresentation,
+      ]
+      if SecItemAdd(add as CFDictionary, nil) == errSecSuccess { key = fresh }
+    }
+    if let key, let url = container?.appendingPathComponent("save-inbox.pub") {
+      let pub = key.publicKey.x963Representation
+      if (try? Data(contentsOf: url)) != pub { try? pub.write(to: url, options: .atomic) }
+    }
+    return key
+  }
+
+  /// Deschide și șterge toate parolele din cutie.
+  static func takeAll() -> [[String: Any]] {
+    guard let key = ensureKey(),
+      let dir = container?.appendingPathComponent("save-inbox", isDirectory: true),
+      let files = try? FileManager.default.contentsOfDirectory(
+        at: dir, includingPropertiesForKeys: nil)
+    else { return [] }
+    var out: [[String: Any]] = []
+    for file in files where file.pathExtension == "bin" {
+      defer { try? FileManager.default.removeItem(at: file) }
+      guard let data = try? Data(contentsOf: file), data.count > 65,
+        let eph = try? P256.KeyAgreement.PublicKey(x963Representation: data.prefix(65)),
+        let shared = try? key.sharedSecretFromKeyAgreement(with: eph)
+      else { continue }
+      let sym = shared.hkdfDerivedSymmetricKey(
+        using: SHA256.self, salt: Data("notite-save-inbox".utf8), sharedInfo: Data(),
+        outputByteCount: 32)
+      guard let box = try? AES.GCM.SealedBox(combined: data.dropFirst(65)),
+        let json = try? AES.GCM.open(box, using: sym),
+        let item = try? JSONSerialization.jsonObject(with: json) as? [String: Any]
+      else { continue }
+      out.append(item)
+    }
+    if !out.isEmpty { AutofillLog.write("aplicație: \(out.count) parole primite din completarea automată") }
+    return out
   }
 }

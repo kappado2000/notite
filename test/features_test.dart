@@ -39,6 +39,46 @@ void main() {
     await dir.delete(recursive: true);
   });
 
+  test('parola salvată de iOS găsește contul existent al site-ului', () async {
+    final store = await openStore('salvare-ios');
+    final yahoo = store.newSecret(SecretType.login)
+      ..title = 'Yahoo'
+      ..url = 'https://login.yahoo.com'
+      ..username = 'dr_x@yahoo.com'
+      ..password = 'veche';
+    await store.addSecrets([yahoo]);
+    SecretItem cand(String url, String user) =>
+        store.newSecret(SecretType.login)
+          ..url = url
+          ..username = user
+          ..password = 'noua';
+    // alt subdomeniu, utilizatorul fără @yahoo.com: același cont
+    expect(
+      findSameAccount(
+        store.allSecrets,
+        cand('https://mail.yahoo.com', 'DR_X'),
+      )?.id,
+      yahoo.id,
+    );
+    // alt utilizator sau alt site: cont nou
+    expect(
+      findSameAccount(store.allSecrets, cand('https://yahoo.com', 'altcineva')),
+      isNull,
+    );
+    expect(
+      findSameAccount(
+        store.allSecrets,
+        cand('https://gmail.com', 'dr_x@yahoo.com'),
+      ),
+      isNull,
+    );
+    // fără utilizator nu ghicim
+    expect(
+      findSameAccount(store.allSecrets, cand('https://yahoo.com', '')),
+      isNull,
+    );
+  });
+
   test('șabloanele produc documente valide pentru editor', () {
     for (final t in noteTemplates) {
       final doc = Document.fromJson(jsonDecode(t.contentJson()) as List);

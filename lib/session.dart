@@ -204,7 +204,21 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
       }
       ..attach(store);
     // Parolele pentru completarea automată din iOS (criptate, cu Face ID).
-    IosAutofill.instance.attach(store);
+    IosAutofill.instance
+      ..onImported = (n) {
+        final ctx = _navigatorKey.currentContext;
+        if (ctx == null || !ctx.mounted) return;
+        ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(
+          SnackBar(
+            content: Text(
+              n == 1
+                  ? 'Am salvat în Parole o parolă din completarea automată.'
+                  : 'Am salvat în Parole $n parole din completarea automată.',
+            ),
+          ),
+        );
+      }
+      ..attach(store);
     // Acțiunile rapide de pe iconiță (apăsare lungă).
     HomeShortcuts.init((shortcut) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {

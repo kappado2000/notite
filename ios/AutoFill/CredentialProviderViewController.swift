@@ -354,6 +354,51 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     complete(shown[indexPath.row])
   }
 
+  // MARK: - Salvarea parolelor (iOS 26.2+): „Salvez parola în Notițe?”
+
+  /// iOS cere salvarea unei parole tastate într-o aplicație sau pe un site.
+  /// Extensia NU are cheia seifului: pune parola, criptată cu cheia publică
+  /// a aplicației, în „cutia poștală” din grupul aplicației; Notițe o ia la
+  /// următoarea deschidere și o salvează în cont.
+  @available(iOS 26.2, *)
+  override func performWithoutUserInteractionIfPossible(
+    savePasswordRequest: ASSavePasswordRequest
+  ) {
+    stageSave(savePasswordRequest)
+  }
+
+  @available(iOS 26.2, *)
+  override func prepareInterface(for savePasswordRequest: ASSavePasswordRequest) {
+    stageSave(savePasswordRequest)
+  }
+
+  @available(iOS 26.2, *)
+  private func stageSave(_ request: ASSavePasswordRequest) {
+    let id = request.serviceIdentifier
+    let kind: String
+    switch id.type {
+    case .URL: kind = "url"
+    case .domain: kind = "domain"
+    default: kind = "app"
+    }
+    let payload: [String: Any] = [
+      "user": request.credential.user,
+      "password": request.credential.password,
+      "identifier": id.identifier,
+      "type": kind,
+      "name": id.displayName ?? "",
+      "title": request.title ?? "",
+      "at": Date().timeIntervalSince1970 * 1000,
+    ]
+    if SaveInbox.put(payload) {
+      AutofillLog.write("extensie: parolă de salvat (\(kind)) pentru \(id.displayName ?? id.identifier)")
+      extensionContext.completeSavePasswordRequest(completionHandler: nil)
+    } else {
+      AutofillLog.write("extensie: nu am putut pune parola în cutie (deschide Notițe o dată)")
+      extensionContext.cancelRequest(withError: ASExtensionError(.failed))
+    }
+  }
+
   // MARK: - Folosite recent (doar identificatori, în grupul aplicației)
 
   private static let recentKey = "autofill.recent"
@@ -458,5 +503,47 @@ enum AutofillLog {
     lines.append(line.trimmingCharacters(in: .newlines))
     if lines.count > 300 { lines.removeFirst(lines.count - 300) }
     try? (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+  }
+}
+
+
+/// Cutia poștală pentru parolele de salvat: fiecare parolă e criptată
+/// (ECIES: cheie P-256 de unică folosință + HKDF + AES-GCM) cu cheia publică
+/// pe care aplicația o lasă în grupul aplicației. Doar aplicația, cu cheia ei
+/// privată din Keychain, le poate deschide. Aceeași logică în AppDelegate.
+enum SaveInbox {
+  static var dir: URL? {
+    FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: AutofillVault.group)?
+      .appendingPathComponent("save-inbox", isDirectory: true)
+  }
+
+  static var publicKeyURL: URL? {
+    FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: AutofillVault.group)?
+      .appendingPathComponent("save-inbox.pub")
+  }
+
+  static func put(_ payload: [String: Any]) -> Bool {
+    guard let dir, let pubURL = publicKeyURL,
+      let pubData = try? Data(contentsOf: pubURL),
+      let pub = try? P256.KeyAgreement.PublicKey(x963Representation: pubData),
+      let json = try? JSONSerialization.data(withJSONObject: payload)
+    else { return false }
+    let eph = P256.KeyAgreement.PrivateKey()
+    guard let shared = try? eph.sharedSecretFromKeyAgreement(with: pub) else { return false }
+    let key = shared.hkdfDerivedSymmetricKey(
+      using: SHA256.self, salt: Data("notite-save-inbox".utf8), sharedInfo: Data(),
+      outputByteCount: 32)
+    guard let sealed = try? AES.GCM.seal(json, using: key), let body = sealed.combined else {
+      return false
+    }
+    do {
+      try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+      let file = dir.appendingPathComponent(UUID().uuidString + ".bin")
+      try (eph.publicKey.x963Representation + body).write(
+        to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+      return true
+    } catch {
+      return false
+    }
   }
 }

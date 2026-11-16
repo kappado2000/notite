@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 
 import '../data/notes_store.dart';
 import '../models/secret_item.dart';
+import 'password_tools.dart';
 import 'secret_helpers.dart';
 
 /// Completarea automată în iOS: ține la zi, pentru extensia AutoFill,
@@ -54,12 +56,71 @@ class IosAutofill {
     _store = store;
     store.addListener(_changed);
     _changed();
+    importSaves();
+    _lifecycle ??= AppLifecycleListener(onResume: importSaves);
+  }
+
+  AppLifecycleListener? _lifecycle;
+
+  /// Anunțat după ce au fost salvate parole primite de la iOS (câte).
+  void Function(int count)? onImported;
+
+  /// Parolele pe care iOS (26.2+) le-a dat extensiei spre salvare („Salvez
+  /// parola în Notițe?” după conectarea într-o aplicație sau pe un site):
+  /// le pune în cont — actualizează contul existent (parola veche intră în
+  /// istoric) sau creează unul nou.
+  Future<int> importSaves() async {
+    final store = _store;
+    if (!supported || store == null) return 0;
+    List<dynamic> raw;
+    try {
+      raw = await _channel.invokeMethod<List<dynamic>>('takeSaves') ?? [];
+    } catch (e) {
+      debugPrint('IosAutofill.takeSaves: $e');
+      return 0;
+    }
+    var count = 0;
+    for (final m in raw.whereType<Map<dynamic, dynamic>>()) {
+      final user = (m['user'] as String?)?.trim() ?? '';
+      final pass = (m['password'] as String?) ?? '';
+      if (pass.isEmpty) continue;
+      final id = (m['identifier'] as String?) ?? '';
+      final name = (m['name'] as String?)?.trim() ?? '';
+      final title = (m['title'] as String?)?.trim() ?? '';
+      final candidate = store.newSecret(SecretType.login)
+        ..username = user
+        ..password = pass;
+      if (m['type'] == 'app') {
+        candidate
+          ..title = name.isNotEmpty ? name : id
+          ..notes =
+              'Salvat din aplicația iOS „${name.isNotEmpty ? name : id}”.';
+      } else {
+        final url = m['type'] == 'url' ? id : 'https://$id';
+        candidate
+          ..url = url
+          ..title = title.isNotEmpty ? title : hostOf(url)
+          ..notes = 'Salvat de completarea automată iOS.';
+      }
+      final existing = findSameAccount(store.allSecrets, candidate);
+      if (existing != null) {
+        if (existing.password == pass) continue;
+        await store.saveSecret(existing.copy()..password = pass);
+      } else {
+        await store.saveSecret(candidate);
+      }
+      count++;
+    }
+    if (count > 0) onImported?.call(count);
+    return count;
   }
 
   void detach() {
     _store?.removeListener(_changed);
     _store = null;
     _debounce?.cancel();
+    _lifecycle?.dispose();
+    _lifecycle = null;
   }
 
   /// La deconectare: nimic nu mai rămâne pentru extensie.
