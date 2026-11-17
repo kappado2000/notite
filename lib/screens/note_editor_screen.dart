@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../data/app_settings.dart';
 import '../data/notes_store.dart';
 import '../models/attachment.dart';
 import '../models/note.dart';
@@ -29,6 +30,7 @@ import '../widgets/attachment_image_embed.dart';
 import 'pdf_sign_screen.dart';
 import 'qr_scan_screen.dart';
 import '../widgets/identity_check.dart';
+import '../widgets/customize.dart';
 import '../widgets/note_links.dart';
 import '../widgets/pickers.dart';
 
@@ -475,10 +477,41 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     }
   }
 
+  /// Uneltele notiței (bara tastaturii, meniul „+”): id → acțiune; null =
+  /// indisponibilă pe acest dispozitiv.
+  VoidCallback? _tool(String id) => switch (id) {
+    'checklist' => () {
+      _controller.formatSelection(
+        _controller.getSelectionStyle().attributes['list']?.value == 'unchecked'
+            ? Attribute.clone(Attribute.unchecked, null)
+            : Attribute.unchecked,
+      );
+      _editorFocus.requestFocus();
+    },
+    'file' => _pickFiles,
+    'scan' => ScanService.scanSupported ? _scan : null,
+    'camera' => _isMobile ? () => _pickImages(camera: true) : null,
+    'image' => () => _pickImages(),
+    'voice' => VoiceService.recordingSupported ? _recordVoice : null,
+    'qr' => _insertScannedCode,
+    'share' => _share,
+    _ => null,
+  };
+
+  void _customize(CustomList list) {
+    _hideKeyboard();
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => CustomizeScreen(only: list)));
+  }
+
   void _showAddMenu() {
     // tastatura jos înainte de meniu: altfel rămânea uneori ridicată și
     // blocată după alegerea unei poze / a unui fișier
     _hideKeyboard();
+    final tools = [
+      for (final d in CustomList.addMenu.chosen(context.read<AppSettings>()))
+        if (_tool(d.id) case final run?) (d, run),
+    ];
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
@@ -494,73 +527,22 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(
-                leading: const Icon(Icons.checklist),
-                title: const Text('Listă de bifat'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _controller.formatSelection(Attribute.unchecked);
-                  _editorFocus.requestFocus();
-                },
-              ),
-              if (ScanService.scanSupported)
+              for (final (d, run) in tools)
                 ListTile(
-                  leading: const Icon(Icons.document_scanner_outlined),
-                  title: const Text('Scanează document'),
-                  subtitle: const Text(
-                    'Din cameră sau dintr-o poză → PDF sau text',
-                  ),
+                  leading: Icon(d.icon),
+                  title: Text(d.label),
                   onTap: () {
                     Navigator.pop(ctx);
-                    _scan();
+                    run();
                   },
                 ),
-              if (_isMobile)
-                ListTile(
-                  leading: const Icon(Icons.photo_camera_outlined),
-                  title: const Text('Fotografie'),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _pickImages(camera: true);
-                  },
-                ),
+              const Divider(),
               ListTile(
-                leading: const Icon(Icons.image_outlined),
-                title: const Text('Imagine din galerie'),
+                leading: const Icon(Icons.tune),
+                title: const Text('Personalizează meniul și bara'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _pickImages();
-                },
-              ),
-              if (VoiceService.recordingSupported)
-                ListTile(
-                  leading: const Icon(Icons.mic_none),
-                  title: const Text('Notă vocală'),
-                  subtitle: Text(
-                    VoiceService.transcriptionSupported
-                        ? 'Înregistrare + transcriere automată în text'
-                        : 'Înregistrare audio atașată',
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _recordVoice();
-                  },
-                ),
-              ListTile(
-                leading: const Icon(Icons.qr_code_scanner),
-                title: const Text('Cod QR / de bare'),
-                subtitle: const Text('Adaugă conținutul codului în notiță'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _insertScannedCode();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.attach_file),
-                title: const Text('Fișier (PDF, document…)'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickFiles();
+                  _customize(CustomList.addMenu);
                 },
               ),
             ],
@@ -887,6 +869,16 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               ? null
               : [
                   IconButton(
+                    tooltip: 'Partajează',
+                    icon: Icon(
+                      Theme.of(context).platform == TargetPlatform.iOS ||
+                              Theme.of(context).platform == TargetPlatform.macOS
+                          ? Icons.ios_share
+                          : Icons.share_outlined,
+                    ),
+                    onPressed: _share,
+                  ),
+                  IconButton(
                     tooltip: _note.pinned ? 'Anulează fixarea' : 'Fixează sus',
                     icon: Icon(
                       _note.pinned ? Icons.push_pin : Icons.push_pin_outlined,
@@ -1063,17 +1055,30 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                           style: TextStyle(color: scheme.onSurfaceVariant),
                         ),
                       ),
-                      for (final t in noteTemplates)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: Center(
-                            child: ActionChip(
-                              avatar: Icon(t.icon, size: 18),
-                              label: Text(t.name),
-                              onPressed: () => _applyTemplate(t),
+                      // doar iconițe, una lângă alta (numele: la apăsare
+                      // lungă / la trecerea cu mouse-ul)
+                      for (final d in CustomList.templates.chosen(
+                        context.watch<AppSettings>(),
+                      ))
+                        if (noteTemplates.where((t) => t.name == d.id)
+                            case final found when found.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Center(
+                              child: IconButton.filledTonal(
+                                tooltip: d.label,
+                                icon: Icon(d.icon, size: 20),
+                                onPressed: () => _applyTemplate(found.first),
+                              ),
                             ),
                           ),
+                      Center(
+                        child: IconButton(
+                          tooltip: 'Alege și ordonează șabloanele',
+                          icon: const Icon(Icons.tune, size: 20),
+                          onPressed: () => _customize(CustomList.templates),
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -1121,11 +1126,24 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   ),
                   child: Row(
                     children: [
-                      IconButton(
-                        tooltip: 'Adaugă imagine, scanare, fișier…',
-                        icon: Icon(Icons.add_circle, color: scheme.primary),
-                        onPressed: _busy ? null : _showAddMenu,
+                      GestureDetector(
+                        onLongPress: () => _customize(CustomList.editorBar),
+                        child: IconButton(
+                          tooltip: 'Adaugă imagine, scanare, fișier…',
+                          icon: Icon(Icons.add_circle, color: scheme.primary),
+                          onPressed: _busy ? null : _showAddMenu,
+                        ),
                       ),
+                      // uneltele alese (implicit: agrafă și listă de bifat)
+                      for (final d in CustomList.editorBar.chosen(
+                        context.watch<AppSettings>(),
+                      ))
+                        if (_tool(d.id) case final run?)
+                          IconButton(
+                            tooltip: d.label,
+                            icon: Icon(d.icon),
+                            onPressed: _busy ? null : run,
+                          ),
                       Expanded(
                         // Butoanele barei nu iau focusul, ca cursorul să rămână
                         // în editor după aplicarea unei formatări.

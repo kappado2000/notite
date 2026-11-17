@@ -515,7 +515,24 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
             ),
           ),
         const Divider(height: 1),
-        for (var i = 0; i < r.items.length; i++) _itemTile(s, i),
+        // întâi ce mai e de ales; produsele luate în întregime de alții
+        // coboară într-o secțiune strânsă, ca lista să se „golească”
+        for (var i = 0; i < r.items.length; i++)
+          if (!_takenByOthers(s, i)) _itemTile(s, i),
+        if ([
+              for (var i = 0; i < r.items.length; i++)
+                if (_takenByOthers(s, i)) i,
+            ]
+            case final done when done.isNotEmpty)
+          ExpansionTile(
+            leading: const Icon(Icons.done_all),
+            title: Text(
+              done.length == 1
+                  ? '1 produs ales deja de alții'
+                  : '${done.length} produse alese deja de alții',
+            ),
+            children: [for (final i in done) _itemTile(s, i)],
+          ),
         Padding(
           padding: const EdgeInsets.all(8),
           child: Wrap(
@@ -571,6 +588,10 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
     if (source != null && mounted) await _read(source, append: true);
   }
 
+  /// Produsul a fost luat în întregime de ceilalți (nu și de cine alege acum).
+  bool _takenByOthers(ReceiptSplit s, int i) =>
+      s.remaining(i) == 0 && s.taken(_person, i) == 0;
+
   Widget _itemTile(ReceiptSplit s, int i) {
     final scheme = Theme.of(context).colorScheme;
     final item = s.receipt.items[i];
@@ -605,11 +626,16 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
       subtitle: Text(
         [
           '$qty × ${formatLei(item.unitPrice)} = ${formatLei(item.total)} lei',
+          if (item.units > 1 && free > 0 && free < item.units)
+            'rămase $free din ${item.units}',
           if (others.isNotEmpty) others.join(', '),
           if (free == 0 && mine == 0) 'ales în întregime',
         ].join('\n'),
       ),
-      isThreeLine: others.isNotEmpty || (free == 0 && mine == 0),
+      isThreeLine:
+          others.isNotEmpty ||
+          (free == 0 && mine == 0) ||
+          (item.units > 1 && free > 0 && free < item.units),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -658,11 +684,20 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 2),
+                  // soldul scade pe măsură ce fiecare își alege produsele
                   Text(
-                    [
-                      'Total bon ${formatLei(s.receipt.itemsTotal)} lei',
-                      if (rest.abs() >= 0.01) 'nealocat ${formatLei(rest)} lei',
-                    ].join('  ·  '),
+                    rest.abs() >= 0.01
+                        ? 'Rămas de împărțit: ${formatLei(rest)} lei'
+                        : 'Tot bonul a fost împărțit',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: rest.abs() >= 0.01
+                          ? scheme.tertiary
+                          : scheme.primary,
+                    ),
+                  ),
+                  Text(
+                    'Total bon ${formatLei(s.receipt.itemsTotal)} lei',
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
                 ],

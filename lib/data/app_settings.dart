@@ -14,6 +14,19 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// O listă personalizată (carduri Acasă, unelte, șabloane): id-urile
+  /// alese, în ordinea aleasă; null = cea implicită.
+  List<String>? customList(String key) =>
+      (_box.get('custom_$key') as List?)?.cast<String>();
+  void setCustomList(String key, List<String>? ids) {
+    if (ids == null) {
+      _box.delete('custom_$key');
+    } else {
+      _box.put('custom_$key', ids);
+    }
+    notifyListeners();
+  }
+
   /// Notițele afișate în grilă (true) sau în listă.
   bool get notesGrid => (_box.get('notesGrid') as bool?) ?? false;
   set notesGrid(bool v) {

@@ -79,6 +79,19 @@ void main() {
     );
   });
 
+  test('data bonului din titlu ordonează bonurile', () async {
+    final store = await openStore('data-bon');
+    final a = await store.createNote()
+      ..title = 'Bon · Lidl · 03.11.2026';
+    final b = await store.createNote()
+      ..title = 'Bon · Kaufland · 14.11.2026';
+    final c = await store.createNote()
+      ..title = 'Fără dată';
+    expect(NotesStore.docDate(a), DateTime(2026, 11, 3));
+    expect(NotesStore.docDate(b), DateTime(2026, 11, 14));
+    expect(NotesStore.docDate(c), c.createdAt);
+  });
+
   test('șabloanele produc documente valide pentru editor', () {
     for (final t in noteTemplates) {
       final doc = Document.fromJson(jsonDecode(t.contentJson()) as List);

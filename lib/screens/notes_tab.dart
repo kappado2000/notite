@@ -212,6 +212,8 @@ class _NotesTabState extends State<NotesTab> {
                   store.sort = NoteSort.created;
                 case 'sort-title':
                   store.sort = NoteSort.title;
+                case 'sort-doc':
+                  store.sort = NoteSort.docDate;
                 case 'notebook':
                   showNotebookMenu(
                     context,
@@ -280,6 +282,12 @@ class _NotesTabState extends State<NotesTab> {
                     Icons.sort_by_alpha,
                     'După titlu',
                     checked: store.sort == NoteSort.title,
+                  ),
+                  item(
+                    'sort-doc',
+                    Icons.event_note_outlined,
+                    'După data bonului / din titlu',
+                    checked: store.sort == NoteSort.docDate,
                   ),
                 ],
                 if (nbView != null) ...[
@@ -396,6 +404,21 @@ class _NotesTabState extends State<NotesTab> {
       for (final nb in store.notebooks)
         if (byNotebook[nb.id] case final list?) (nb, list),
     ];
+    // notițe al căror carnet lipsește (șters pe alt dispozitiv etc.): nu
+    // le ascundem — intră la carnetul implicit
+    final known = {for (final nb in store.notebooks) nb.id};
+    final orphans = [
+      for (final n in notes)
+        if (!known.contains(n.notebookId)) n,
+    ];
+    if (orphans.isNotEmpty && groups.isNotEmpty) {
+      final i = groups.indexWhere((g) => g.$1.id == store.defaultNotebookId);
+      if (i >= 0) {
+        groups[i] = (groups[i].$1, [...groups[i].$2, ...orphans]);
+      } else if (store.notebook(store.defaultNotebookId) case final nb?) {
+        groups.add((nb, orphans));
+      }
+    }
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(12, 12, 12, bottomSpace(context)),
       itemCount: groups.length,

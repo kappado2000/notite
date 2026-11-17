@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../data/app_settings.dart';
 import '../data/notes_store.dart';
 import '../models/note.dart';
 import '../models/notebook.dart';
@@ -9,6 +10,7 @@ import '../services/scan_service.dart';
 import '../session.dart';
 import '../theme.dart';
 import '../utils/format.dart';
+import '../widgets/customize.dart';
 import '../widgets/note_actions.dart';
 import '../widgets/note_card.dart';
 import '../widgets/notebook_editor.dart';
@@ -56,7 +58,24 @@ class _HomeTabState extends State<HomeTab> {
         ? '🙂'
         : session.email.substring(0, 1).toUpperCase();
 
+    final receipts =
+        store.activeNotes.where((n) => n.tags.contains('bonuri')).toList()
+          ..sort(
+            (a, b) => NotesStore.docDate(b).compareTo(NotesStore.docDate(a)),
+          );
     return Scaffold(
+      // notiță nouă direct de pe Acasă, ca în pagina Notițe
+      floatingActionButton: searching
+          ? null
+          : aboveNavBar(
+              context,
+              FloatingActionButton(
+                heroTag: 'acasa-notita-noua',
+                tooltip: 'Notiță nouă',
+                onPressed: () => createAndOpenNote(context),
+                child: const Icon(Icons.edit_note, size: 28),
+              ),
+            ),
       body: SafeArea(
         bottom: false,
         child: CustomScrollView(
@@ -211,6 +230,36 @@ class _HomeTabState extends State<HomeTab> {
                   },
                 ),
               ),
+              if (receipts.isNotEmpty)
+                _section(
+                  _Header(
+                    'Bonuri',
+                    action: 'Toate',
+                    onAction: () => shell.openNotes(const TagView('bonuri')),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Card(
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        children: [
+                          for (final n in receipts.take(3))
+                            ListTile(
+                              leading: Icon(
+                                Icons.receipt_long_outlined,
+                                color: scheme.primary,
+                              ),
+                              title: Text(
+                                n.displayTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap: () => openNote(context, n),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               if (store.allTags.isNotEmpty)
                 _section(
                   const _Header('Etichete'),
@@ -316,101 +365,104 @@ class _QuickActions extends StatelessWidget {
   const _QuickActions({required this.shell});
   final ShellController shell;
 
+  VoidCallback? _action(BuildContext context, String id) => switch (id) {
+    'list' => () => createAndOpenNote(context, checklist: true),
+    'note' => () => createAndOpenNote(context),
+    'scan' => ScanService.scanSupported ? () => _scan(context) : null,
+    'pinned' => () => shell.openNotes(const PinnedView()),
+    'qr' => () async {
+      final note = await scanCodeFlow(context);
+      if (note != null && context.mounted) openNote(context, note);
+    },
+    'bon' => () => openReceiptSplit(context),
+    'reminders' => () => shell.openNotes(const RemindersView()),
+    _ => null,
+  };
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final neutral = Theme.of(context).cardTheme.color ?? scheme.surface;
-    final actions = <(IconData, String, Color, Color, VoidCallback)>[
-      // lista de bifat prima, peste tot
-      (
-        Icons.checklist,
-        'Listă',
-        scheme.primary,
-        scheme.onPrimary,
-        () => createAndOpenNote(context, checklist: true),
-      ),
-      (
-        Icons.edit_outlined,
-        'Notiță',
-        neutral,
-        scheme.primary,
-        () => createAndOpenNote(context),
-      ),
-      if (ScanService.scanSupported)
-        (
-          Icons.document_scanner_outlined,
-          'Scanează',
-          neutral,
-          scheme.primary,
-          () => _scan(context),
-        )
-      else
-        (
-          Icons.push_pin_outlined,
-          'Fixate',
-          neutral,
-          scheme.primary,
-          () => shell.openNotes(const PinnedView()),
-        ),
-      (
-        Icons.qr_code_scanner,
-        'Cod QR',
-        neutral,
-        scheme.primary,
-        () async {
-          final note = await scanCodeFlow(context);
-          if (note != null && context.mounted) openNote(context, note);
-        },
-      ),
-      (
-        Icons.receipt_long_outlined,
-        'Bon',
-        neutral,
-        scheme.primary,
-        () => openReceiptSplit(context),
-      ),
+    // cardurile alese în Personalizare, în ordinea aleasă; toate în același
+    // stil (fundal deschis, iconiță verde)
+    final cards = [
+      for (final d in CustomList.homeCards.chosen(context.watch<AppSettings>()))
+        if (_action(context, d.id) case final onTap?) (d, onTap),
     ];
-    return Row(
+    void customize() => Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const CustomizeScreen(only: CustomList.homeCards),
+      ),
+    );
+    if (cards.isEmpty) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          icon: const Icon(Icons.tune),
+          label: const Text('Alege cardurile de aici'),
+          onPressed: customize,
+        ),
+      );
+    }
+    // câte 5 pe rând (mai puține: ocupă tot rândul)
+    final cols = cards.length < 5 ? cards.length : 5;
+    final rows = [
+      for (var i = 0; i < cards.length; i += 5)
+        cards.sublist(i, (i + 5).clamp(0, cards.length)),
+    ];
+    return Column(
       children: [
-        for (var i = 0; i < actions.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(
-            child: Material(
-              color: actions[i].$3,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-                side: i == 0
-                    ? BorderSide.none
-                    : BorderSide(color: scheme.outlineVariant),
-              ),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: actions[i].$5,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 16, 4, 16),
-                  child: Column(
-                    children: [
-                      Icon(actions[i].$1, color: actions[i].$4, size: 26),
-                      const SizedBox(height: 6),
-                      // Pe un rând; la text mare se micșorează, nu se taie.
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          actions[i].$2,
-                          maxLines: 1,
-                          softWrap: false,
-                          style: TextStyle(
-                            color: actions[i].$4,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
+        for (final (r, row) in rows.indexed) ...[
+          if (r > 0) const SizedBox(height: 8),
+          Row(
+            children: [
+              for (var i = 0; i < cols; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                Expanded(
+                  child: i >= row.length
+                      ? const SizedBox()
+                      : Material(
+                          color: neutral,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            side: BorderSide(color: scheme.outlineVariant),
+                          ),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            onTap: row[i].$2,
+                            // apăsare lungă: alegi cardurile și ordinea lor
+                            onLongPress: customize,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(4, 16, 4, 16),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    row[i].$1.icon,
+                                    color: scheme.primary,
+                                    size: 26,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      row[i].$1.label,
+                                      maxLines: 1,
+                                      softWrap: false,
+                                      style: TextStyle(
+                                        color: scheme.primary,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
                 ),
-              ),
-            ),
+              ],
+            ],
           ),
         ],
       ],

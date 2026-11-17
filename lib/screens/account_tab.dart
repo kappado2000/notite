@@ -12,6 +12,7 @@ import '../services/privacy_shield.dart';
 import '../services/data_export.dart';
 import '../services/firestore_sync.dart';
 import '../session.dart';
+import '../widgets/customize.dart';
 import '../widgets/identity_check.dart';
 import '../widgets/pickers.dart';
 import 'secrets/pin_setup.dart';
@@ -527,6 +528,23 @@ class _AccountTabState extends State<AccountTab> {
                       ),
                     ),
                 ],
+              ),
+            ),
+          ),
+
+          // ---- personalizare
+          const _SectionTitle('Personalizare'),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.tune),
+              title: const Text('Carduri, unelte și șabloane'),
+              subtitle: const Text(
+                'Ce carduri apar pe Acasă, uneltele de deasupra tastaturii, '
+                'meniul „+” și șabloanele — și în ce ordine',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CustomizeScreen()),
               ),
             ),
           ),

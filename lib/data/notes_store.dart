@@ -14,7 +14,7 @@ import '../services/password_tools.dart';
 import '../services/reminder_service.dart';
 import '../theme.dart';
 
-enum NoteSort { updated, created, title }
+enum NoteSort { updated, created, title, docDate }
 
 /// Primește fiecare modificare locală, ca s-o trimită în cloud.
 abstract class SyncSink {
@@ -382,6 +382,21 @@ class NotesStore extends ChangeNotifier {
 
   int tagCount(String tag) => notesWithTag(tag).length;
 
+  static final _titleDate = RegExp(r'(\d{1,2})\.(\d{1,2})\.(\d{4})');
+
+  /// Data documentului: cea din titlu (bonuri: „Bon · Lidl · 14.11.2026”),
+  /// altfel data creării notiței.
+  static DateTime docDate(Note n) {
+    final m = _titleDate.firstMatch(n.title);
+    if (m != null) {
+      final d = DateTime.tryParse(
+        '${m[3]}-${m[2]!.padLeft(2, '0')}-${m[1]!.padLeft(2, '0')}',
+      );
+      if (d != null) return d;
+    }
+    return n.createdAt;
+  }
+
   List<Note> _sorted(Iterable<Note> notes) {
     final list = notes.toList();
     switch (sort) {
@@ -395,6 +410,8 @@ class NotesStore extends ChangeNotifier {
             b.displayTitle.toLowerCase(),
           ),
         );
+      case NoteSort.docDate:
+        list.sort((a, b) => docDate(b).compareTo(docDate(a)));
     }
     // Notițele fixate rămân sus.
     final pinned = list.where((n) => n.pinned);
