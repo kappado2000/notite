@@ -118,6 +118,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   /// poate dispărea o clipă (pe web), iar bara nu trebuie să clipească.
   bool _toolbarVisible = false;
   Timer? _toolbarTimer;
+  bool _pointerOnBar = false;
+  bool _barDragging = false;
 
   void _onEditorFocus() {
     _toolbarTimer?.cancel();
@@ -126,6 +128,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     } else {
       _toolbarTimer = Timer(const Duration(milliseconds: 300), () {
         if (!mounted || _editorFocus.hasFocus) return;
+        // degetul e pe bară (ex. muți o iconiță): bara rămâne
+        if (_pointerOnBar || _barDragging) {
+          _onEditorFocus();
+          return;
+        }
         if (_toolbarVisible) setState(() => _toolbarVisible = false);
         // Pe iPhone tastatura rămânea uneori ridicată după ce editorul a
         // pierdut focusul (meniu, fereastră, alegere de fișier), fără să
@@ -504,14 +511,21 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   static const _barIcon = 21.0;
   // butoanele Quill desenează iconița la iconSize × iconButtonFactor:
   // 13 × 1.55 ≈ 20, cât agrafa și camera (21)
+  // fără eticheta de la apăsarea lungă: apăsarea lungă mută iconița
   static const _quillLook = QuillToolbarBaseButtonOptions(
     iconSize: 13,
     iconButtonFactor: 1.55,
+    tooltip: '',
   );
 
   /// Pastila: fundal deschis, colțuri complet rotunjite, umbră fină;
   /// butoanele nu iau focusul (cursorul rămâne în text).
-  Widget _pill(ColorScheme scheme, List<Widget> items, {Widget? trailing}) {
+  Widget _pill(
+    ColorScheme scheme,
+    List<Widget> items, {
+    Widget? trailing,
+    Widget? content,
+  }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
       child: Material(
@@ -525,8 +539,15 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         child: SizedBox(
           height: 44,
           child: Listener(
-            onPointerDown: (_) => _editorHadFocus = _editorFocus.hasFocus,
-            onPointerUp: (_) => _reconnectEditorOnWeb(),
+            onPointerDown: (_) {
+              _pointerOnBar = true;
+              _editorHadFocus = _editorFocus.hasFocus;
+            },
+            onPointerUp: (_) {
+              _pointerOnBar = false;
+              _reconnectEditorOnWeb();
+            },
+            onPointerCancel: (_) => _pointerOnBar = false,
             child: Focus(
               canRequestFocus: false,
               descendantsAreFocusable: false,
@@ -544,21 +565,23 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Row(
-                          children: [
-                            for (final w in items)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 5,
-                                ),
-                                child: w,
-                              ),
-                          ],
-                        ),
-                      ),
+                      child:
+                          content ??
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: Row(
+                              children: [
+                                for (final w in items)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                    ),
+                                    child: w,
+                                  ),
+                              ],
+                            ),
+                          ),
                     ),
                     ?trailing,
                     if (trailing != null) const SizedBox(width: 6),
@@ -567,6 +590,60 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Bara principală: ții degetul pe o iconiță și o muți unde vrei;
+  /// ordinea nouă se ține minte (aceeași ca în Personalizare).
+  Widget _reorderableBar(ColorScheme scheme) {
+    final settings = context.watch<AppSettings>();
+    final chosen = CustomList.editorBar.chosen(settings);
+    // „+” rămâne mereu (meniul cu restul uneltelor)
+    final defs = [
+      ...chosen,
+      if (!chosen.any((d) => d.id == 'add')) formatToolDefs[1],
+    ];
+    final shown = [
+      for (final d in defs)
+        if (_barButton(d) case final w?) (d, w),
+    ];
+    // uneltele care nu există pe acest dispozitiv își păstrează locul la
+    // capăt (ex. camera pe calculator)
+    final hidden = [
+      for (final d in defs)
+        if (!shown.any((e) => e.$1.id == d.id)) d.id,
+    ];
+    return ReorderableListView.builder(
+      scrollDirection: Axis.horizontal,
+      buildDefaultDragHandles: false,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      itemCount: shown.length,
+      proxyDecorator: (child, _, _) => Material(
+        color: scheme.primaryContainer,
+        shape: const CircleBorder(),
+        elevation: 4,
+        child: child,
+      ),
+      // cât muți o iconiță, bara nu dispare (focusul poate sări o clipă)
+      onReorderStart: (_) => _barDragging = true,
+      onReorderItem: (from, to) {
+        _barDragging = false;
+        Future.delayed(const Duration(milliseconds: 80), () {
+          if (mounted && !_editorFocus.hasFocus) _editorFocus.requestFocus();
+        });
+        HapticFeedback.selectionClick();
+        final ids = [for (final e in shown) e.$1.id];
+        ids.insert(to, ids.removeAt(from));
+        settings.setCustomList(CustomList.editorBar.key, [...ids, ...hidden]);
+      },
+      itemBuilder: (_, i) => ReorderableDelayedDragStartListener(
+        key: ValueKey(shown[i].$1.id),
+        index: i,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          child: Center(child: shown[i].$2),
         ),
       ),
     );
@@ -584,7 +661,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     final format = switch (d.id) {
       // „Aa”: deschide / închide rândul cu formatarea
       'format' => IconButton(
-        tooltip: _formatOpen ? 'Închide formatarea' : 'Formatare',
         isSelected: _formatOpen,
         style: IconButton.styleFrom(
           backgroundColor: _formatOpen ? scheme.primaryContainer : null,
@@ -599,13 +675,18 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
           ),
         ),
       ),
-      'add' => GestureDetector(
+      // fără tooltip: pe telefon apăsarea lungă ar arăta doar eticheta
+      'add' => InkResponse(
+        radius: 22,
+        onTap: _busy ? null : _showAddMenu,
         onLongPress: () => _customize(CustomList.editorBar),
-        child: IconButton(
-          tooltip: 'Adaugă (ține apăsat: personalizează bara)',
-          iconSize: _barIcon,
-          icon: Icon(Icons.add_circle_outline, color: scheme.primary),
-          onPressed: _busy ? null : _showAddMenu,
+        child: Padding(
+          padding: const EdgeInsets.all(7),
+          child: Icon(
+            Icons.add_circle_outline,
+            size: _barIcon,
+            color: scheme.primary,
+          ),
         ),
       ),
       'bullet' => toggle(Attribute.ul),
@@ -667,7 +748,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     final run = _tool(d.id);
     if (run == null) return null;
     return IconButton(
-      tooltip: d.label,
       iconSize: _barIcon,
       icon: Icon(d.icon),
       onPressed: _busy ? null : run,
@@ -1314,24 +1394,29 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   ]),
                 _pill(
                   scheme,
-                  [
-                    for (final d in CustomList.editorBar.chosen(
-                      context.watch<AppSettings>(),
-                    ))
-                      ?_barButton(d),
-                    // „+” rămâne mereu (meniul cu restul uneltelor)
-                    if (!CustomList.editorBar
-                        .chosen(context.watch<AppSettings>())
-                        .any((d) => d.id == 'add'))
-                      ?_barButton(formatToolDefs[1]),
-                  ],
-                  trailing: _isMobile
-                      ? IconButton(
+                  const [],
+                  content: _reorderableBar(scheme),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // ordinea și uneltele barei, la vedere
+                      IconButton(
+                        tooltip: 'Personalizează bara',
+                        icon: Icon(
+                          Icons.tune,
+                          size: 20,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        onPressed: () => _customize(CustomList.editorBar),
+                      ),
+                      if (_isMobile)
+                        IconButton(
                           tooltip: 'Ascunde tastatura',
                           icon: const Icon(Icons.keyboard_hide_outlined),
                           onPressed: _hideKeyboard,
-                        )
-                      : null,
+                        ),
+                    ],
+                  ),
                 ),
               ],
               if (files.isNotEmpty)
