@@ -473,8 +473,16 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
                     child: GestureDetector(
                       onLongPress: () => _personMenu(p),
                       child: ChoiceChip(
+                        avatar: CircleAvatar(
+                          backgroundColor: _personColor(s, p),
+                          radius: 6,
+                        ),
                         label: Text('$p · ${formatLei(s.personTotal(p))}'),
                         selected: _person == p,
+                        selectedColor: _personColor(
+                          s,
+                          p,
+                        ).withValues(alpha: 0.22),
                         onSelected: (_) => setState(() => _person = p),
                       ),
                     ),
@@ -523,24 +531,11 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
           for (var i = 0; i < r.items.length; i++)
             if (s.remaining(i) > 0) i,
         ], empty: r.items.isEmpty ? null : 'Tot bonul a fost împărțit.'),
-        ..._group(s, 'Alese de $_person', [
-          for (var i = 0; i < r.items.length; i++)
-            if (s.remaining(i) == 0 && s.taken(_person, i) > 0) i,
-        ]),
-        if ([
-              for (var i = 0; i < r.items.length; i++)
-                if (_takenByOthers(s, i)) i,
-            ]
-            case final done when done.isNotEmpty)
-          ExpansionTile(
-            leading: const Icon(Icons.done_all),
-            title: Text(
-              done.length == 1
-                  ? '1 produs ales de alții'
-                  : '${done.length} produse alese de alții',
-            ),
-            children: [for (final i in done) _itemTile(s, i)],
-          ),
+        // persoana care alege acum: deschis, în culoarea ei
+        _personGroup(s, _person, current: true),
+        // ceilalți: fiecare în culoarea lui, strâns (se deschide la atingere)
+        for (final p in s.persons)
+          if (p != _person) _personGroup(s, p),
         Padding(
           padding: const EdgeInsets.all(8),
           child: Wrap(
@@ -622,77 +617,142 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
     ];
   }
 
-  /// Produsul a fost luat în întregime de ceilalți (nu și de cine alege acum).
-  bool _takenByOthers(ReceiptSplit s, int i) =>
-      s.remaining(i) == 0 && s.taken(_person, i) == 0;
+  /// Culori pentru persoane (aceeași persoană = aceeași culoare).
+  static const _palette = [
+    Color(0xFF3F8F6B),
+    Color(0xFF3B6FB6),
+    Color(0xFFC0702A),
+    Color(0xFF7B4FA8),
+    Color(0xFFB8434A),
+    Color(0xFF2C8C99),
+    Color(0xFF8A7A2E),
+  ];
 
+  Color _personColor(ReceiptSplit s, String p) =>
+      _palette[s.persons.indexOf(p).clamp(0, 999) % _palette.length];
+
+  /// Ce a ales o persoană: fundal în culoarea ei, cu bucățile și suma.
+  Widget _personGroup(ReceiptSplit s, String p, {bool current = false}) {
+    final items = [
+      for (var i = 0; i < s.receipt.items.length; i++)
+        if (s.taken(p, i) > 0) i,
+    ];
+    if (items.isEmpty) return const SizedBox.shrink();
+    final color = _personColor(s, p);
+    final header = Row(
+      children: [
+        CircleAvatar(radius: 6, backgroundColor: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            'ALESE DE ${p.toUpperCase()}',
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+              color: color,
+            ),
+          ),
+        ),
+        Text(
+          '${formatLei(s.personTotal(p))} lei',
+          style: TextStyle(fontWeight: FontWeight.w700, color: color),
+        ),
+      ],
+    );
+    final rows = [for (final i in items) _takenTile(s, i, p, current)];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: current
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+                  child: header,
+                ),
+                ...rows,
+              ],
+            )
+          : ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+              shape: const Border(),
+              collapsedShape: const Border(),
+              title: header,
+              children: rows,
+            ),
+    );
+  }
+
+  /// Un produs ales de [p]: câte bucăți și cât costă; persoana de acum
+  /// poate scoate o bucată („−”).
+  Widget _takenTile(ReceiptSplit s, int i, String p, bool editable) {
+    final item = s.receipt.items[i];
+    final n = s.taken(p, i);
+    final color = _personColor(s, p);
+    return ListTile(
+      dense: true,
+      leading: CircleAvatar(
+        radius: 15,
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        child: Text('$n', style: const TextStyle(fontWeight: FontWeight.w700)),
+      ),
+      title: Text(item.name),
+      subtitle: Text(
+        '$n × ${formatLei(item.unitPrice)} = '
+        '${formatLei(round2(n * item.unitShare))} lei',
+      ),
+      trailing: editable
+          ? IconButton(
+              tooltip: 'Scoate o bucată',
+              icon: const Icon(Icons.remove_circle_outline),
+              onPressed: () => setState(() => s.set(p, i, n - 1)),
+            )
+          : null,
+    );
+  }
+
+  /// Un produs din „De împărțit”: arată doar ce a RĂMAS (ex. din 8 beri,
+  /// după ce Adi a luat 2, scrie 6). Atingerea dă o bucată persoanei care
+  /// alege acum; scoaterea se face din grupa ei colorată („−”).
   Widget _itemTile(ReceiptSplit s, int i) {
     final scheme = Theme.of(context).colorScheme;
     final item = s.receipt.items[i];
-    final mine = s.taken(_person, i);
-    final others = [
-      for (final p in s.persons)
-        if (p != _person && s.taken(p, i) > 0) '$p ${s.taken(p, i)}',
-    ];
     final free = s.remaining(i);
-    final qty = item.qty == item.qty.roundToDouble()
-        ? item.qty.round().toString()
-        : item.qty.toString().replaceAll('.', ',');
+    final color = _personColor(s, _person);
     return ListTile(
-      onTap: free > 0 || (item.units == 1 && mine > 0)
-          ? () => _tapItem(i)
-          : null,
+      onTap: free > 0 ? () => _tapItem(i) : null,
       onLongPress: () => _editItem(i),
       leading: item.units == 1
-          ? Checkbox(
-              value: mine > 0,
-              onChanged: free > 0 || mine > 0 ? (_) => _tapItem(i) : null,
-            )
+          ? Icon(Icons.check_box_outline_blank, color: color)
           : CircleAvatar(
               radius: 18,
-              backgroundColor: mine > 0
-                  ? scheme.primary
-                  : scheme.surfaceContainerHigh,
-              foregroundColor: mine > 0 ? scheme.onPrimary : scheme.onSurface,
-              child: Text('$mine'),
+              backgroundColor: scheme.surfaceContainerHigh,
+              foregroundColor: scheme.onSurface,
+              child: Text(
+                '$free',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
       title: Text(item.name),
       subtitle: Text(
         [
-          '$qty × ${formatLei(item.unitPrice)} = ${formatLei(item.total)} lei',
-          if (item.units > 1 && free > 0 && free < item.units)
-            'mai sunt $free din ${item.units} · '
-                '${formatLei(round2(free * item.unitShare))} lei',
-          if (others.isNotEmpty) others.join(', '),
-          if (free == 0 && mine == 0) 'ales în întregime',
-        ].join('\n'),
+          '$free × ${formatLei(item.unitPrice)} = '
+              '${formatLei(round2(free * item.unitShare))} lei',
+          if (free < item.units) 'din ${item.units} pe bon',
+        ].join(' · '),
       ),
-      isThreeLine:
-          others.isNotEmpty ||
-          (free == 0 && mine == 0) ||
-          (item.units > 1 && free > 0 && free < item.units),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (item.units > 1 && mine > 0)
-            IconButton(
-              tooltip: 'Una mai puțin',
-              icon: const Icon(Icons.remove_circle_outline),
-              onPressed: () => setState(() => s.set(_person, i, mine - 1)),
-            ),
-          Text(
-            mine > 0 ? '${formatLei(round2(mine * item.unitShare))} lei' : '',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: scheme.primary,
-            ),
-          ),
-          IconButton(
-            tooltip: 'Modifică produsul',
-            icon: const Icon(Icons.edit_outlined, size: 20),
-            onPressed: () => _editItem(i),
-          ),
-        ],
+      trailing: IconButton(
+        tooltip: 'Modifică produsul',
+        icon: const Icon(Icons.edit_outlined, size: 20),
+        onPressed: () => _editItem(i),
       ),
     );
   }
