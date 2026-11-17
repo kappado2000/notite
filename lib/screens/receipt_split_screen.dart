@@ -515,10 +515,18 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
             ),
           ),
         const Divider(height: 1),
-        // întâi ce mai e de ales; produsele luate în întregime de alții
-        // coboară într-o secțiune strânsă, ca lista să se „golească”
-        for (var i = 0; i < r.items.length; i++)
-          if (!_takenByOthers(s, i)) _itemTile(s, i),
+        // Lista se „golește” pe măsură ce produsele sunt alocate:
+        // 1. ce mai e de împărțit (cu bucățile rămase);
+        // 2. ce a ales deja persoana de acum (ca să poată scoate);
+        // 3. ce au luat ceilalți (strâns).
+        ..._group(s, 'De împărțit', [
+          for (var i = 0; i < r.items.length; i++)
+            if (s.remaining(i) > 0) i,
+        ], empty: r.items.isEmpty ? null : 'Tot bonul a fost împărțit.'),
+        ..._group(s, 'Alese de $_person', [
+          for (var i = 0; i < r.items.length; i++)
+            if (s.remaining(i) == 0 && s.taken(_person, i) > 0) i,
+        ]),
         if ([
               for (var i = 0; i < r.items.length; i++)
                 if (_takenByOthers(s, i)) i,
@@ -528,8 +536,8 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
             leading: const Icon(Icons.done_all),
             title: Text(
               done.length == 1
-                  ? '1 produs ales deja de alții'
-                  : '${done.length} produse alese deja de alții',
+                  ? '1 produs ales de alții'
+                  : '${done.length} produse alese de alții',
             ),
             children: [for (final i in done) _itemTile(s, i)],
           ),
@@ -588,6 +596,32 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
     if (source != null && mounted) await _read(source, append: true);
   }
 
+  /// Titlul unei grupe de produse + produsele ei (nimic dacă e goală).
+  List<Widget> _group(
+    ReceiptSplit s,
+    String title,
+    List<int> items, {
+    String? empty,
+  }) {
+    if (items.isEmpty && empty == null) return const [];
+    final scheme = Theme.of(context).colorScheme;
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Text(
+          items.isEmpty ? empty! : title.toUpperCase(),
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+            color: items.isEmpty ? scheme.primary : scheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+      for (final i in items) _itemTile(s, i),
+    ];
+  }
+
   /// Produsul a fost luat în întregime de ceilalți (nu și de cine alege acum).
   bool _takenByOthers(ReceiptSplit s, int i) =>
       s.remaining(i) == 0 && s.taken(_person, i) == 0;
@@ -627,7 +661,8 @@ class _ReceiptSplitScreenState extends State<ReceiptSplitScreen> {
         [
           '$qty × ${formatLei(item.unitPrice)} = ${formatLei(item.total)} lei',
           if (item.units > 1 && free > 0 && free < item.units)
-            'rămase $free din ${item.units}',
+            'mai sunt $free din ${item.units} · '
+                '${formatLei(round2(free * item.unitShare))} lei',
           if (others.isNotEmpty) others.join(', '),
           if (free == 0 && mine == 0) 'ales în întregime',
         ].join('\n'),

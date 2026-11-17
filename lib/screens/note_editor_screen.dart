@@ -502,16 +502,18 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
   /// Butoanele barei: iconițe mari, cu spațiu între ele.
   static const _barIcon = 21.0;
+  // butoanele Quill desenează iconița la iconSize × iconButtonFactor:
+  // 13 × 1.55 ≈ 20, cât agrafa și camera (21)
   static const _quillLook = QuillToolbarBaseButtonOptions(
-    iconSize: _barIcon,
-    iconButtonFactor: 1.7,
+    iconSize: 13,
+    iconButtonFactor: 1.55,
   );
 
   /// Pastila: fundal deschis, colțuri complet rotunjite, umbră fină;
   /// butoanele nu iau focusul (cursorul rămâne în text).
   Widget _pill(ColorScheme scheme, List<Widget> items, {Widget? trailing}) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 4, 28, 8),
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
       child: Material(
         color: scheme.surfaceContainerLowest,
         elevation: 3,
@@ -521,35 +523,47 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         ),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
-          height: 50,
+          height: 44,
           child: Listener(
             onPointerDown: (_) => _editorHadFocus = _editorFocus.hasFocus,
             onPointerUp: (_) => _reconnectEditorOnWeb(),
             child: Focus(
               canRequestFocus: false,
               descendantsAreFocusable: false,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Row(
-                        children: [
-                          for (final w in items)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 5,
-                              ),
-                              child: w,
-                            ),
-                        ],
-                      ),
+              // butoane compacte, ca pastila să fie scundă
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  iconButtonTheme: IconButtonThemeData(
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(36, 36),
+                      padding: const EdgeInsets.all(6),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),
-                  ?trailing,
-                  if (trailing != null) const SizedBox(width: 6),
-                ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Row(
+                          children: [
+                            for (final w in items)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                ),
+                                child: w,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    ?trailing,
+                    if (trailing != null) const SizedBox(width: 6),
+                  ],
+                ),
               ),
             ),
           ),
@@ -579,7 +593,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         icon: Text(
           'Aa',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 15,
             fontWeight: FontWeight.w700,
             color: scheme.onSurface,
           ),
