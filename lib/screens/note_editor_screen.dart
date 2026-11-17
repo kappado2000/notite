@@ -498,29 +498,155 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _ => null,
   };
 
+  bool _formatOpen = false;
+
+  /// Butoanele barei: iconițe mari, cu spațiu între ele.
+  static const _barIcon = 25.0;
+  static const _quillLook = QuillToolbarBaseButtonOptions(
+    iconSize: _barIcon,
+    iconButtonFactor: 1.75,
+  );
+
+  /// Pastila: fundal deschis, colțuri complet rotunjite, umbră fină;
+  /// butoanele nu iau focusul (cursorul rămâne în text).
+  Widget _pill(ColorScheme scheme, List<Widget> items, {Widget? trailing}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+      child: Material(
+        color: scheme.surfaceContainerLowest,
+        elevation: 3,
+        shadowColor: Colors.black.withValues(alpha: 0.25),
+        shape: StadiumBorder(
+          side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          height: 58,
+          child: Listener(
+            onPointerDown: (_) => _editorHadFocus = _editorFocus.hasFocus,
+            onPointerUp: (_) => _reconnectEditorOnWeb(),
+            child: Focus(
+              canRequestFocus: false,
+              descendantsAreFocusable: false,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Row(
+                        children: [
+                          for (final w in items)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                              ),
+                              child: w,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  ?trailing,
+                  if (trailing != null) const SizedBox(width: 6),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Un buton din bara de deasupra tastaturii.
   Widget? _barButton(ToolDef d) {
     final c = _controller;
-    Widget toggle(Attribute a) =>
-        QuillToolbarToggleStyleButton(controller: c, attribute: a);
+    final scheme = Theme.of(context).colorScheme;
+    Widget toggle(Attribute a) => QuillToolbarToggleStyleButton(
+      controller: c,
+      attribute: a,
+      baseOptions: _quillLook,
+    );
     final format = switch (d.id) {
+      // „Aa”: deschide / închide rândul cu formatarea
+      'format' => IconButton(
+        tooltip: _formatOpen ? 'Închide formatarea' : 'Formatare',
+        isSelected: _formatOpen,
+        style: IconButton.styleFrom(
+          backgroundColor: _formatOpen ? scheme.primaryContainer : null,
+        ),
+        onPressed: () => setState(() => _formatOpen = !_formatOpen),
+        icon: Text(
+          'Aa',
+          style: TextStyle(
+            fontSize: 21,
+            fontWeight: FontWeight.w700,
+            color: scheme.onSurface,
+          ),
+        ),
+      ),
+      'add' => GestureDetector(
+        onLongPress: () => _customize(CustomList.editorBar),
+        child: IconButton(
+          tooltip: 'Adaugă (ține apăsat: personalizează bara)',
+          iconSize: _barIcon,
+          icon: Icon(Icons.add_circle_outline, color: scheme.primary),
+          onPressed: _busy ? null : _showAddMenu,
+        ),
+      ),
       'bullet' => toggle(Attribute.ul),
       'numbered' => toggle(Attribute.ol),
-      'checklist' => QuillToolbarToggleCheckListButton(controller: c),
+      'checklist' => QuillToolbarToggleCheckListButton(
+        controller: c,
+        baseOptions: _quillLook,
+        options: const QuillToolbarToggleCheckListButtonOptions(
+          iconData: Icons.checklist,
+        ),
+      ),
       'bold' => toggle(Attribute.bold),
       'italic' => toggle(Attribute.italic),
       'underline' => toggle(Attribute.underline),
       'strike' => toggle(Attribute.strikeThrough),
       'quote' => toggle(Attribute.blockQuote),
       'header' => QuillToolbarSelectHeaderStyleDropdownButton(controller: c),
-      'color' => QuillToolbarColorButton(controller: c, isBackground: false),
-      'bgcolor' => QuillToolbarColorButton(controller: c, isBackground: true),
-      'indent' => QuillToolbarIndentButton(controller: c, isIncrease: true),
-      'outdent' => QuillToolbarIndentButton(controller: c, isIncrease: false),
-      'link' => QuillToolbarLinkStyleButton(controller: c),
-      'clear' => QuillToolbarClearFormatButton(controller: c),
-      'undo' => QuillToolbarHistoryButton(controller: c, isUndo: true),
-      'redo' => QuillToolbarHistoryButton(controller: c, isUndo: false),
+      'color' => QuillToolbarColorButton(
+        controller: c,
+        isBackground: false,
+        baseOptions: _quillLook,
+      ),
+      'bgcolor' => QuillToolbarColorButton(
+        controller: c,
+        isBackground: true,
+        baseOptions: _quillLook,
+      ),
+      'indent' => QuillToolbarIndentButton(
+        controller: c,
+        isIncrease: true,
+        baseOptions: _quillLook,
+      ),
+      'outdent' => QuillToolbarIndentButton(
+        controller: c,
+        isIncrease: false,
+        baseOptions: _quillLook,
+      ),
+      'link' => QuillToolbarLinkStyleButton(
+        controller: c,
+        baseOptions: _quillLook,
+      ),
+      'clear' => QuillToolbarClearFormatButton(
+        controller: c,
+        baseOptions: _quillLook,
+      ),
+      'undo' => QuillToolbarHistoryButton(
+        controller: c,
+        isUndo: true,
+        baseOptions: _quillLook,
+      ),
+      'redo' => QuillToolbarHistoryButton(
+        controller: c,
+        isUndo: false,
+        baseOptions: _quillLook,
+      ),
       _ => null,
     };
     if (format != null) return format;
@@ -528,6 +654,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     if (run == null) return null;
     return IconButton(
       tooltip: d.label,
+      iconSize: _barIcon,
       icon: Icon(d.icon),
       onPressed: _busy ? null : run,
     );
@@ -1152,58 +1279,47 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   ),
                 ),
               ),
-              if (!trashed && _toolbarVisible)
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.symmetric(
-                      horizontal: BorderSide(color: scheme.outlineVariant),
+              // Bara de unelte ca în Notele din iOS: o „pastilă” care plutește
+              // deasupra tastaturii, cu iconițe mari și rare; „Aa” deschide
+              // deasupra ei formatarea textului.
+              if (!trashed && _toolbarVisible) ...[
+                if (_formatOpen)
+                  _pill(scheme, [
+                    for (final id in formatPanelIds)
+                      ?_barButton(
+                        [
+                          ...formatToolDefs,
+                          ...editorToolDefs,
+                        ].firstWhere((d) => d.id == id),
+                      ),
+                    IconButton(
+                      tooltip: 'Personalizează bara',
+                      icon: const Icon(Icons.tune),
+                      onPressed: () => _customize(CustomList.editorBar),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onLongPress: () => _customize(CustomList.editorBar),
-                        child: IconButton(
-                          tooltip: 'Adaugă imagine, scanare, fișier…',
-                          icon: Icon(Icons.add_circle, color: scheme.primary),
-                          onPressed: _busy ? null : _showAddMenu,
-                        ),
-                      ),
-                      Expanded(
-                        // Butoanele barei nu iau focusul, ca cursorul să rămână
-                        // în editor după aplicarea unei formatări.
-                        child: Listener(
-                          onPointerDown: (_) =>
-                              _editorHadFocus = _editorFocus.hasFocus,
-                          onPointerUp: (_) => _reconnectEditorOnWeb(),
-                          child: Focus(
-                            canRequestFocus: false,
-                            descendantsAreFocusable: false,
-                            // uneltele alese de tine, în ordinea ta
-                            // (Cont → Personalizare sau apăsare lungă pe +)
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  for (final d in CustomList.editorBar.chosen(
-                                    context.watch<AppSettings>(),
-                                  ))
-                                    ?_barButton(d),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (_isMobile)
-                        IconButton(
+                  ]),
+                _pill(
+                  scheme,
+                  [
+                    for (final d in CustomList.editorBar.chosen(
+                      context.watch<AppSettings>(),
+                    ))
+                      ?_barButton(d),
+                    // „+” rămâne mereu (meniul cu restul uneltelor)
+                    if (!CustomList.editorBar
+                        .chosen(context.watch<AppSettings>())
+                        .any((d) => d.id == 'add'))
+                      ?_barButton(formatToolDefs[1]),
+                  ],
+                  trailing: _isMobile
+                      ? IconButton(
                           tooltip: 'Ascunde tastatura',
                           icon: const Icon(Icons.keyboard_hide_outlined),
                           onPressed: _hideKeyboard,
-                        ),
-                    ],
-                  ),
+                        )
+                      : null,
                 ),
+              ],
               if (files.isNotEmpty)
                 _FilesBar(
                   files: files,

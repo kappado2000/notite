@@ -39,6 +39,8 @@ const editorToolDefs = <ToolDef>[
 
 /// Formatarea textului (doar în bara de deasupra tastaturii).
 const formatToolDefs = <ToolDef>[
+  ToolDef('format', Icons.text_fields, 'Formatare (Aa)'),
+  ToolDef('add', Icons.add_circle_outline, 'Adaugă (+)'),
   ToolDef('bullet', Icons.format_list_bulleted, 'Listă cu buline'),
   ToolDef('numbered', Icons.format_list_numbered, 'Listă numerotată'),
   ToolDef('bold', Icons.format_bold, 'Aldin'),
@@ -57,12 +59,20 @@ const formatToolDefs = <ToolDef>[
   ToolDef('redo', Icons.redo, 'Refă'),
 ];
 
-/// Bara de deasupra tastaturii: listele întâi, apoi agrafa, formatarea.
+/// Bara de deasupra tastaturii, ca în Notele din iOS: Aa (formatarea),
+/// listele, agrafa, camera și „+” (restul).
 const editorBarDefaults = [
+  'format',
+  'checklist',
   'bullet',
   'numbered',
-  'checklist',
   'file',
+  'camera',
+  'add',
+];
+
+/// Ce se deschide din „Aa”.
+const formatPanelIds = [
   'bold',
   'italic',
   'underline',
