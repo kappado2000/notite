@@ -511,7 +511,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   /// butoanele nu iau focusul (cursorul rămâne în text).
   Widget _pill(ColorScheme scheme, List<Widget> items, {Widget? trailing}) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+      padding: const EdgeInsets.fromLTRB(28, 4, 28, 8),
       child: Material(
         color: scheme.surfaceContainerLowest,
         elevation: 3,
