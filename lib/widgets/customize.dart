@@ -36,7 +36,48 @@ const editorToolDefs = <ToolDef>[
   ToolDef('qr', Icons.qr_code_scanner, 'Cod QR / de bare'),
   ToolDef('share', Icons.ios_share, 'Partajează notița'),
 ];
-const editorBarDefaults = ['file', 'checklist'];
+
+/// Formatarea textului (doar în bara de deasupra tastaturii).
+const formatToolDefs = <ToolDef>[
+  ToolDef('bullet', Icons.format_list_bulleted, 'Listă cu buline'),
+  ToolDef('numbered', Icons.format_list_numbered, 'Listă numerotată'),
+  ToolDef('bold', Icons.format_bold, 'Aldin'),
+  ToolDef('italic', Icons.format_italic, 'Cursiv'),
+  ToolDef('underline', Icons.format_underline, 'Subliniat'),
+  ToolDef('strike', Icons.format_strikethrough, 'Tăiat'),
+  ToolDef('header', Icons.title, 'Titlu (mărime)'),
+  ToolDef('color', Icons.format_color_text, 'Culoarea textului'),
+  ToolDef('bgcolor', Icons.format_color_fill, 'Culoare de fundal'),
+  ToolDef('quote', Icons.format_quote, 'Citat'),
+  ToolDef('indent', Icons.format_indent_increase, 'Mută la dreapta'),
+  ToolDef('outdent', Icons.format_indent_decrease, 'Mută la stânga'),
+  ToolDef('link', Icons.link, 'Legătură'),
+  ToolDef('clear', Icons.format_clear, 'Șterge formatarea'),
+  ToolDef('undo', Icons.undo, 'Anulează'),
+  ToolDef('redo', Icons.redo, 'Refă'),
+];
+
+/// Bara de deasupra tastaturii: listele întâi, apoi agrafa, formatarea.
+const editorBarDefaults = [
+  'bullet',
+  'numbered',
+  'checklist',
+  'file',
+  'bold',
+  'italic',
+  'underline',
+  'strike',
+  'header',
+  'color',
+  'bgcolor',
+  'quote',
+  'indent',
+  'outdent',
+  'link',
+  'clear',
+  'undo',
+  'redo',
+];
 const addMenuDefaults = [
   'checklist',
   'scan',
@@ -64,7 +105,8 @@ enum CustomList {
 
   List<ToolDef> get defs => switch (this) {
     homeCards => homeCardDefs,
-    editorBar || addMenu => editorToolDefs,
+    editorBar => [...formatToolDefs, ...editorToolDefs],
+    addMenu => editorToolDefs,
     templates => templateDefs(),
   };
 

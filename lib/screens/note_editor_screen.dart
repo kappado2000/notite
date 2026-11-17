@@ -498,6 +498,41 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _ => null,
   };
 
+  /// Un buton din bara de deasupra tastaturii.
+  Widget? _barButton(ToolDef d) {
+    final c = _controller;
+    Widget toggle(Attribute a) =>
+        QuillToolbarToggleStyleButton(controller: c, attribute: a);
+    final format = switch (d.id) {
+      'bullet' => toggle(Attribute.ul),
+      'numbered' => toggle(Attribute.ol),
+      'checklist' => QuillToolbarToggleCheckListButton(controller: c),
+      'bold' => toggle(Attribute.bold),
+      'italic' => toggle(Attribute.italic),
+      'underline' => toggle(Attribute.underline),
+      'strike' => toggle(Attribute.strikeThrough),
+      'quote' => toggle(Attribute.blockQuote),
+      'header' => QuillToolbarSelectHeaderStyleDropdownButton(controller: c),
+      'color' => QuillToolbarColorButton(controller: c, isBackground: false),
+      'bgcolor' => QuillToolbarColorButton(controller: c, isBackground: true),
+      'indent' => QuillToolbarIndentButton(controller: c, isIncrease: true),
+      'outdent' => QuillToolbarIndentButton(controller: c, isIncrease: false),
+      'link' => QuillToolbarLinkStyleButton(controller: c),
+      'clear' => QuillToolbarClearFormatButton(controller: c),
+      'undo' => QuillToolbarHistoryButton(controller: c, isUndo: true),
+      'redo' => QuillToolbarHistoryButton(controller: c, isUndo: false),
+      _ => null,
+    };
+    if (format != null) return format;
+    final run = _tool(d.id);
+    if (run == null) return null;
+    return IconButton(
+      tooltip: d.label,
+      icon: Icon(d.icon),
+      onPressed: _busy ? null : run,
+    );
+  }
+
   void _customize(CustomList list) {
     _hideKeyboard();
     Navigator.of(context)
@@ -1134,16 +1169,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                           onPressed: _busy ? null : _showAddMenu,
                         ),
                       ),
-                      // uneltele alese (implicit: agrafă și listă de bifat)
-                      for (final d in CustomList.editorBar.chosen(
-                        context.watch<AppSettings>(),
-                      ))
-                        if (_tool(d.id) case final run?)
-                          IconButton(
-                            tooltip: d.label,
-                            icon: Icon(d.icon),
-                            onPressed: _busy ? null : run,
-                          ),
                       Expanded(
                         // Butoanele barei nu iau focusul, ca cursorul să rămână
                         // în editor după aplicarea unei formatări.
@@ -1154,19 +1179,17 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                           child: Focus(
                             canRequestFocus: false,
                             descendantsAreFocusable: false,
-                            child: QuillSimpleToolbar(
-                              controller: _controller,
-                              config: const QuillSimpleToolbarConfig(
-                                multiRowsDisplay: false,
-                                showFontFamily: false,
-                                showFontSize: false,
-                                showSubscript: false,
-                                showSuperscript: false,
-                                showSearchButton: false,
-                                showInlineCode: false,
-                                showCodeBlock: false,
-                                showDirection: false,
-                                showAlignmentButtons: false,
+                            // uneltele alese de tine, în ordinea ta
+                            // (Cont → Personalizare sau apăsare lungă pe +)
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  for (final d in CustomList.editorBar.chosen(
+                                    context.watch<AppSettings>(),
+                                  ))
+                                    ?_barButton(d),
+                                ],
                               ),
                             ),
                           ),
