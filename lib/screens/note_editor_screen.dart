@@ -501,10 +501,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   bool _formatOpen = false;
 
   /// Butoanele barei: iconițe mari, cu spațiu între ele.
-  static const _barIcon = 25.0;
+  static const _barIcon = 21.0;
   static const _quillLook = QuillToolbarBaseButtonOptions(
     iconSize: _barIcon,
-    iconButtonFactor: 1.75,
+    iconButtonFactor: 1.7,
   );
 
   /// Pastila: fundal deschis, colțuri complet rotunjite, umbră fină;
@@ -521,7 +521,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         ),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
-          height: 58,
+          height: 50,
           child: Listener(
             onPointerDown: (_) => _editorHadFocus = _editorFocus.hasFocus,
             onPointerUp: (_) => _reconnectEditorOnWeb(),
@@ -579,7 +579,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         icon: Text(
           'Aa',
           style: TextStyle(
-            fontSize: 21,
+            fontSize: 18,
             fontWeight: FontWeight.w700,
             color: scheme.onSurface,
           ),
