@@ -84,11 +84,22 @@ function render() {
   renderFilters();
   const q = $('q').value.trim().toLowerCase();
   const list = $('list');
+  // „https://”, „www.” nu contează la căutare (altfel „tp” = orice site);
+  // întâi titlurile care încep cu textul căutat, apoi restul
+  const plain = (i) =>
+    `${i.title} ${i.username} ${i.url}`.toLowerCase().replace(/https?:\/\/|www\./g, ' ');
+  const rank = (i) => {
+    const t = i.title.toLowerCase();
+    if (t.startsWith(q)) return 0;
+    if (t.split(/[^a-z0-9ăâîșț]+/).some((w) => w.startsWith(q))) return 1;
+    if (t.includes(q)) return 2;
+    if ((i.username || '').toLowerCase().includes(q)) return 3;
+    return 4;
+  };
   const shown = all.filter(
-    (i) =>
-      (!healthFilter || i.health === healthFilter) &&
-      (!q || `${i.title} ${i.username} ${i.url}`.toLowerCase().includes(q)),
+    (i) => (!healthFilter || i.health === healthFilter) && (!q || plain(i).includes(q)),
   );
+  if (q) shown.sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title, 'ro'));
   if (!shown.length) {
     list.innerHTML = `<div class="empty">${all.length ? 'Niciun rezultat' : 'Nicio parolă salvată încă.'}</div>`;
     return;

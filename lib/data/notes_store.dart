@@ -797,12 +797,45 @@ class NotesStore extends ChangeNotifier {
 
   SecretItem? secret(String id) => _secrets[id];
 
+  static final _scheme = RegExp(r'https?://|www\.');
+
+  /// Căutare în parole. „http://”, „https://” și „www.” din adrese nu se
+  /// iau în seamă (altfel „tp” s-ar potrivi cu orice site). Rezultatele
+  /// sunt ordonate după cât de bine se potrivesc: întâi titlurile care
+  /// încep cu textul căutat (TP-Link pentru „tp”), apoi cuvinte din titlu
+  /// care încep cu el, apoi titlul care îl conține, apoi utilizatorul,
+  /// apoi restul (site, notițe).
   List<SecretItem> searchSecrets(String query, Iterable<SecretItem> scope) {
-    final words = _fold(query).split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
-    if (words.isEmpty) return scope.toList();
-    return scope
-        .where((i) => words.every(_fold(i.searchText).contains))
+    final words = _fold(query)
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
         .toList();
+    if (words.isEmpty) return scope.toList();
+    final first = words.first;
+    int rank(SecretItem i) {
+      final title = _fold(i.displayTitle);
+      if (title.startsWith(first)) return 0;
+      if (title.split(RegExp(r'[^a-z0-9]+')).any((w) => w.startsWith(first))) {
+        return 1;
+      }
+      if (title.contains(first)) return 2;
+      if (_fold(i.username).contains(first)) return 3;
+      return 4;
+    }
+
+    final hits = [
+      for (final i in scope)
+        if (_fold(i.searchText).replaceAll(_scheme, ' ') case final text
+            when words.every(text.contains))
+          (i, rank(i)),
+    ];
+    hits.sort((a, b) {
+      final r = a.$2.compareTo(b.$2);
+      return r != 0
+          ? r
+          : _fold(a.$1.displayTitle).compareTo(_fold(b.$1.displayTitle));
+    });
+    return [for (final h in hits) h.$1];
   }
 
   SecretItem newSecret(SecretType type) {

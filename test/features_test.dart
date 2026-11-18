@@ -92,6 +92,27 @@ void main() {
     expect(NotesStore.docDate(c), c.createdAt);
   });
 
+  test(
+    'căutarea în parole: „tp” găsește TP-Link primul, nu orice https',
+    () async {
+      final store = await openStore('cautare-tp');
+      SecretItem login(String title, String url) =>
+          store.newSecret(SecretType.login)
+            ..title = title
+            ..url = url
+            ..username = 'admin'
+            ..password = 'x';
+      await store.addSecrets([
+        login('2invoice', 'https://www.2invoice.ro'),
+        login('Router casă', 'http://192.168.0.1'),
+        login('Contul TP-Link', 'https://tplinkcloud.com'),
+        login('TP-Link Deco', 'https://tp-link.com'),
+      ]);
+      final r = store.searchSecrets('tp', store.allSecrets);
+      expect(r.map((i) => i.title), ['TP-Link Deco', 'Contul TP-Link']);
+    },
+  );
+
   test('șabloanele produc documente valide pentru editor', () {
     for (final t in noteTemplates) {
       final doc = Document.fromJson(jsonDecode(t.contentJson()) as List);
