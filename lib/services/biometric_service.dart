@@ -4,12 +4,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:local_auth/local_auth.dart';
 
+import 'web_presence_stub.dart'
+    if (dart.library.js_interop) 'web_presence_web.dart';
+
 /// Deblocare cu amprentă / Face ID / Windows Hello.
 class BiometricService {
   static final _auth = LocalAuthentication();
 
   static Future<bool> isAvailable() async {
-    if (kIsWeb) return false;
+    // în browser (aplicația web de pe laptop): Windows Hello prin WebAuthn
+    if (kIsWeb) return webPresenceAvailable();
     try {
       return await _auth.isDeviceSupported() && await _auth.canCheckBiometrics;
     } catch (_) {
@@ -19,6 +23,7 @@ class BiometricService {
 
   /// Numele afișat: „Face ID” pe iPhone, „amprentă” în rest.
   static Future<String> label() async {
+    if (kIsWeb) return 'Windows Hello';
     try {
       final types = await _auth.getAvailableBiometrics();
       if (defaultTargetPlatform == TargetPlatform.iOS &&
@@ -53,6 +58,11 @@ class BiometricService {
   }
 
   static Future<bool> _run() async {
+    if (kIsWeb) {
+      final ok = await webPresenceVerify();
+      if (ok) _lastOk = DateTime.now();
+      return ok;
+    }
     for (var attempt = 0; attempt < 2; attempt++) {
       await _whenActive();
       final started = DateTime.now();

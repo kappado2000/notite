@@ -88,9 +88,28 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
   bool get _isNew => _store.secret(_i.id) == null;
   SecretType get _type => _i.type;
 
+  /// Cum arăta formularul la deschidere: la ieșirea fără „Salvează”,
+  /// dacă s-a schimbat ceva, anunțăm că modificările nu s-au salvat.
+  late final String _initial = _snapshot();
+
+  String _snapshot() => [
+    for (final c in _c.values) c.text,
+    for (final (a, b, h) in _custom) '${a.text}|${b.text}|$h',
+    _docKind.name,
+    '$_issueDate',
+    '$_expiryDate',
+    '$_renewalDate',
+    _currency,
+    _category,
+    _period.name,
+  ].join('\u0001');
+
+  bool get _dirty => _added.isNotEmpty || _snapshot() != _initial;
+
   @override
   void initState() {
     super.initState();
+    _initial; // fixează starea de la deschidere
     // Doar verifică dacă există text (fără să-l citească — pe iPhone
     // citirea ar afișa avertismentul „a lipit din…”).
     Clipboard.hasStrings()
@@ -965,94 +984,111 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
   @override
   Widget build(BuildContext context) {
     final isNote = _type == SecretType.note;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('${_isNew ? 'Adaugă' : 'Editează'}: ${_type.label}'),
-        actions: [TextButton(onPressed: _save, child: const Text('Salvează'))],
-      ),
-      body: Form(
-        key: _form,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
-          children: [
-            if (_clipAvailable)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: ActionChip(
-                    avatar: const Icon(Icons.content_paste, size: 18),
-                    label: const Text('Lipește din clipboard'),
-                    onPressed: _pasteClipboard,
-                  ),
-                ),
-              ),
-            _text(
-              'title',
-              isNote ? 'Titlu' : 'Nume (opțional)',
-              icon: Icons.label_outline,
-              caps: TextCapitalization.sentences,
-              onChanged: (_) => setState(() {}),
-              bottom: 8,
-              hint: switch (_type) {
-                SecretType.login => 'ex. Gmail, Banca, eMAG',
-                SecretType.card => 'ex. Card salariu',
-                SecretType.bank => 'ex. Cont salariu BT',
-                SecretType.identity => 'ex. Buletinul meu',
-                SecretType.subscription => 'ex. Netflix, Spotify',
-                SecretType.wifi => 'ex. Wi-Fi acasă',
-                SecretType.note => 'ex. Coduri de rezervă',
-              },
+    final messenger = ScaffoldMessenger.of(context);
+    return PopScope(
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop || _saved || !_dirty) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              _isNew
+                  ? 'Contul nu a fost salvat.'
+                  : 'Modificările la „${_i.displayTitle}” nu au fost salvate.',
             ),
-            _titleSuggestions(),
-            const SizedBox(height: 6),
-            ..._typeFields(),
-            if (isNote)
-              _text(
-                'notes',
-                'Conținut',
-                caps: TextCapitalization.sentences,
-                maxLines: 14,
-                keyboard: TextInputType.multiline,
-              ),
-            if (!isNote) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Câmpuri proprii',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              const SizedBox(height: 8),
-              for (var k = 0; k < _custom.length; k++) _customRow(k),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: const Text('Adaugă câmp'),
-                  onPressed: () => setState(
-                    () => _custom.add((
-                      TextEditingController(),
-                      TextEditingController(),
-                      false,
-                    )),
+          ),
+        );
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('${_isNew ? 'Adaugă' : 'Editează'}: ${_type.label}'),
+          actions: [
+            TextButton(onPressed: _save, child: const Text('Salvează')),
+          ],
+        ),
+        body: Form(
+          key: _form,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+            children: [
+              if (_clipAvailable)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: ActionChip(
+                      avatar: const Icon(Icons.content_paste, size: 18),
+                      label: const Text('Lipește din clipboard'),
+                      onPressed: _pasteClipboard,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
               _text(
-                'notes',
-                'Notițe',
-                icon: Icons.notes,
+                'title',
+                isNote ? 'Titlu' : 'Nume (opțional)',
+                icon: Icons.label_outline,
                 caps: TextCapitalization.sentences,
-                maxLines: 4,
-                keyboard: TextInputType.multiline,
+                onChanged: (_) => setState(() {}),
+                bottom: 8,
+                hint: switch (_type) {
+                  SecretType.login => 'ex. Gmail, Banca, eMAG',
+                  SecretType.card => 'ex. Card salariu',
+                  SecretType.bank => 'ex. Cont salariu BT',
+                  SecretType.identity => 'ex. Buletinul meu',
+                  SecretType.subscription => 'ex. Netflix, Spotify',
+                  SecretType.wifi => 'ex. Wi-Fi acasă',
+                  SecretType.note => 'ex. Coduri de rezervă',
+                },
+              ),
+              _titleSuggestions(),
+              const SizedBox(height: 6),
+              ..._typeFields(),
+              if (isNote)
+                _text(
+                  'notes',
+                  'Conținut',
+                  caps: TextCapitalization.sentences,
+                  maxLines: 14,
+                  keyboard: TextInputType.multiline,
+                ),
+              if (!isNote) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Câmpuri proprii',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                for (var k = 0; k < _custom.length; k++) _customRow(k),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('Adaugă câmp'),
+                    onPressed: () => setState(
+                      () => _custom.add((
+                        TextEditingController(),
+                        TextEditingController(),
+                        false,
+                      )),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _text(
+                  'notes',
+                  'Notițe',
+                  icon: Icons.notes,
+                  caps: TextCapitalization.sentences,
+                  maxLines: 4,
+                  keyboard: TextInputType.multiline,
+                ),
+              ],
+              SecretAttachments(
+                ownerId: _i.attachmentOwnerId,
+                editable: true,
+                onAdded: _added.add,
               ),
             ],
-            SecretAttachments(
-              ownerId: _i.attachmentOwnerId,
-              editable: true,
-              onAdded: _added.add,
-            ),
-          ],
+          ),
         ),
       ),
     );
