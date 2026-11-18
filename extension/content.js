@@ -264,6 +264,31 @@
     menuFor = null;
   }
 
+  // panoul nu rămâne „agățat”: dispare când câmpul pierde focusul, nu mai e
+  // vizibil (pagina s-a schimbat după logare) sau la Esc
+  setInterval(() => {
+    if (menu.hidden || !menuFor) return;
+    if (!menuFor.isConnected || !visible(menuFor)) hideMenu();
+  }, 400);
+  document.addEventListener(
+    'focusout',
+    (e) => {
+      const f = e.target;
+      setTimeout(() => {
+        const a = document.activeElement;
+        if (menuFor === f && a !== f && a !== host && !host.contains(a)) hideMenu();
+      }, 150);
+    },
+    true,
+  );
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key === 'Escape' && !menu.hidden) hideMenu();
+    },
+    true,
+  );
+
 const HEALTH_TIP = {
   red: 'Compromisă: apare în scurgeri de date — schimb-o',
   yellow: 'Slabă sau folosită și la alt cont',
@@ -283,9 +308,10 @@ const HEALTH_TIP = {
       if (r.loggedIn === false) return; // extensia nu e conectată: nu deranjăm
       parts.push(`<div class="note">🔒 Notițe e blocat. Deschide iconița extensiei ca să-l deblochezi.</div>`);
     } else {
-      if (!r.secure && r.items.length) {
-        parts.push(`<div class="note">⚠️ Pagina nu e securizată (fără HTTPS); nu completez parole aici.</div>`);
-      } else {
+      // pagină fără HTTPS (în afara rețelei de acasă): nu completăm și nici
+      // nu afișăm nimic — un avertisment care stă pe ecran doar încurcă
+      if (!r.secure) return hideMenu();
+      {
         for (const i of r.items) {
           parts.push(
             `<div class="item" tabindex="0" data-id="${esc(i.id)}"><span class="t">${i.health ? `<span class="dot ${esc(i.health)}" title="${esc(HEALTH_TIP[i.health] ?? '')}"></span>` : ''}${esc(i.username || i.title)}</span><span class="s">${esc(i.title)}</span></div>`,
