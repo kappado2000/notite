@@ -578,14 +578,29 @@ async function savePending() {
 
 // ----------------------------------------------- reguli de siguranță
 
+/// Adresă din rețeaua locală: localhost, 10.x, 172.16–31.x, 192.168.x,
+/// 169.254.x sau un nume .local / .lan / .home.
+function isLocalHost(h) {
+  if (h === 'localhost' || h === '127.0.0.1') return true;
+  if (/\.(local|lan|home|internal)$/i.test(h)) return true;
+  const m = h.match(/^(\d+)\.(\d+)\.\d+\.\d+$/);
+  if (!m) return false;
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  return (
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254)
+  );
+}
+
 function pageAllowed(url) {
   try {
     const u = new URL(url);
-    return (
-      u.protocol === 'https:' ||
-      (u.protocol === 'http:' &&
-        ['localhost', '127.0.0.1'].includes(u.hostname))
-    );
+    if (u.protocol === 'https:') return true;
+    // fără HTTPS doar în rețeaua de acasă: ruterul, imprimanta, NAS-ul
+    // (adrese private, care nu ies pe internet)
+    return u.protocol === 'http:' && isLocalHost(u.hostname);
   } catch {
     return false;
   }
