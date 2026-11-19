@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import '../data/notes_store.dart';
 import '../models/secret_item.dart';
 import 'password_tools.dart';
 import 'secret_helpers.dart';
+import 'totp.dart';
 
 /// Completarea automată în iOS: ține la zi, pentru extensia AutoFill,
 /// conturile cu parolă (criptate în partea nativă, cu cheia protejată de
@@ -41,8 +43,21 @@ class IosAutofill {
           'host': _host(i),
           'user': i.username,
           'password': i.password,
+          // codul 2FA: iOS 18+ îl oferă deasupra tastaturii, la câmpul de cod
+          ...?_otp(i.totp),
         },
   ];
+
+  static Map<String, String>? _otp(String totp) {
+    final t = Totp.parse(totp);
+    if (t == null) return null;
+    return {
+      'otpKey': base64Encode(t.secret),
+      'otpDigits': '${t.digits}',
+      'otpPeriod': '${t.period}',
+      'otpAlg': t.algorithm,
+    };
+  }
 
   static String _host(SecretItem i) {
     final h = hostOf(i.url);

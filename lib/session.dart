@@ -16,7 +16,10 @@ import 'services/auth_service.dart';
 import 'services/biometric_service.dart';
 import 'screens/qr_scan_screen.dart';
 import 'services/firestore_sync.dart';
+import 'services/full_backup.dart';
 import 'services/home_shortcuts.dart';
+import 'services/home_widget_sync.dart';
+import 'screens/receipt_split_screen.dart';
 import 'services/incoming_files.dart';
 import 'services/ios_autofill.dart';
 import 'services/reminder_service.dart';
@@ -88,6 +91,7 @@ class Session extends ChangeNotifier {
     }
     await sync?.stop();
     await IosAutofill.instance.clear();
+    await HomeWidgetSync.instance.detach();
     await Vault.deleteLocal(uid);
     await auth.signOut();
   }
@@ -110,6 +114,7 @@ class Session extends ChangeNotifier {
     await ReminderService.instance.cancelAll();
     await sync?.stop();
     await IosAutofill.instance.clear();
+    await HomeWidgetSync.instance.detach();
     await FirestoreSync.deleteAllRemote(uid);
     await store.wipeLocal();
     await Vault.deleteLocal(uid);
@@ -219,6 +224,39 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
         );
       }
       ..attach(store);
+    // Widgeturile de pe ecranul iPhone-ului: lista de bifat + atingerile.
+    HomeWidgetSync.instance
+      ..onLink = (link) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final ctx = _navigatorKey.currentContext;
+          if (ctx == null || !ctx.mounted) return;
+          if (link.startsWith('note/')) {
+            final id = link.substring(5);
+            if (store.note(id) == null) return;
+            await _navigatorKey.currentState?.push(
+              MaterialPageRoute(builder: (_) => NoteEditorScreen(noteId: id)),
+            );
+            return;
+          }
+          switch (link) {
+            case 'new/note':
+              await createAndOpenNote(ctx);
+            case 'new/list':
+              await createAndOpenNote(ctx, checklist: true);
+            case 'new/scan':
+              final note = await store.createNote();
+              await _navigatorKey.currentState?.push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      NoteEditorScreen(noteId: note.id, startWithScan: true),
+                ),
+              );
+            case 'new/bon':
+              await openReceiptSplit(ctx);
+          }
+        });
+      }
+      ..attach(store);
     // Acțiunile rapide de pe iconiță (apăsare lungă).
     HomeShortcuts.init((shortcut) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -242,6 +280,15 @@ class _SessionAppState extends State<SessionApp> with WidgetsBindingObserver {
             if (note != null && ctx.mounted) await openNote(ctx, note);
         }
       });
+    });
+    // Backup complet criptat, o dată pe săptămână (dacă e pornit), după ce
+    // aplicația s-a liniștit după pornire.
+    Future.delayed(const Duration(seconds: 30), () async {
+      try {
+        await FullBackup.autoIfDue(store, widget.user.uid);
+      } catch (e) {
+        debugPrint('backup automat: $e');
+      }
     });
     if (!session.biometricEnabled && !session.biometricOffered) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _offerBiometric());

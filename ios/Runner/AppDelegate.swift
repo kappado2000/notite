@@ -3,6 +3,11 @@ import CryptoKit
 import Flutter
 import Speech
 import UIKit
+import WidgetKit
+
+#if canImport(FoundationModels)
+  import FoundationModels
+#endif
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -26,6 +31,40 @@ import UIKit
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "AutofillBridge") {
       AutofillBridge.register(with: registrar)
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BackupBridge") {
+      BackupBridge.register(with: registrar)
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "WidgetBridge") {
+      WidgetBridge.register(with: registrar)
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "OnDeviceAI") {
+      OnDeviceAI.register(with: registrar)
+    }
+  }
+}
+
+/// Backup automat în iCloud Drive (canal `notite/backup`): folderul
+/// „Notițe” din iCloud Drive, dacă iCloud e activ și aplicația are dreptul
+/// iCloud Documents; altfel null (aplicația scrie local).
+class BackupBridge: NSObject, FlutterPlugin {
+  static func register(with registrar: FlutterPluginRegistrar) {
+    let channel = FlutterMethodChannel(
+      name: "notite/backup", binaryMessenger: registrar.messenger())
+    registrar.addMethodCallDelegate(BackupBridge(), channel: channel)
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard call.method == "cloudDir" else {
+      result(FlutterMethodNotImplemented)
+      return
+    }
+    // url(forUbiquityContainerIdentifier:) poate dura: nu pe firul principal
+    DispatchQueue.global(qos: .utility).async {
+      let url = FileManager.default.url(forUbiquityContainerIdentifier: nil)?
+        .appendingPathComponent("Documents", isDirectory: true)
+      if let url { try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true) }
+      DispatchQueue.main.async { result(url?.path) }
     }
   }
 }
@@ -401,6 +440,30 @@ class AutofillBridge: NSObject, FlutterPlugin {
           serviceIdentifier: ASCredentialServiceIdentifier(identifier: host, type: .domain),
           user: user, recordIdentifier: id)
       }
+      // iOS 18+: și conturile cu cod 2FA, ca iOS să ofere „cod de la
+      // Notițe” la câmpul de cod (codul îl calculează extensia, după Face ID)
+      if #available(iOS 18.0, *) {
+        var otpSeen = Set<String>()
+        let otps: [any ASCredentialIdentity] = logins.compactMap { l in
+          guard let host = l["host"] as? String, !host.isEmpty,
+            let id = l["id"] as? String,
+            let key = l["otpKey"] as? String, !key.isEmpty,
+            otpSeen.insert(host.lowercased() + "|" + ((l["user"] as? String) ?? "")).inserted
+          else { return nil }
+          let label = ((l["user"] as? String) ?? "").isEmpty
+            ? ((l["title"] as? String) ?? host) : (l["user"] as? String ?? host)
+          return ASOneTimeCodeCredentialIdentity(
+            serviceIdentifier: ASCredentialServiceIdentifier(identifier: host, type: .domain),
+            label: label, recordIdentifier: id)
+        }
+        let all: [any ASCredentialIdentity] = ids + otps
+        store.replaceCredentialIdentities(all) { ok, error in
+          let outcome = ok ? "ok" : "eroare " + (error?.localizedDescription ?? "")
+          AutofillLog.write(
+            "aplicație: \(ids.count) conturi + \(otps.count) coduri 2FA date lui iOS → " + outcome)
+        }
+        return
+      }
       store.replaceCredentialIdentities(with: ids) { ok, error in
         let outcome = ok ? "ok" : "eroare " + (error?.localizedDescription ?? "")
         AutofillLog.write("aplicație: \(ids.count) conturi date lui iOS → " + outcome)
@@ -509,5 +572,142 @@ enum SaveInbox {
     }
     if !out.isEmpty { AutofillLog.write("aplicație: \(out.count) parole primite din completarea automată") }
     return out
+  }
+}
+
+/// Widgeturile de pe ecranul principal (canal `notite/widget`):
+/// - `update`: aplicația trimite lista de bifat afișată (JSON) → fișierul
+///   `widget.json` din grupul comun + reîncărcarea widgeturilor;
+/// - legăturile `notite://widget/<ce>` atinse în widget ajung în Flutter
+///   (`link`), sau sunt ținute până le cere (`takeLink`) dacă aplicația
+///   abia pornește.
+class WidgetBridge: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate {
+  private let channel: FlutterMethodChannel
+  private var pending: String?
+
+  init(channel: FlutterMethodChannel) {
+    self.channel = channel
+  }
+
+  static func register(with registrar: FlutterPluginRegistrar) {
+    let channel = FlutterMethodChannel(
+      name: "notite/widget", binaryMessenger: registrar.messenger())
+    let instance = WidgetBridge(channel: channel)
+    registrar.addMethodCallDelegate(instance, channel: channel)
+    registrar.addApplicationDelegate(instance)
+    registrar.addSceneDelegate(instance)
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "update":
+      let json = (call.arguments as? String) ?? "{}"
+      if let url = FileManager.default.containerURL(
+        forSecurityApplicationGroupIdentifier: AutofillBridge.group)?
+        .appendingPathComponent("widget.json")
+      {
+        try? Data(json.utf8).write(
+          to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+      }
+      if #available(iOS 14.0, *) { WidgetCenter.shared.reloadAllTimelines() }
+      result(nil)
+    case "takeLink":
+      result(pending)
+      pending = nil
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  func scene(
+    _ scene: UIScene, willConnectTo session: UISceneSession,
+    options connectionOptions: UIScene.ConnectionOptions?
+  ) -> Bool {
+    guard let contexts = connectionOptions?.urlContexts else { return false }
+    return receive(contexts.map { $0.url }, launching: true)
+  }
+
+  func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) -> Bool {
+    return receive(URLContexts.map { $0.url }, launching: false)
+  }
+
+  func application(
+    _ application: UIApplication, open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    return receive([url], launching: false)
+  }
+
+  /// `notite://widget/new/note` → „new/note”.
+  private func receive(_ urls: [URL], launching: Bool) -> Bool {
+    guard let url = urls.first(where: { $0.scheme == "notite" && $0.host == "widget" })
+    else { return false }
+    let link = String(url.path.drop(while: { $0 == "/" }))
+    if launching {
+      pending = link
+    } else {
+      channel.invokeMethod("link", arguments: link)
+    }
+    return true
+  }
+}
+
+/// AI pe telefon (canal `notite/ai`): modelul de limbaj Apple (Foundation
+/// Models, iOS 26+, Apple Intelligence). Totul rulează pe dispozitiv.
+class OnDeviceAI: NSObject, FlutterPlugin {
+  static func register(with registrar: FlutterPluginRegistrar) {
+    let channel = FlutterMethodChannel(
+      name: "notite/ai", binaryMessenger: registrar.messenger())
+    registrar.addMethodCallDelegate(OnDeviceAI(), channel: channel)
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "available":
+      #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+          switch SystemLanguageModel.default.availability {
+          case .available:
+            result(["ok": true])
+          case .unavailable(let reason):
+            let text: String
+            switch reason {
+            case .deviceNotEligible: text = "deviceNotEligible"
+            case .appleIntelligenceNotEnabled: text = "appleIntelligenceNotEnabled"
+            case .modelNotReady: text = "modelNotReady"
+            @unknown default: text = "Indisponibil"
+            }
+            result(["ok": false, "reason": text])
+          }
+          return
+        }
+      #endif
+      result(["ok": false, "reason": "ios"])
+    case "respond":
+      #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+          let args = call.arguments as? [String: Any]
+          let instructions = (args?["instructions"] as? String) ?? ""
+          let prompt = (args?["prompt"] as? String) ?? ""
+          Task {
+            do {
+              let session = LanguageModelSession(instructions: instructions)
+              let response = try await session.respond(to: prompt)
+              await MainActor.run { result(response.content) }
+            } catch {
+              await MainActor.run {
+                result(
+                  FlutterError(
+                    code: "failed", message: error.localizedDescription, details: nil))
+              }
+            }
+          }
+          return
+        }
+      #endif
+      result(FlutterError(code: "unavailable", message: "Necesită iOS 26", details: nil))
+    default:
+      result(FlutterMethodNotImplemented)
+    }
   }
 }

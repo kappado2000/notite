@@ -142,6 +142,7 @@ jobs:
           APP_PROFILE_BASE64: ${{ secrets.IOS_APP_PROVISION_PROFILE_BASE64 }}
           AUTOFILL_PROFILE_BASE64: ${{ secrets.IOS_AUTOFILL_PROVISION_PROFILE_BASE64 }}
           SAFARI_PROFILE_BASE64: ${{ secrets.IOS_SAFARI_PROVISION_PROFILE_BASE64 }}
+          WIDGET_PROFILE_BASE64: ${{ secrets.IOS_WIDGET_PROVISION_PROFILE_BASE64 }}
         run: |
           CERT_PATH="$RUNNER_TEMP/distribution.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
@@ -171,6 +172,23 @@ jobs:
             exit 1
           fi
           echo -n "$SAFARI_PROFILE_BASE64" | base64 --decode -o "$PROFILE_DIR/notite_safari.mobileprovision"
+          # Widgeturile (opțional: fără profil, build-ul iese fără widget)
+          if [ -n "$WIDGET_PROFILE_BASE64" ]; then
+            echo -n "$WIDGET_PROFILE_BASE64" | base64 --decode -o "$PROFILE_DIR/notite_widget.mobileprovision"
+            echo "NOTITE_WIDGET=1" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Fără IOS_WIDGET_PROVISION_PROFILE_BASE64 — build fără widgeturi."
+          fi
+          # Backup în iCloud Drive: drepturile iCloud intră în aplicație doar
+          # dacă profilul ei le are (altfel semnarea ar eșua).
+          security cms -D -i "$PROFILE_DIR/notite.mobileprovision" > "$RUNNER_TEMP/app_profile.plist"
+          if grep -q "iCloud.com.kappado.notite" "$RUNNER_TEMP/app_profile.plist"; then
+            E=ios/Runner/Runner.entitlements
+            /usr/libexec/PlistBuddy -c "Add :com.apple.developer.icloud-container-identifiers array"               -c "Add :com.apple.developer.icloud-container-identifiers:0 string iCloud.com.kappado.notite"               -c "Add :com.apple.developer.icloud-services array"               -c "Add :com.apple.developer.icloud-services:0 string CloudDocuments"               -c "Add :com.apple.developer.ubiquity-container-identifiers array"               -c "Add :com.apple.developer.ubiquity-container-identifiers:0 string iCloud.com.kappado.notite" "$E"
+            echo "iCloud Drive: activ în profil — backup-ul merge în iCloud"
+          else
+            echo "::warning::Profilul aplicației nu are iCloud — backup-ul automat rămâne local pe telefon."
+          fi
 
       # Extensia AutoFill se adaugă în proiectul Xcode aici (pe Mac), cu
       # biblioteca xcodeproj (aceeași pe care o folosește CocoaPods).
@@ -206,6 +224,8 @@ jobs:
               <string>Notite AutoFill AppStore</string>
               <key>com.kappado.notite.Safari</key>
               <string>Notite Safari AppStore</string>
+              <key>com.kappado.notite.Widget</key>
+              <string>Notite Widget AppStore</string>
             </dict>
           </dict>
           </plist>

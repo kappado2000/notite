@@ -29,6 +29,8 @@ import 'pin_setup.dart';
 import 'secret_detail_screen.dart';
 import 'secret_edit_screen.dart';
 import 'secret_widgets.dart';
+import 'two_factor_screen.dart';
+import '../../services/two_factor_sites.dart';
 
 const secretsRouteName = 'parole';
 
@@ -84,6 +86,13 @@ class _SecretsScreenState extends State<SecretsScreen>
     HardwareKeyboard.instance.addHandler(_onKey);
     _initPin();
     _initBiometric();
+    TwoFactorSites.instance
+      ..addListener(_tfaChanged)
+      ..load();
+  }
+
+  void _tfaChanged() {
+    if (mounted) setState(() {});
   }
 
   // ------------------------------------------- blocare după inactivitate
@@ -242,6 +251,7 @@ class _SecretsScreenState extends State<SecretsScreen>
   @override
   void dispose() {
     _idle?.cancel();
+    TwoFactorSites.instance.removeListener(_tfaChanged);
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_onPointer);
     HardwareKeyboard.instance.removeHandler(_onKey);
     WidgetsBinding.instance.removeObserver(this);
@@ -716,6 +726,8 @@ class _SecretsScreenState extends State<SecretsScreen>
         if (i.expiresOn case final d?)
           if (DateUtils.dateOnly(d).difference(today).inDays <= 30) i,
     ]..sort((a, b) => a.expiresOn!.compareTo(b.expiresOn!));
+    // conturi de pe site-uri cu 2FA prin aplicație, fără cheie salvată
+    final noTfa = TwoFactorSites.instance.missing(all);
     // Totalul lunar al abonamentelor, pe monede.
     final monthly = <String, double>{};
     for (final i in all.where((i) => i.type == SecretType.subscription)) {
@@ -860,6 +872,7 @@ class _SecretsScreenState extends State<SecretsScreen>
                               ),
                             ),
                           if (report.problems > 0 ||
+                              noTfa.isNotEmpty ||
                               (soon.isNotEmpty &&
                                   _type == null &&
                                   _query.isEmpty))
@@ -910,6 +923,26 @@ class _SecretsScreenState extends State<SecretsScreen>
                                             '+${soon.length - 1}',
                                         ].join(' '),
                                         onTap: () => _showExpiring(soon),
+                                      ),
+                                    ),
+                                  if (noTfa.isNotEmpty)
+                                    Expanded(
+                                      child: _AlertCard(
+                                        icon: Icons.shield_outlined,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .tertiaryContainer,
+                                        border: Theme.of(context)
+                                            .colorScheme
+                                            .tertiary,
+                                        title: '${noTfa.length} fără 2FA',
+                                        subtitle: 'Site-ul îl permite',
+                                        onTap: () => Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const TwoFactorScreen(),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                 ],

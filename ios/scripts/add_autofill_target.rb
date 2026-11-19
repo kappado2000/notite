@@ -12,6 +12,12 @@ runner = project.targets.find { |t| t.name == 'Runner' }
 
 runner.build_configurations.each do |c|
   c.build_settings['CODE_SIGN_ENTITLEMENTS'] = 'Runner/Runner.entitlements'
+  # Modelul AI Apple (iOS 26+): legat „slab”, ca aplicația să pornească și
+  # pe iOS mai vechi.
+  flags = Array(c.build_settings['OTHER_LDFLAGS'] || ['$(inherited)'])
+  unless flags.include?('FoundationModels')
+    c.build_settings['OTHER_LDFLAGS'] = flags + ['-weak_framework', 'FoundationModels']
+  end
 end
 
 def embed_phase(runner)
@@ -32,10 +38,10 @@ def embed_phase(runner)
 end
 
 def add_extension(project, runner, ios_dir, name:, bundle_id:, profile:, swift:,
-                  entitlements: nil, resources: nil)
+                  entitlements: nil, resources: nil, deployment: '15.5')
   return if project.targets.any? { |t| t.name == name }
 
-  ext = project.new_target(:app_extension, name, :ios, '15.5', nil, :swift)
+  ext = project.new_target(:app_extension, name, :ios, deployment, nil, :swift)
   unless ext.build_configurations.any? { |c| c.name == 'Profile' }
     ext.add_build_configuration('Profile', :release)
   end
@@ -68,7 +74,7 @@ def add_extension(project, runner, ios_dir, name:, bundle_id:, profile:, swift:,
     s['GENERATE_INFOPLIST_FILE'] = 'NO'
     s['CODE_SIGN_ENTITLEMENTS'] = "#{name}/#{entitlements}" if entitlements
     s['SWIFT_VERSION'] = '5.0'
-    s['IPHONEOS_DEPLOYMENT_TARGET'] = '15.5'
+    s['IPHONEOS_DEPLOYMENT_TARGET'] = deployment
     s['TARGETED_DEVICE_FAMILY'] = '1,2'
     s['DEVELOPMENT_TEAM'] = 'FUR5C9CYR8'
     s['SKIP_INSTALL'] = 'YES'
@@ -107,6 +113,21 @@ if File.directory?(File.join(ios, 'SafariExtension', 'Resources'))
                 profile: 'Notite Safari AppStore',
                 swift: 'SafariWebExtensionHandler.swift',
                 resources: 'Resources')
+end
+
+# Widgeturile: doar când profilul lor a fost instalat de workflow
+# (secretul IOS_WIDGET_PROVISION_PROFILE_BASE64 există).
+if ENV['NOTITE_WIDGET'] == '1'
+  add_extension(project, runner, ios,
+                name: 'NotiteWidget',
+                bundle_id: 'com.kappado.notite.Widget',
+                profile: 'Notite Widget AppStore',
+                swift: 'NotiteWidget.swift',
+                entitlements: 'NotiteWidget.entitlements',
+                deployment: '16.0')
+  puts 'Widget: adăugat'
+else
+  puts 'Widget: lipsește profilul — build fără widget'
 end
 
 project.save

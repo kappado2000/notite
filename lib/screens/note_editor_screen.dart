@@ -19,7 +19,9 @@ import '../models/attachment.dart';
 import '../models/note.dart';
 import '../services/file_opener.dart';
 import '../models/note_template.dart';
+import '../services/home_widget_sync.dart';
 import '../services/note_pdf.dart';
+import '../services/on_device_ai.dart';
 import '../services/pdf_builder.dart';
 import '../services/voice_service.dart';
 import '../widgets/voice_recorder_sheet.dart';
@@ -66,6 +68,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   bool _busy = false;
   bool _editorHadFocus = false;
 
+  /// Modelul Apple de pe telefon e disponibil (Apple Intelligence).
+  bool _aiOk = false;
+
   /// Titlul-exemplu al șablonului ales (arătat gri în câmpul de titlu).
   String? _titleHint;
 
@@ -98,6 +103,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _docSub = _controller.document.changes.listen((e) {
       if (e.source == ChangeSource.local) _dropFilledHints();
       _changed();
+    });
+    OnDeviceAI.available().then((ok) {
+      if (mounted && ok) setState(() => _aiOk = true);
     });
     _title.addListener(() {
       if (_title.text != _note.title) _changed();
@@ -1013,6 +1021,146 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     );
   }
 
+  // ------------------------------------------------------------- AI
+
+  /// Textul notiței pentru AI: conținutul + textul citit din poze/PDF-uri.
+  String _aiText() {
+    final b = StringBuffer(_controller.document.toPlainText().trim());
+    for (final a in _store.attachmentsOf(_note.id)) {
+      if (a.ocrText.trim().isNotEmpty) b.write('\n\n${a.ocrText.trim()}');
+    }
+    return b.toString();
+  }
+
+  Future<void> _aiMenu() async {
+    final body = _aiText();
+    if (body.trim().length < 20) {
+      _snack('Notița are prea puțin text pentru asistent.');
+      return;
+    }
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('Asistent AI'),
+              subtitle: Text(
+                'Rulează pe telefon (Apple Intelligence): textul nu pleacă '
+                'nicăieri.',
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.short_text),
+              title: const Text('Rezumă notița'),
+              onTap: () => Navigator.pop(ctx, 'sum'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.checklist),
+              title: const Text('Extrage ce e de făcut'),
+              subtitle: const Text('Ca listă de bifat la finalul notiței'),
+              onTap: () => Navigator.pop(ctx, 'tasks'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.title),
+              title: const Text('Propune un titlu'),
+              onTap: () => Navigator.pop(ctx, 'title'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final title = _title.text.trim().isEmpty ? 'fără titlu' : _title.text;
+      switch (choice) {
+        case 'sum':
+          final r = await OnDeviceAI.summarize(title, body);
+          if (!mounted || r.isEmpty) return;
+          final put = await _aiResult('Rezumat', r, 'Pune la început');
+          if (put == true) {
+            _controller.replaceText(0, 0, 'Rezumat: $r\n\n', null);
+          }
+        case 'tasks':
+          final items = await OnDeviceAI.tasks(title, body);
+          if (!mounted) return;
+          if (items.isEmpty) {
+            _snack('Nu am găsit nimic de făcut în notiță.');
+            return;
+          }
+          final put = await _aiResult(
+            'De făcut',
+            items.map((t) => '☐ $t').join('\n'),
+            'Adaugă lista',
+          );
+          if (put == true) _appendChecklist(items);
+        case 'title':
+          final r = await OnDeviceAI.title(body);
+          if (!mounted || r.isEmpty) return;
+          final put = await _aiResult('Titlu propus', r, 'Folosește-l');
+          if (put == true) _title.text = r;
+      }
+    } catch (e) {
+      _snack('Asistentul nu a putut răspunde: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<bool?> _aiResult(String title, String text, String action) =>
+      showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(title),
+          content: SingleChildScrollView(child: SelectableText(text)),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: text));
+                Navigator.pop(ctx, false);
+              },
+              child: const Text('Copiază'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(action),
+            ),
+          ],
+        ),
+      );
+
+  /// Adaugă la final câte un rând de listă de bifat pentru fiecare sarcină.
+  void _appendChecklist(List<String> items) {
+    for (final t in items) {
+      final doc = _controller.document;
+      var at = doc.length - 1;
+      final last = doc.toPlainText().split('\n');
+      // rândul de la final are text: începem pe un rând nou
+      if (last.length >= 2 && last[last.length - 2].isNotEmpty) {
+        _controller.replaceText(at, 0, '\n', null);
+        at++;
+      }
+      _controller.replaceText(at, 0, t, null);
+      _controller.formatText(at, t.length, Attribute.unchecked);
+    }
+  }
+
+  void _snack(String text) =>
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(text), persist: false));
+
+  /// Notița aleasă apare în widgetul „Listă” de pe ecranul iPhone-ului.
+  Future<void> _showOnWidget() async {
+    await HomeWidgetSync.instance.choose(_note.id);
+    _snack(
+      'Notița apare acum în widgetul „Listă Notițe”. Adaugă widgetul: '
+      'apasă lung pe ecranul principal → Editează → Adaugă widget → Notițe.',
+    );
+  }
+
   Future<void> _exportPdf() async {
     await _save();
     try {
@@ -1172,9 +1320,30 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                           _toggleLock();
                         case 'pdf':
                           _exportPdf();
+                        case 'ai':
+                          _aiMenu();
+                        case 'widget':
+                          _showOnWidget();
                       }
                     },
                     itemBuilder: (_) => [
+                      if (_aiOk)
+                        const PopupMenuItem(
+                          value: 'ai',
+                          child: ListTile(
+                            leading: Icon(Icons.auto_awesome_outlined),
+                            title: Text('Asistent AI'),
+                            subtitle: Text('Rezumat, sarcini, titlu'),
+                          ),
+                        ),
+                      if (HomeWidgetSync.supported && !_note.locked)
+                        const PopupMenuItem(
+                          value: 'widget',
+                          child: ListTile(
+                            leading: Icon(Icons.widgets_outlined),
+                            title: Text('Arată pe widget'),
+                          ),
+                        ),
                       const PopupMenuItem(
                         value: 'toc',
                         child: ListTile(

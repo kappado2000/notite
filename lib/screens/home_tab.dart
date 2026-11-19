@@ -14,6 +14,8 @@ import '../widgets/customize.dart';
 import '../widgets/note_actions.dart';
 import '../widgets/note_card.dart';
 import '../widgets/notebook_editor.dart';
+import '../services/on_device_ai.dart';
+import 'ask_notes_screen.dart';
 import 'note_editor_screen.dart';
 import 'notes_tab.dart';
 import 'qr_scan_screen.dart';
@@ -33,6 +35,17 @@ class _HomeTabState extends State<HomeTab> {
   final _search = TextEditingController();
   String _query = '';
   bool _searchOpen = false;
+
+  /// „Întreabă notițele” (AI pe telefon) e disponibil.
+  bool _aiOk = false;
+
+  @override
+  void initState() {
+    super.initState();
+    OnDeviceAI.available().then((ok) {
+      if (mounted && ok) setState(() => _aiOk = true);
+    });
+  }
 
   @override
   void dispose() {
@@ -107,6 +120,16 @@ class _HomeTabState extends State<HomeTab> {
                         ],
                       ),
                     ),
+                    if (_aiOk)
+                      IconButton(
+                        tooltip: 'Întreabă notițele',
+                        icon: const Icon(Icons.auto_awesome_outlined),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const AskNotesScreen(),
+                          ),
+                        ),
+                      ),
                     IconButton(
                       tooltip: _searchOpen ? 'Închide căutarea' : 'Caută',
                       icon: Icon(_searchOpen ? Icons.close : Icons.search),

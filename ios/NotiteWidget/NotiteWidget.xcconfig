@@ -1,0 +1,2 @@
+// Versiunea extensiei = versiunea aplicației (FLUTTER_BUILD_NAME / NUMBER).
+#include? "../Flutter/Generated.xcconfig"

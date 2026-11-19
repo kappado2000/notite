@@ -34,6 +34,8 @@
 				<true/>
 				<key>SupportsGeneratePasswordCredentials</key>
 				<true/>
+				<key>ProvidesOneTimeCodes</key>
+				<true/>
 			</dict>
 			<key>ASCredentialProviderExtensionShowsConfigurationUI</key>
 			<true/>

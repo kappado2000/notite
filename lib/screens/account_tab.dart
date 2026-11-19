@@ -16,6 +16,7 @@ import '../widgets/customize.dart';
 import '../widgets/identity_check.dart';
 import '../widgets/pickers.dart';
 import 'secrets/pin_setup.dart';
+import 'backup_screen.dart';
 import 'shell.dart';
 import '../widgets/mfa.dart';
 import '../services/ios_autofill.dart';
@@ -556,20 +557,15 @@ class _AccountTabState extends State<AccountTab> {
               children: [
                 ListTile(
                   leading: const Icon(Icons.backup_outlined),
-                  title: const Text('Exportă backup'),
+                  title: const Text('Backup și spațiu'),
                   subtitle: const Text(
-                    'Notițe, carnete și atașamente într-un fișier (fără '
-                    'parole). Fișierul nu e criptat — păstrează-l în siguranță.',
+                    'Backup complet criptat (și parolele), automat în '
+                    'iCloud; restaurare; spațiul ocupat în cloud',
                   ),
-                  onTap: () => DataExport.shareBackup(context, store),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.settings_backup_restore),
-                  title: const Text('Restaurează din backup'),
-                  subtitle: const Text(
-                    'Adaugă ce lipsește; nu dublează și nu șterge nimic',
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const BackupScreen()),
                   ),
-                  onTap: () => DataExport.restoreBackup(context, store),
                 ),
                 ListTile(
                   leading: const Icon(Icons.picture_as_pdf_outlined),

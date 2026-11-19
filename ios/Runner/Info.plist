@@ -22,6 +22,18 @@
 	<string>Notițe</string>
 	<!-- Tipurile de fișiere pe care Notițe le poate primi din meniul de
 	     partajare (PDF, imagini, text). iOS le copiază în aplicație. -->
+	<!-- notite://widget/… — atingerile din widgeturile de pe ecranul principal -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.kappado.notite</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>notite</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -62,6 +74,20 @@
 		</dict>
 	</array>
 	<!-- Fișierul primit e copiat în aplicație, nu deschis pe loc. -->
+	<!-- Backup automat: folderul „Notițe” din iCloud Drive (are efect doar
+	     când profilul aplicației include iCloud Documents). -->
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.com.kappado.notite</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>Notițe</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
 	<key>CFBundleExecutable</key>

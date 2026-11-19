@@ -722,7 +722,10 @@ class NotesStore extends ChangeNotifier {
 
   /// Datele contului pentru un fișier de backup (fără parole: fișierul nu
   /// e criptat). Atașamentele sunt incluse, codate base64.
-  Map<String, dynamic> exportBackup() => {
+  ///
+  /// [withSecrets]: și parolele cu atașamentele lor — DOAR pentru backup-ul
+  /// criptat ([FullBackup]).
+  Map<String, dynamic> exportBackup({bool withSecrets = false}) => {
     'format': 'notite-backup',
     'version': 1,
     'createdAt': DateTime.now().millisecondsSinceEpoch,
@@ -730,18 +733,41 @@ class NotesStore extends ChangeNotifier {
     'notes': [for (final n in _notes.values) n.toMap()],
     'attachments': [
       for (final a in _attachments.values)
-        if (!a.noteId.startsWith('secret:'))
+        if (withSecrets || !a.noteId.startsWith('secret:'))
           if (_blobsBox.get(a.id) case final bytes?)
             {...a.toMap(), 'data': base64Encode(bytes)},
     ],
+    if (withSecrets) 'secrets': [for (final i in _secrets.values) i.toMap()],
   };
+
+  /// Spațiul ocupat de date (aproximativ cât ocupă și în cloud): atașamente
+  /// și text (notițe, carnete, parole).
+  ({int attachmentBytes, int attachments, int textBytes}) storageUsage() {
+    var att = 0;
+    for (final a in _attachments.values) {
+      att += a.size;
+    }
+    var text = 0;
+    for (final m in [
+      ..._notesBox.values,
+      ..._notebooksBox.values,
+      ..._secretsBox.values,
+      ..._attachmentsBox.values,
+    ]) {
+      text += jsonEncode(m, toEncodable: (o) => o.toString()).length;
+    }
+    return (
+      attachmentBytes: att,
+      attachments: _attachments.length,
+      textBytes: text,
+    );
+  }
 
   /// Restaurează dintr-un backup. Nu dublează nimic: elementele existente
   /// rămân; o notiță existentă e înlocuită doar dacă cea din backup e mai
   /// nouă. Tot ce se adaugă e și sincronizat în cloud.
-  Future<({int notebooks, int notes, int attachments})> importBackup(
-    Map<String, dynamic> data,
-  ) async {
+  Future<({int notebooks, int notes, int attachments, int secrets})>
+  importBackup(Map<String, dynamic> data) async {
     if (data['format'] != 'notite-backup') {
       throw const FormatException('Fișierul nu este un backup Notițe.');
     }
@@ -766,10 +792,26 @@ class NotesStore extends ChangeNotifier {
       await ReminderService.instance.sync(n);
       notes++;
     }
+    // parolele (doar din backup-ul criptat): se adaugă cele lipsă și se
+    // înlocuiesc cele mai vechi decât în backup
+    var secrets = 0;
+    for (final m in (data['secrets'] as List? ?? const [])) {
+      final i = SecretItem.fromMap(m as Map);
+      final local = _secrets[i.id];
+      if (local != null && !i.updatedAt.isAfter(local.updatedAt)) continue;
+      _secrets[i.id] = i;
+      await _secretsBox.put(i.id, i.toMap());
+      sync?.secretChanged(i);
+      await ReminderService.instance.syncSecret(i);
+      secrets++;
+    }
     for (final m in (data['attachments'] as List? ?? const [])) {
       final map = m as Map;
       final a = Attachment.fromMap(map);
-      if (_attachments.containsKey(a.id) || !_notes.containsKey(a.noteId)) {
+      final owner = a.noteId.startsWith('secret:')
+          ? _secrets.containsKey(a.noteId.substring(7))
+          : _notes.containsKey(a.noteId);
+      if (_attachments.containsKey(a.id) || !owner) {
         continue;
       }
       final bytes = base64Decode(map['data'] as String);
@@ -780,7 +822,7 @@ class NotesStore extends ChangeNotifier {
       atts++;
     }
     notifyListeners();
-    return (notebooks: nbs, notes: notes, attachments: atts);
+    return (notebooks: nbs, notes: notes, attachments: atts, secrets: secrets);
   }
 
   // ------------------------------------------------------------- parole

@@ -19,7 +19,17 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     let host: String
     let user: String
     let password: String
+    // codul 2FA (TOTP) al contului, dacă are
+    let otpKey: String?
+    let otpDigits: String?
+    let otpPeriod: String?
+    let otpAlg: String?
+
+    var hasOtp: Bool { !(otpKey ?? "").isEmpty }
   }
+
+  /// Cererea e pentru codul 2FA (iOS 18+), nu pentru parolă.
+  private var otpMode = false
 
   private var logins: [Login] = []
   private var shown: [Login] = []
@@ -65,6 +75,17 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     }
   }
 
+  // MARK: - Codul 2FA (iOS 18+): „Cod de la Notițe” deasupra tastaturii
+
+  @available(iOS 18.0, *)
+  override func prepareOneTimeCodeCredentialList(
+    for serviceIdentifiers: [ASCredentialServiceIdentifier]
+  ) {
+    AutofillLog.write("extensie: listă coduri 2FA")
+    otpMode = true
+    prepareCredentialList(for: serviceIdentifiers)
+  }
+
   // MARK: - Contul propus direct de iOS
 
   override func provideCredentialWithoutUserInteraction(
@@ -85,6 +106,13 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   @available(iOS 17.0, *)
   override func prepareInterfaceToProvideCredential(for credentialRequest: ASCredentialRequest) {
     AutofillLog.write("extensie: cerere cu interfață (nouă)")
+    if #available(iOS 18.0, *),
+      let otp = credentialRequest.credentialIdentity as? ASOneTimeCodeCredentialIdentity
+    {
+      otpMode = true
+      showOtp(recordId: otp.recordIdentifier)
+      return
+    }
     guard let identity = credentialRequest.credentialIdentity as? ASPasswordCredentialIdentity
     else {
       AutofillLog.write("extensie: cerere care nu e de parolă — anulată")
@@ -114,6 +142,19 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         return
       }
       AutofillLog.write("extensie: parolă dată")
+      self.complete(login)
+    }
+  }
+
+  private func showOtp(recordId: String?) {
+    buildUI()
+    showMessage("Se deschide seiful…")
+    unlock { [weak self] ok in
+      guard let self else { return }
+      guard ok, let login = self.logins.first(where: { $0.id == recordId && $0.hasOtp }) else {
+        self.showMessage(ok ? "Contul nu mai are cod 2FA în Notițe." : Self.lockedText)
+        return
+      }
       self.complete(login)
     }
   }
@@ -173,6 +214,16 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   }
 
   private func complete(_ login: Login) {
+    if otpMode {
+      guard #available(iOS 18.0, *), let code = Self.totp(login) else {
+        showMessage("Contul nu are cod 2FA salvat în Notițe.")
+        return
+      }
+      AutofillLog.write("extensie: cod 2FA dat")
+      extensionContext.completeOneTimeCodeRequest(
+        using: ASOneTimeCodeCredential(code: code), completionHandler: nil)
+      return
+    }
     extensionContext.completeRequest(
       withSelectedCredential: ASPasswordCredential(user: login.user, password: login.password),
       completionHandler: nil)
@@ -266,6 +317,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     let onlySite = q.isEmpty && !matching.isEmpty && !showAll
     shown =
       logins
+      .filter { !otpMode || $0.hasOtp }
       .filter {
         onlySite
           ? matching.contains($0.id)
@@ -336,7 +388,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
     let l = shown[indexPath.row]
     cell.textLabel?.text = l.title.isEmpty ? l.host : l.title
-    cell.detailTextLabel?.text = l.user
+    cell.detailTextLabel?.text = otpMode ? "\(l.user) · cod 2FA" : l.user
     cell.detailTextLabel?.textColor = .secondaryLabel
     cell.imageView?.image = UIImage(
       systemName: matching.contains(l.id) ? "key.fill" : "key")
@@ -398,6 +450,30 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         ASGeneratedPassword(kind: .alphanumeric, value: Self.generate(18, symbols: false)),
       ],
       completionHandler: nil)
+  }
+
+  /// Codul TOTP (RFC 6238) al contului, acum — ca în aplicație.
+  static func totp(_ l: Login, at date: Date = Date()) -> String? {
+    guard let b64 = l.otpKey, let key = Data(base64Encoded: b64), !key.isEmpty else { return nil }
+    let digits = Int(l.otpDigits ?? "") ?? 6
+    let period = max(1, Int(l.otpPeriod ?? "") ?? 30)
+    var counter = UInt64(date.timeIntervalSince1970 / Double(period)).bigEndian
+    let msg = Data(bytes: &counter, count: 8)
+    let sym = SymmetricKey(data: key)
+    let mac: [UInt8]
+    switch (l.otpAlg ?? "SHA1").uppercased() {
+    case "SHA256": mac = Array(HMAC<SHA256>.authenticationCode(for: msg, using: sym))
+    case "SHA512": mac = Array(HMAC<SHA512>.authenticationCode(for: msg, using: sym))
+    default: mac = Array(HMAC<Insecure.SHA1>.authenticationCode(for: msg, using: sym))
+    }
+    let offset = Int(mac[mac.count - 1] & 0x0f)
+    let bin =
+      (UInt32(mac[offset] & 0x7f) << 24) | (UInt32(mac[offset + 1]) << 16)
+      | (UInt32(mac[offset + 2]) << 8) | UInt32(mac[offset + 3])
+    var mod: UInt32 = 1
+    for _ in 0..<min(digits, 9) { mod *= 10 }
+    let value = String(bin % mod)
+    return String(repeating: "0", count: max(0, digits - value.count)) + value
   }
 
   /// Ca generatorul din aplicație: litere mari, mici, cifre (+ ! * - _ .),
