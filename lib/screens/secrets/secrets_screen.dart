@@ -985,95 +985,146 @@ class _SecretsScreenState extends State<SecretsScreen>
                                 final cols = wide ? 8 : 4;
                                 final tileW =
                                     (box.maxWidth - 8 * (cols - 1)) / cols;
-                                return GridView(
-                                  shrinkWrap: true,
-                                  padding: EdgeInsets.zero,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  gridDelegate:
-                                      SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: cols,
-                                        mainAxisSpacing: 8,
-                                        crossAxisSpacing: 8,
-                                        mainAxisExtent: wide
-                                            ? 66
-                                            : (tileW / 1.25).clamp(60, 90),
+                                final extent = wide
+                                    ? 66.0
+                                    : (tileW / 1.25).clamp(60.0, 90.0);
+                                final scheme = Theme.of(context).colorScheme;
+                                // avertizările: pe un rând separat, împărțit
+                                // egal; cu cât sunt mai puține, cu atât mai
+                                // explicit titlul (3 → scurt, 1 → complet)
+                                final alerts = [
+                                  if (report.problems > 0)
+                                    (
+                                      icon: Icons.health_and_safety_outlined,
+                                      count: report.accounts,
+                                      color: scheme.error,
+                                      labels: const [
+                                        'Risc',
+                                        'Conturi de reparat',
+                                        'Conturi de reparat: slabe, repetate sau vechi',
+                                      ],
+                                      tooltip: 'Conturi de reparat: slabe, repetate, vechi',
+                                      onTap: () => Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const PasswordFixScreen(),
+                                        ),
                                       ),
-                                  children: [
-                                    _typeTile(
-                                      icon: Icons.apps,
-                                      label: 'Toate',
-                                      count: all.length,
-                                      tint: null,
-                                      selected: _type == null && !_favorites,
-                                      onTap: () => setState(() {
-                                        _type = null;
-                                        _category = null;
-                                        _favorites = false;
-                                      }),
                                     ),
-                                    for (final t in SecretType.values)
-                                      _typeTile(
-                                        icon: t.icon,
-                                        label: _short(t),
-                                        count: all
-                                            .where((i) => i.type == t)
-                                            .length,
-                                        tint: secretTint(context, t),
-                                        onLongPress: () =>
-                                            editSecretTypeTint(context, t),
-                                        selected: _type == t,
-                                        onTap: () => setState(() {
-                                          _favorites = false;
-                                          _type = _type == t ? null : t;
-                                          _category = null;
-                                        }),
-                                      ),
-                                    // rândul de avertizări, în același format
-                                    if (report.problems > 0)
-                                      _alertTile(
-                                        icon: Icons.health_and_safety_outlined,
-                                        label: 'Risc',
-                                        count: report.accounts,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .error,
-                                        tooltip: 'Conturi de reparat: slabe, repetate, vechi',
-                                        onTap: () => Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                const PasswordFixScreen(),
-                                          ),
+                                  if (soon.isNotEmpty &&
+                                      _type == null &&
+                                      _query.isEmpty)
+                                    (
+                                      icon: Icons.event_busy_outlined,
+                                      count: soon.length,
+                                      color: scheme.secondary,
+                                      labels: [
+                                        'Expiră',
+                                        'Expiră curând',
+                                        [
+                                          'Expiră curând: '
+                                              '${soon.first.displayTitle} · '
+                                              '${formatShortDate(soon.first.expiresOn!)}',
+                                          if (soon.length > 1)
+                                            '+${soon.length - 1}',
+                                        ].join(' '),
+                                      ],
+                                      tooltip: 'Expiră curând',
+                                      onTap: () => _showExpiring(soon),
+                                    ),
+                                  if (noTfa.isNotEmpty)
+                                    (
+                                      icon: Icons.shield_outlined,
+                                      count: noTfa.length,
+                                      color: scheme.tertiary,
+                                      labels: const [
+                                        '2FA',
+                                        'Conturi fără 2FA',
+                                        'Conturi fără 2FA, deși site-ul îl permite',
+                                      ],
+                                      tooltip: 'Conturi fără 2FA, deși site-ul îl permite',
+                                      onTap: () => Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const TwoFactorScreen(),
                                         ),
                                       ),
-                                    if (soon.isNotEmpty &&
-                                        _type == null &&
-                                        _query.isEmpty)
-                                      _alertTile(
-                                        icon: Icons.event_busy_outlined,
-                                        label: 'Expiră',
-                                        count: soon.length,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .secondary,
-                                        tooltip: 'Expiră curând',
-                                        onTap: () => _showExpiring(soon),
-                                      ),
-                                    if (noTfa.isNotEmpty)
-                                      _alertTile(
-                                        icon: Icons.shield_outlined,
-                                        label: '2FA',
-                                        count: noTfa.length,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .tertiary,
-                                        tooltip: 'Conturi fără 2FA, deși site-ul îl permite',
-                                        onTap: () => Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                const TwoFactorScreen(),
+                                    ),
+                                ];
+                                final n = alerts.length;
+                                return Column(
+                                  children: [
+                                    GridView(
+                                      shrinkWrap: true,
+                                      padding: EdgeInsets.zero,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      gridDelegate:
+                                          SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: cols,
+                                            mainAxisSpacing: 8,
+                                            crossAxisSpacing: 8,
+                                            mainAxisExtent: extent,
                                           ),
+                                      children: [
+                                        _typeTile(
+                                          icon: Icons.apps,
+                                          label: 'Toate',
+                                          count: all.length,
+                                          tint: null,
+                                          selected:
+                                              _type == null && !_favorites,
+                                          onTap: () => setState(() {
+                                            _type = null;
+                                            _category = null;
+                                            _favorites = false;
+                                          }),
+                                        ),
+                                        for (final t in SecretType.values)
+                                          _typeTile(
+                                            icon: t.icon,
+                                            label: _short(t),
+                                            count: all
+                                                .where((i) => i.type == t)
+                                                .length,
+                                            tint: secretTint(context, t),
+                                            onLongPress: () =>
+                                                editSecretTypeTint(context, t),
+                                            selected: _type == t,
+                                            onTap: () => setState(() {
+                                              _favorites = false;
+                                              _type = _type == t ? null : t;
+                                              _category = null;
+                                            }),
+                                          ),
+                                      ],
+                                    ),
+                                    if (n > 0) ...[
+                                      const SizedBox(height: 8),
+                                      SizedBox(
+                                        height: extent,
+                                        child: Row(
+                                          children: [
+                                            for (final (k, a)
+                                                in alerts.indexed) ...[
+                                              if (k > 0)
+                                                const SizedBox(width: 8),
+                                              Expanded(
+                                                child: _alertTile(
+                                                  icon: a.icon,
+                                                  label: a.labels[3 - n],
+                                                  count: a.count,
+                                                  color: a.color,
+                                                  fontSize: n == 3 ? 12.5 : 14,
+                                                  tooltip: a.tooltip,
+                                                  onTap: a.onTap,
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                       ),
+                                    ],
                                   ],
                                 );
                               },
@@ -1514,6 +1565,7 @@ class _SecretsScreenState extends State<SecretsScreen>
     required Color color,
     required String tooltip,
     required VoidCallback onTap,
+    double fontSize = 12.5,
   }) {
     final scheme = Theme.of(context).colorScheme;
     final bg = Color.alphaBlend(
@@ -1558,7 +1610,7 @@ class _SecretsScreenState extends State<SecretsScreen>
                     label,
                     maxLines: 1,
                     style: TextStyle(
-                      fontSize: 12.5,
+                      fontSize: fontSize,
                       fontWeight: FontWeight.w600,
                       color: color,
                     ),
