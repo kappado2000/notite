@@ -461,8 +461,8 @@ class _QuickActions extends StatelessWidget {
                               padding: const EdgeInsets.fromLTRB(4, 16, 4, 16),
                               child: Column(
                                 children: [
-                                  Icon(
-                                    row[i].$1.icon,
+                                  toolIcon(
+                                    row[i].$1,
                                     color: scheme.primary,
                                     size: 26,
                                   ),

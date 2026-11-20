@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../data/app_settings.dart';
 import '../models/note_template.dart';
+import 'auth_icon.dart';
 
 /// Un element care poate fi ales și pus în ordinea dorită (card de pe
 /// Acasă, unealtă din bara tastaturii / meniul „+”, șablon).
@@ -13,10 +14,15 @@ class ToolDef {
   final String label;
 }
 
+/// Iconița unui element; „Auth” are desenul ei (lacăt-scut cu un om).
+Widget toolIcon(ToolDef d, {Color? color, double size = 24}) => d.id == 'auth'
+    ? AuthIcon(size: size, color: color)
+    : Icon(d.icon, color: color, size: size);
+
 /// Cardurile de sus de pe Acasă.
 const homeCardDefs = <ToolDef>[
   ToolDef('list', Icons.checklist, 'Listă'),
-  ToolDef('auth', Icons.pin_outlined, 'Autentificator'),
+  ToolDef('auth', Icons.pin_outlined, 'Auth'),
   ToolDef('note', Icons.edit_outlined, 'Notiță'),
   ToolDef('scan', Icons.document_scanner_outlined, 'Scanează'),
   ToolDef('pinned', Icons.push_pin_outlined, 'Fixate'),
@@ -214,7 +220,7 @@ class _ListEditor extends StatelessWidget {
                 ),
                 title: Row(
                   children: [
-                    Icon(d.icon, color: scheme.primary),
+                    toolIcon(d, color: scheme.primary),
                     const SizedBox(width: 12),
                     Expanded(child: Text(d.label)),
                   ],
@@ -236,7 +242,7 @@ class _ListEditor extends StatelessWidget {
               ),
               title: Row(
                 children: [
-                  Icon(d.icon, color: scheme.onSurfaceVariant),
+                  toolIcon(d, color: scheme.onSurfaceVariant),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(

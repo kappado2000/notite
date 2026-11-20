@@ -31,6 +31,7 @@ import 'secret_detail_screen.dart';
 import 'secret_edit_screen.dart';
 import 'secrets_trash_screen.dart';
 import 'authenticator_screen.dart';
+import '../../widgets/auth_icon.dart';
 import 'password_compare_screen.dart';
 import '../../services/google_compare.dart';
 import '../../services/file_opener.dart';
@@ -666,7 +667,7 @@ class _SecretsScreenState extends State<SecretsScreen>
           if (_unlocked)
             IconButton(
               tooltip: 'Autentificator (coduri 2FA)',
-              icon: const Icon(Icons.pin_outlined),
+              icon: const AuthIcon(),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const AuthenticatorScreen()),
               ),
