@@ -453,7 +453,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
   }
 
   /// Codul TOTP (RFC 6238) al contului, acum — ca în aplicație.
-  static func totp(_ l: Login, at date: Date = Date()) -> String? {
+  private static func totp(_ l: Login, at date: Date = Date()) -> String? {
     guard let b64 = l.otpKey, let key = Data(base64Encoded: b64), !key.isEmpty else { return nil }
     let digits = Int(l.otpDigits ?? "") ?? 6
     let period = max(1, Int(l.otpPeriod ?? "") ?? 30)
