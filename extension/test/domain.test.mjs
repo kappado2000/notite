@@ -35,3 +35,18 @@ test('Apple ID @icloud.com pe apple.com (și nimic altceva)', () => {
   assert.equal(matches(icloud, 'https://apple.com.exemplu.ro/login'), false);
   assert.equal(matches(icloud, 'https://icloud-com.ro/login'), false);
 });
+
+test('găzduiri comune: fiecare subdomeniu e alt site', () => {
+  const afm = { url: 'https://afmb2cprod.b2clogin.com/x' };
+  assert.equal(baseDomain('https://afmb2cprod.b2clogin.com/a/b'), 'afmb2cprod.b2clogin.com');
+  assert.ok(matches(afm, 'https://afmb2cprod.b2clogin.com/login'));
+  assert.ok(!matches(afm, 'https://altafirma.b2clogin.com/login'));
+  assert.ok(!matches({ url: 'https://a.github.io' }, 'https://b.github.io'));
+});
+
+test('alte site-uri ale contului', () => {
+  const i = { url: 'https://www.afm.ro', sites: ['https://afmb2cprod.b2clogin.com'] };
+  assert.ok(matches(i, 'https://afm.ro/login'));
+  assert.ok(matches(i, 'https://afmb2cprod.b2clogin.com/login'));
+  assert.ok(!matches(i, 'https://alta.b2clogin.com/login'));
+});

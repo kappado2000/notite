@@ -32,11 +32,13 @@ class SecretEditScreen extends StatefulWidget {
 class _SecretEditScreenState extends State<SecretEditScreen> {
   final _form = GlobalKey<FormState>();
   late final SecretItem _i = widget.item;
+  bool _showSites = false;
   late final NotesStore _store = context.read<NotesStore>();
   late final Map<String, TextEditingController> _c = {
     for (final e in {
       'title': _i.title,
       'url': _i.url,
+      'sites': _i.sites.join('\n'),
       'username': _i.username,
       'password': _i.password,
       'totp': _i.totp,
@@ -143,6 +145,10 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
     _i
       ..title = _v('title')
       ..url = _v('url')
+      ..sites = [
+        for (final l in _c['sites']!.text.split('\n'))
+          if (l.trim().isNotEmpty) l.trim(),
+      ]
       ..username = _v('username')
       ..password = _c['password']!.text
       ..totp = _v('totp')
@@ -735,6 +741,24 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
         icon: Icons.link,
         keyboard: TextInputType.url,
       ),
+      if (_i.sites.isNotEmpty || _showSites)
+        _text(
+          'sites',
+          'Alte site-uri (câte unul pe rând)',
+          icon: Icons.add_link,
+          keyboard: TextInputType.url,
+          maxLines: 4,
+          hint: 'ex. afmb2cprod.b2clogin.com',
+        )
+      else
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => setState(() => _showSites = true),
+            icon: const Icon(Icons.add_link),
+            label: const Text('Folosit și pe alt site'),
+          ),
+        ),
       _totpField(),
       _dropdown<String>('Categorie', Icons.folder_outlined, _category, [
         ('', 'Automat (${autoLoginCategory(_i).label})'),

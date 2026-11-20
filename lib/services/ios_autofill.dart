@@ -36,16 +36,21 @@ class IosAutofill {
     ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt)))
       if ((i.type == SecretType.login || i.type == SecretType.subscription) &&
           i.password.isNotEmpty)
-        {
-          'id': i.id,
-          'title': i.displayTitle,
-          'url': i.url,
-          'host': _host(i),
-          'user': i.username,
-          'password': i.password,
-          // codul 2FA: iOS 18+ îl oferă deasupra tastaturii, la câmpul de cod
-          ...?_otp(i.totp),
-        },
+        for (final host in {
+          _host(i),
+          // „Alte site-uri”: același cont (același id) și pe ele
+          for (final s in i.sites) hostOf(s),
+        }.where((h) => h.isNotEmpty || i.sites.isEmpty))
+          {
+            'id': i.id,
+            'title': i.displayTitle,
+            'url': i.url,
+            'host': host,
+            'user': i.username,
+            'password': i.password,
+            // codul 2FA: iOS 18+ îl oferă deasupra tastaturii, la câmpul de cod
+            ...?_otp(i.totp),
+          },
   ];
 
   static Map<String, String>? _otp(String totp) {

@@ -7,6 +7,17 @@ const TWO_PART = new Set([
   'co.za', 'com.mx', 'com.ar', 'co.in', 'com.cn', 'com.hk', 'com.sg',
 ]);
 
+// Găzduiri comune: fiecare subdomeniu e ALT proprietar (afm.b2clogin.com și
+// altceva.b2clogin.com sunt firme diferite) — site-ul e numele complet.
+const SHARED = new Set([
+  'b2clogin.com', 'azurewebsites.net', 'onmicrosoft.com', 'cloudapp.net',
+  'github.io', 'gitlab.io', 'herokuapp.com', 'web.app', 'firebaseapp.com',
+  'appspot.com', 'netlify.app', 'vercel.app', 'pages.dev', 'workers.dev',
+  'blogspot.com', 'wordpress.com', 'wixsite.com', 'myshopify.com',
+  'cloudfront.net', 'amazonaws.com', 'glitch.me', 'onrender.com',
+  'fly.dev', 'ngrok.io', 'ngrok-free.app', 'sharepoint.com',
+]);
+
 export function hostOf(url) {
   if (!url) return '';
   let s = String(url).trim().toLowerCase();
@@ -24,7 +35,9 @@ export function baseDomain(url) {
   const parts = host.split('.');
   if (parts.length <= 2) return host;
   const lastTwo = parts.slice(-2).join('.');
-  return TWO_PART.has(lastTwo) ? parts.slice(-3).join('.') : lastTwo;
+  return TWO_PART.has(lastTwo) || SHARED.has(lastTwo)
+    ? parts.slice(-3).join('.')
+    : lastTwo;
 }
 
 /// Un nume frumos pentru titlu: „emag.ro” → „Emag”.
@@ -53,6 +66,10 @@ function accountSite(url) {
 export function matches(item, pageUrl) {
   const page = accountSite(pageUrl);
   if (!page) return false;
+  // „Alte site-uri” ale contului (adăugate de tine: „Folosește și aici”)
+  for (const u of item.sites ?? []) {
+    if (u && accountSite(u) === page) return true;
+  }
   if (item.url) return accountSite(item.url) === page;
   const t = (item.title || '').toLowerCase().replace(/\s+/g, '');
   const name = page.split('.')[0];

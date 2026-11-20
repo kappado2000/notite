@@ -231,6 +231,10 @@
       .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:1px; }
       .dot.red { background:#D93025; } .dot.yellow { background:#E8A200; } .dot.green { background:#2E9E5B; } .dot.ignored { background:#9AA0A6; } .s { font-size: 12px; color: #5E6559; }
       .note { padding: 8px 10px; font-size: 13px; color: #5E6559; }
+      .q { width: 100%; margin: 2px 0 6px; padding: 8px 10px; border: 1px solid #b9c7bd; border-radius: 9px;
+        font-size: 14px; background: transparent; color: inherit; outline: none; }
+      .q:focus { border-color: #3F8F6B; }
+      .sep { border-top: 1px solid #e3e8e1; margin: 4px 2px; }
       .toast { position: fixed; top: 16px; right: 16px; width: 340px; background: #fff; color: #22261F;
         border: 1px solid #3F8F6B; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.2);
         padding: 12px 14px; font-size: 14px; }
@@ -241,6 +245,7 @@
       @media (prefers-color-scheme: dark) {
         .menu, .toast { background: #1E221C; color: #E6E8E1; border-color: #4b5a50; }
         .item:hover, .item:focus { background: #2b3a31; } .s, .note { color: #B4BBAE; }
+        .q { border-color: #4b5a50; } .sep { border-color: #3a4237; }
         .sec { background: #30362D; color: #E6E8E1; } .toast b { color: #8FCFAE; }
       }
     </style>
@@ -334,6 +339,9 @@ const HEALTH_TIP = {
           );
         }
       }
+      parts.push(
+        `${r.items.length ? '<div class="sep"></div>' : ''}<div class="item" tabindex="0" data-search="1"><span class="t">🔍 Alt cont din Notițe…</span><span class="s">Caută printre toate conturile tale</span></div>`,
+      );
       // o parolă generată e deja în câmpuri: NU mai oferim alta (ar înlocui-o
       // pe cea pe care poate site-ul a acceptat-o deja)
       const already =
@@ -357,10 +365,77 @@ const HEALTH_TIP = {
     menuFor = field;
   }
 
-  menu.addEventListener('mousedown', (e) => e.preventDefault());
+  menu.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.q')) e.preventDefault();
+  });
+
+  // ---- „Alt cont din Notițe…”: contul e salvat pentru alt site (ex. afm.ro,
+  // iar logarea e pe afmb2cprod.b2clogin.com). Îl alegi tu și confirmi.
+  let searchTimer = 0;
+  function showSearch() {
+    const field = menuFor;
+    menu.innerHTML = `<div class="head">🔑 Notițe · alt cont</div><input class="q" type="search" placeholder="Caută: nume, site sau e-mail" autocomplete="off" spellcheck="false"><div class="res"></div>`;
+    const q = menu.querySelector('.q');
+    const res = menu.querySelector('.res');
+    const run = async () => {
+      const r = await send({ type: 'searchLogins', q: q.value });
+      if (!r || menuFor !== field) return;
+      if (r.locked) {
+        res.innerHTML = `<div class="note">🔒 Notițe e blocat.</div>`;
+        return;
+      }
+      res.innerHTML = r.items.length
+        ? r.items
+            .map(
+              (i) =>
+                `<div class="item" tabindex="0" data-other="${esc(i.id)}" data-site="${esc(i.site || i.title)}" data-user="${esc(i.username || i.title)}"><span class="t">${esc(i.username || i.title)}</span><span class="s">${esc(i.title)}${i.site && i.site.toLowerCase() !== i.title.toLowerCase() ? ` · ${esc(i.site)}` : ''}</span></div>`,
+            )
+            .join('') +
+          (r.total > r.items.length
+            ? `<div class="note">Încă ${r.total - r.items.length} — scrie mai mult ca să restrângi.</div>`
+            : '')
+        : `<div class="note">Niciun cont găsit.</div>`;
+    };
+    q.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(run, 150);
+    });
+    q.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Escape') hideMenu();
+      if (e.key === 'Enter' && e.isTrusted) {
+        e.preventDefault();
+        const first = menu.querySelector('[data-other]');
+        if (first) showConfirm(first);
+      }
+    });
+    run();
+    q.focus();
+  }
+
+  function showConfirm(it) {
+    const here = location.hostname.replace(/^www\./, '');
+    menu.innerHTML = `<div class="head">🔑 Notițe · alt cont</div><div class="note"><b>${esc(it.dataset.user)}</b> e salvat pentru <b>${esc(it.dataset.site || 'alt site')}</b>.<br><br>Verifică adresa din bara browserului: ești pe <b>${esc(here)}</b>. Îl folosești și aici?</div><div class="item" tabindex="0" data-use="${esc(it.dataset.other)}" data-remember="1"><span class="t">✓ Da, și ține minte</span><span class="s">Data viitoare apare direct aici</span></div><div class="item" tabindex="0" data-use="${esc(it.dataset.other)}"><span class="t">Doar acum</span><span class="s">Nu-l leg de acest site</span></div>`;
+  }
+
   menu.addEventListener('click', async (e) => {
     const it = e.target.closest('.item');
     if (!it) return;
+    // doar clicuri reale: pagina nu poate apăsa în locul tău
+    if (!e.isTrusted) return;
+    if (it.dataset.search) return showSearch();
+    if (it.dataset.other) return showConfirm(it);
+    if (it.dataset.use) {
+      const target = menuFor;
+      const cred = await send({
+        type: 'fillOther',
+        id: it.dataset.use,
+        remember: !!it.dataset.remember,
+      });
+      if (cred) fill(cred.username, cred.password, target);
+      hideMenu();
+      return;
+    }
     if (it.dataset.otp) {
       if (menuFor) setValue(menuFor, it.dataset.otp);
       hideMenu();

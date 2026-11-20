@@ -153,6 +153,7 @@ class SecretItem {
     this.renewalDate,
     this.notes = '',
     List<CustomField>? custom,
+    List<String>? sites,
     List<PasswordVersion>? passwordHistory,
     this.favorite = false,
     this.category = '',
@@ -162,6 +163,7 @@ class SecretItem {
     required this.updatedAt,
     DateTime? passwordChangedAt,
   }) : custom = custom ?? [],
+       sites = sites ?? [],
        passwordHistory = passwordHistory ?? [],
        passwordChangedAt = passwordChangedAt ?? createdAt;
 
@@ -171,6 +173,11 @@ class SecretItem {
 
   // Cont, abonament (și Wi-Fi: [username] = numele rețelei).
   String url;
+
+  /// Alte site-uri pe care se folosește același cont (ex. pagina de logare
+  /// afmb2cprod.b2clogin.com pentru afm.ro). Adăugate din extensie
+  /// („Da, și ține minte”) sau de mână.
+  List<String> sites;
   String username;
   String password;
 
@@ -318,6 +325,7 @@ class SecretItem {
   String get searchText => [
     title,
     url,
+    ...sites,
     username,
     cardHolder,
     last4,
@@ -337,6 +345,7 @@ class SecretItem {
     'type': type.name,
     'title': title,
     'url': url,
+    'sites': sites,
     'username': username,
     'password': password,
     'totp': totp,
@@ -390,6 +399,10 @@ class SecretItem {
       ),
       title: s('title'),
       url: s('url'),
+      sites: [
+        for (final x in (m['sites'] as List?) ?? const [])
+          if (x is String && x.trim().isNotEmpty) x.trim(),
+      ],
       username: s('username'),
       password: s('password'),
       totp: s('totp'),

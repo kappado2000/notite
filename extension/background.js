@@ -1030,6 +1030,65 @@ async function handle(msg, sender) {
       await choose(tabUrl, i.id);
       return { username: i.username, password: i.password };
     }
+    case 'searchLogins': {
+      // „Alt cont din Notițe…” din panoul de pe pagină: doar nume și site
+      // (fără parole), doar prin HTTPS, cu seiful deschis
+      if (!frameOk(sender, tabUrl) || !pageAllowed(tabUrl)) return null;
+      if (!(await status()).unlocked) return { locked: true, items: [] };
+      const q = String(msg.q ?? '').trim().toLowerCase();
+      const all = (await items()) ?? [];
+      const list = all.filter(
+        (i) =>
+          i.type === 'login' &&
+          i.password &&
+          !matches(i, tabUrl) &&
+          (!q ||
+            [i.title, i.url, i.username, ...(i.sites ?? [])]
+              .join(' ')
+              .toLowerCase()
+              .includes(q)),
+      );
+      list.sort((a, b) =>
+        (a.title || a.url || '').localeCompare(b.title || b.url || '', 'ro'),
+      );
+      return {
+        locked: false,
+        total: list.length,
+        items: list.slice(0, 30).map((i) => ({
+          id: i.id,
+          title: i.title || hostOf(i.url) || 'Fără titlu',
+          username: i.username || '',
+          site: hostOf(i.url) || '',
+        })),
+      };
+    }
+    case 'fillOther': {
+      // cont salvat pentru alt site, ales și confirmat de tine pe pagină;
+      // cu remember: site-ul paginii se adaugă la „Alte site-uri” ale lui
+      if (!frameOk(sender, tabUrl) || !pageAllowed(tabUrl)) return null;
+      const key = await dataKey();
+      if (!key) return null;
+      const all = (await items()) ?? [];
+      const i = all.find((x) => x.id === msg.id && x.type === 'login');
+      if (!i) return null;
+      if (msg.remember && !matches(i, tabUrl)) {
+        let origin = '';
+        try {
+          origin = new URL(tabUrl).origin;
+        } catch {}
+        if (origin) {
+          const updated = {
+            ...i,
+            sites: [...(i.sites ?? []), origin],
+            updatedAt: Date.now(),
+          };
+          await writeItem(key, await authSession(), updated);
+        }
+      }
+      await touch();
+      await choose(tabUrl, i.id);
+      return { username: i.username, password: i.password };
+    }
     case 'generatedInPopup': {
       // „Copiază” din generatorul ferestrei extensiei: o ținem minte pentru
       // site-ul din fila deschisă
