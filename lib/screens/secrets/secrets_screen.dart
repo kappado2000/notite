@@ -28,6 +28,7 @@ import 'password_health_screen.dart';
 import 'pin_setup.dart';
 import 'secret_detail_screen.dart';
 import 'secret_edit_screen.dart';
+import 'secrets_trash_screen.dart';
 import 'secret_widgets.dart';
 import 'two_factor_screen.dart';
 import '../../services/two_factor_sites.dart';
@@ -268,6 +269,54 @@ class _SecretsScreenState extends State<SecretsScreen>
   Future<void> _autoMerge() async {
     final store = context.read<NotesStore>();
     final messenger = ScaffoldMessenger.of(context);
+    // nu mai unim pe tăcute: întâi lista, apoi doar dacă ești de acord
+    final groups = duplicateGroups(store.allSecrets);
+    if (groups.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          groups.length == 1
+              ? 'Un cont apare de mai multe ori'
+              : '${groups.length} conturi apar de mai multe ori',
+        ),
+        content: SizedBox(
+          width: 420,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const Text(
+                'Același site și același utilizator. Le unesc într-unul '
+                'singur? Parola cea mai nouă rămâne; celelalte intră în '
+                '„Parole anterioare”, iar copiile merg în coș (30 de zile).',
+              ),
+              const SizedBox(height: 12),
+              for (final g in groups)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Text('${g.length}×'),
+                  title: Text(g.first.displayTitle),
+                  subtitle: Text(
+                    g.first.username.isEmpty ? '—' : g.first.username,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nu acum'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Unește'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
     final n = await store.mergeDuplicateSecrets();
     if (n > 0) {
       messenger.showSnackBar(
@@ -540,6 +589,13 @@ class _SecretsScreenState extends State<SecretsScreen>
               onSelected: (v) {
                 if (v == 'import') _importCsv();
                 if (v == 'autolock') _chooseAutoLock();
+                if (v == 'trash') {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const SecretsTrashScreen(),
+                    ),
+                  );
+                }
                 if (v == 'health') {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -568,6 +624,17 @@ class _SecretsScreenState extends State<SecretsScreen>
                   child: ListTile(
                     leading: Icon(Icons.health_and_safety_outlined),
                     title: Text('Verificare securitate'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'trash',
+                  child: ListTile(
+                    leading: const Icon(Icons.delete_outline),
+                    title: const Text('Coș și jurnal ștergeri'),
+                    subtitle: Text(
+                      '${context.read<NotesStore>().trashedSecrets.length} '
+                      'în coș (30 de zile)',
+                    ),
                   ),
                 ),
                 const PopupMenuItem(
@@ -1026,20 +1093,15 @@ class _SecretsScreenState extends State<SecretsScreen>
   }
 
   Widget _swipe(SecretItem item, Widget child) {
-    final store = context.read<NotesStore>();
     return SwipeToDelete(
       id: 'secret-${item.id}',
       label: 'Șterge',
       question:
-          'Ștergi „${item.displayTitle}”? Datele salvate '
-          'vor fi șterse definitiv.',
+          'Ștergi „${item.displayTitle}”? Merge în coș (Parole → ⋮ → '
+          'Coș), de unde îl poți recupera 30 de zile.',
       onDelete: (store) => store.deleteSecret(item),
-      doneMessage: 'Șters',
-      // Fără „Anulează” când are atașamente: acelea se
-      // șterg imediat, odată cu intrarea.
-      onUndo: store.attachmentsOf(item.attachmentOwnerId).isEmpty
-          ? (store) => store.saveSecret(item.copy())
-          : null,
+      doneMessage: 'Mutat în coș',
+      onUndo: (store) => store.restoreSecret(item),
       child: child,
     );
   }

@@ -369,7 +369,7 @@ function confirmDelete(row, i) {
   const box = document.createElement('div');
   box.className = 'pend';
   const text = document.createElement('div');
-  text.textContent = `Ștergi contul ${i.title}${i.username ? ` (${i.username})` : ''}? Dispare și din aplicație.`;
+  text.textContent = `Ștergi contul ${i.title}${i.username ? ` (${i.username})` : ''}? Merge în coșul din aplicația Notițe (Parole → ⋮ → Coș), de unde îl poți recupera 30 de zile.`;
   const bar = document.createElement('div');
   bar.className = 'row';
   const no = document.createElement('button');

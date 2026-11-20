@@ -160,8 +160,8 @@ class SecretDetailScreen extends StatelessWidget {
               final nav = Navigator.of(context);
               if (await confirm(
                 context,
-                'Ștergi definitiv „${item.displayTitle}”? Datele și '
-                'atașamentele nu vor mai putea fi recuperate.',
+                'Ștergi „${item.displayTitle}”? Merge în coș (Parole → ⋮ → '
+                'Coș), de unde îl poți recupera 30 de zile.',
               )) {
                 await store.deleteSecret(item);
                 nav.pop();

@@ -151,6 +151,9 @@ class SecretItem {
     this.currency = 'RON',
     this.period = BillingPeriod.monthly,
     this.renewalDate,
+    this.deletedAt,
+    this.deletedFrom = '',
+    this.deletedWhy = '',
     this.notes = '',
     List<CustomField>? custom,
     List<String>? sites,
@@ -218,6 +221,13 @@ class SecretItem {
   String currency;
   BillingPeriod period;
   DateTime? renewalDate;
+
+  /// În coș (șters, dar recuperabil 30 de zile): când, de pe ce dispozitiv
+  /// și de ce (șters de tine / unit cu alt cont).
+  DateTime? deletedAt;
+  String deletedFrom;
+  String deletedWhy;
+  bool get isTrashed => deletedAt != null;
 
   String notes;
   List<CustomField> custom;
@@ -384,6 +394,11 @@ class SecretItem {
     'createdAt': createdAt.millisecondsSinceEpoch,
     'updatedAt': updatedAt.millisecondsSinceEpoch,
     'passwordChangedAt': passwordChangedAt.millisecondsSinceEpoch,
+    if (deletedAt != null) ...{
+      'deletedAt': deletedAt!.millisecondsSinceEpoch,
+      'deletedFrom': deletedFrom,
+      'deletedWhy': deletedWhy,
+    },
   };
 
   factory SecretItem.fromMap(Map<dynamic, dynamic> m) {
@@ -447,6 +462,9 @@ class SecretItem {
       createdAt: d('createdAt'),
       updatedAt: d('updatedAt'),
       passwordChangedAt: od('passwordChangedAt'),
+      deletedAt: od('deletedAt'),
+      deletedFrom: s('deletedFrom'),
+      deletedWhy: s('deletedWhy'),
     );
   }
 }

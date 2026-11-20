@@ -1,7 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -106,7 +105,13 @@ class NotesStore extends ChangeNotifier {
     for (final n in expired) {
       await deleteForever(n);
     }
-    return expired.length;
+    final oldSecrets = trashedSecrets
+        .where((i) => i.deletedAt!.isBefore(limit))
+        .toList();
+    for (final i in oldSecrets) {
+      await purgeSecret(i);
+    }
+    return expired.length + oldSecrets.length;
   }
 
   int get _generation => (_settingsBox.get('boxGeneration_$uid') as int?) ?? 0;
@@ -827,7 +832,7 @@ class NotesStore extends ChangeNotifier {
 
   // ------------------------------------------------------------- parole
 
-  List<SecretItem> get secrets => _secrets.values.toList()
+  List<SecretItem> get secrets => allSecrets.toList()
     ..sort((a, b) {
       if (a.favorite != b.favorite) return a.favorite ? -1 : 1;
       return a.displayTitle.toLowerCase().compareTo(
@@ -835,9 +840,31 @@ class NotesStore extends ChangeNotifier {
       );
     });
 
-  Iterable<SecretItem> get allSecrets => _secrets.values;
+  /// Conturile active (fără cele din coș).
+  Iterable<SecretItem> get allSecrets =>
+      _secrets.values.where((i) => !i.isTrashed);
 
-  SecretItem? secret(String id) => _secrets[id];
+  /// Coșul parolelor: cele mai recent șterse primele.
+  List<SecretItem> get trashedSecrets =>
+      _secrets.values.where((i) => i.isTrashed).toList()
+        ..sort((a, b) => b.deletedAt!.compareTo(a.deletedAt!));
+
+  SecretItem? secret(String id) {
+    final i = _secrets[id];
+    return i == null || i.isTrashed ? null : i;
+  }
+
+  /// Numele dispozitivului, pentru jurnalul ștergerilor.
+  static String get deviceLabel {
+    if (kIsWeb) return 'PC (Notițe web)';
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.iOS => 'iPhone / iPad',
+      TargetPlatform.android => 'Android',
+      TargetPlatform.macOS => 'Mac',
+      TargetPlatform.windows => 'PC (Windows)',
+      _ => 'alt dispozitiv',
+    };
+  }
 
   static final _scheme = RegExp(r'https?://|www\.');
 
@@ -927,7 +954,42 @@ class NotesStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> deleteSecret(SecretItem item) async {
+  /// Ștergere = mutare în coș (30 de zile, criptat și sincronizat ca orice
+  /// cont), cu jurnal: când, de pe ce dispozitiv și de ce.
+  Future<void> deleteSecret(
+    SecretItem item, {
+    String why = 'Șters de tine',
+  }) async {
+    if (_closed) return;
+    final t = (_secrets[item.id] ?? item).copy()
+      ..deletedAt = DateTime.now()
+      ..deletedFrom = deviceLabel
+      ..deletedWhy = why
+      ..updatedAt = DateTime.now();
+    _secrets[t.id] = t;
+    await _secretsBox.put(t.id, t.toMap());
+    sync?.secretChanged(t);
+    await ReminderService.instance.cancelSecret(t.id);
+    notifyListeners();
+  }
+
+  /// Scoate contul din coș.
+  Future<void> restoreSecret(SecretItem item) async {
+    if (_closed) return;
+    final r = (_secrets[item.id] ?? item).copy()
+      ..deletedAt = null
+      ..deletedFrom = ''
+      ..deletedWhy = ''
+      ..updatedAt = DateTime.now();
+    _secrets[r.id] = r;
+    await _secretsBox.put(r.id, r.toMap());
+    sync?.secretChanged(r);
+    await ReminderService.instance.syncSecret(r);
+    notifyListeners();
+  }
+
+  /// Ștergere definitivă (din coș, sau după 30 de zile).
+  Future<void> purgeSecret(SecretItem item) async {
     if (_closed) return;
     _secrets.remove(item.id);
     await _secretsBox.delete(item.id);
@@ -948,12 +1010,15 @@ class NotesStore extends ChangeNotifier {
   Future<int> mergeDuplicateSecrets() async {
     var removed = 0;
     bool hasAtt(SecretItem i) => attachmentsOf(i.attachmentOwnerId).isNotEmpty;
-    for (final g in duplicateGroups(_secrets.values)) {
+    for (final g in duplicateGroups(allSecrets)) {
       if (g.where(hasAtt).length > 1) continue;
       final r = mergeDuplicates(g, hasAttachments: hasAtt);
       await saveSecret(r.keep);
+      final who = r.keep.username.isEmpty
+          ? r.keep.displayTitle
+          : '${r.keep.displayTitle} (${r.keep.username})';
       for (final o in r.remove) {
-        await deleteSecret(o);
+        await deleteSecret(o, why: 'Unit cu „$who” (dublură)');
         removed++;
       }
     }
@@ -966,7 +1031,11 @@ class NotesStore extends ChangeNotifier {
     if (local != null && !remote.updatedAt.isAfter(local.updatedAt)) return;
     _secrets[remote.id] = remote;
     await _secretsBox.put(remote.id, remote.toMap());
-    await ReminderService.instance.syncSecret(remote);
+    if (remote.isTrashed) {
+      await ReminderService.instance.cancelSecret(remote.id);
+    } else {
+      await ReminderService.instance.syncSecret(remote);
+    }
     notifyListeners();
   }
 

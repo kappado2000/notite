@@ -269,7 +269,14 @@ async function logout() {
   await updateBadge();
 }
 
-async function items({ fresh = false } = {}) {
+/// Conturile active: cele din coș (șterse, recuperabile 30 de zile în
+/// aplicație) nu se completează și nu apar nicăieri în extensie.
+async function items(opts) {
+  const all = await allItems(opts);
+  return all && all.filter((i) => !i.deletedAt);
+}
+
+async function allItems({ fresh = false } = {}) {
   const key = await dataKey();
   if (!key) return null;
   // Cota zilnică Firebase (50.000 de citiri): cel mult o dată pe minut
@@ -911,11 +918,18 @@ async function handle(msg, sender) {
       if (!fromExtension(sender)) return null;
       const key = await dataKey();
       if (!key) return { error: 'Seiful e blocat.' };
-      const sess = await authSession();
-      await fb.deleteSecret(sess, msg.id);
-      const { items: list = [] } = await getS('items');
-      await S.set({ items: list.filter((i) => i.id !== msg.id) });
-      await bumpVersion(sess, msg.id);
+      // în coș, nu definitiv: se recuperează din aplicație 30 de zile
+      const all = (await items()) ?? [];
+      const i = all.find((x) => x.id === msg.id);
+      if (!i) return { error: 'Nu am găsit contul.' };
+      const now = Date.now();
+      await writeItem(key, await authSession(), {
+        ...i,
+        deletedAt: now,
+        deletedFrom: `extensia ${navigator.userAgent.includes('Edg/') ? 'Edge' : 'Chrome'} (PC)`,
+        deletedWhy: 'Șters din extensie',
+        updatedAt: now,
+      });
       await touch();
       return { ok: true };
     }
