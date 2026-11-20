@@ -89,6 +89,19 @@ class _PasswordCompareScreenState extends State<PasswordCompareScreen> {
     setState(() => _usedOther.add(d.local.id));
   }
 
+  /// Numărul curent din listă (1, 2, 3…).
+  Widget _num(int n) => SizedBox(
+    width: 36,
+    child: Text(
+      '${n + 1}.',
+      textAlign: TextAlign.right,
+      style: TextStyle(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    ),
+  );
+
   Widget _header(String text, {String? sub}) => Padding(
     padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
     child: Column(
@@ -139,8 +152,9 @@ class _PasswordCompareScreenState extends State<PasswordCompareScreen> {
                 ? 'Toate conturile sunt și în Notițe.'
                 : 'Bifează ce vrei să adaugi.',
           ),
-          for (final i in left)
+          for (final (n, i) in left.indexed)
             CheckboxListTile(
+              secondary: _num(n),
               value: _pick.contains(i.id),
               onChanged: (v) => setState(
                 () => v == true ? _pick.add(i.id) : _pick.remove(i.id),
@@ -157,8 +171,9 @@ class _PasswordCompareScreenState extends State<PasswordCompareScreen> {
                   'Alege „Folosește” doar dacă știi că cea din '
                   '${r.source} e cea bună.',
             ),
-            for (final d in r.different)
+            for (final (n, d) in r.different.indexed)
               ListTile(
+                leading: _num(n),
                 title: Text(d.local.displayTitle),
                 subtitle: Text(
                   [
