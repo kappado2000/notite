@@ -168,11 +168,53 @@ String siteBase(SecretItem i) {
   return _domainLabel(host);
 }
 
+const _sharedHosts = {
+  'b2clogin.com',
+  'azurewebsites.net',
+  'onmicrosoft.com',
+  'cloudapp.net',
+  'github.io',
+  'gitlab.io',
+  'herokuapp.com',
+  'web.app',
+  'firebaseapp.com',
+  'appspot.com',
+  'netlify.app',
+  'vercel.app',
+  'pages.dev',
+  'workers.dev',
+  'blogspot.com',
+  'wordpress.com',
+  'wixsite.com',
+  'myshopify.com',
+  'cloudfront.net',
+  'amazonaws.com',
+  'glitch.me',
+  'onrender.com',
+  'fly.dev',
+  'ngrok.io',
+  'ngrok-free.app',
+  'sharepoint.com',
+};
+
+/// Cheile contului (site + utilizator), pe adresa lui și pe „Alte site-uri”
+/// — pentru compararea cu alt manager de parole.
+Set<String> accountKeys(SecretItem i) => {
+  _dupKey(i),
+  for (final s in i.sites) _dupKey(i.copy()..url = s),
+};
+
 String _domainLabel(String host) {
   if (RegExp(r'^[\d.]+$').hasMatch(host)) return host; // adresă IP
   final p = host.split('.');
   if (p.length < 2) return host;
   const second = {'com', 'co', 'org', 'net', 'gov', 'edu', 'ac', 'nom'};
+  // găzduiri comune: fiecare subdomeniu e alt proprietar
+  // (afmb2cprod.b2clogin.com ≠ altafirma.b2clogin.com)
+  if (p.length >= 3 &&
+      _sharedHosts.contains(p.sublist(p.length - 2).join('.'))) {
+    return p.sublist(p.length - 3).join('.');
+  }
   if (p.length >= 3 && p.last.length == 2 && second.contains(p[p.length - 2])) {
     return p[p.length - 3];
   }

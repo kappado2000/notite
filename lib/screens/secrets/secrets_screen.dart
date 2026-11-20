@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -29,6 +30,9 @@ import 'pin_setup.dart';
 import 'secret_detail_screen.dart';
 import 'secret_edit_screen.dart';
 import 'secrets_trash_screen.dart';
+import 'password_compare_screen.dart';
+import '../../services/google_compare.dart';
+import '../../services/file_opener.dart';
 import 'secret_widgets.dart';
 import 'two_factor_screen.dart';
 import '../../services/two_factor_sites.dart';
@@ -461,6 +465,81 @@ class _SecretsScreenState extends State<SecretsScreen>
     );
   }
 
+  Future<void> _compareCsv() async {
+    final store = context.read<NotesStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['csv'],
+      );
+      if (files.isEmpty || !mounted) return;
+      final text = utf8.decode(
+        await files.first.readAsBytes(),
+        allowMalformed: true,
+      );
+      final r = compareWithCsv(
+        text,
+        existing: store.allSecrets,
+        create: ([t = SecretType.login]) => store.newSecret(t),
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => PasswordCompareScreen(result: r)),
+      );
+    } on FormatException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Nu am putut citi fișierul: $e')),
+      );
+    }
+  }
+
+  Future<void> _exportGoogle() async {
+    final store = context.read<NotesStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final r = googleCsv(store.allSecrets);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded),
+        title: const Text('Export pentru Google'),
+        content: Text(
+          '${r.rows} ${r.rows == 1 ? 'rând' : 'rânduri'} '
+          '(câte unul pentru fiecare site al unui cont)'
+          '${r.skipped > 0 ? '; ${r.skipped} conturi fără site rămân doar în Notițe' : ''}.\n\n'
+          'Fișierul are parolele NECRIPTATE. Importă-l imediat pe '
+          'passwords.google.com → Setări → Importă parolele, apoi '
+          'șterge-l (și din Coșul de gunoi).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Renunță'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Exportă'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      // pe PC (web): descărcare; pe telefon: Salvează în Fișiere
+      await (kIsWeb ? FileOpener.open : FileOpener.share)(
+        'Notite-pentru-Google.csv',
+        'text/csv',
+        utf8.encode(r.csv),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Nu am putut exporta: $e')),
+      );
+    }
+  }
+
   Future<void> _importCsv() async {
     final store = context.read<NotesStore>();
     final messenger = ScaffoldMessenger.of(context);
@@ -588,6 +667,8 @@ class _SecretsScreenState extends State<SecretsScreen>
             PopupMenuButton<String>(
               onSelected: (v) {
                 if (v == 'import') _importCsv();
+                if (v == 'compare') _compareCsv();
+                if (v == 'exportGoogle') _exportGoogle();
                 if (v == 'autolock') _chooseAutoLock();
                 if (v == 'trash') {
                   Navigator.of(context).push(
@@ -643,6 +724,22 @@ class _SecretsScreenState extends State<SecretsScreen>
                     leading: Icon(Icons.file_download_outlined),
                     title: Text('Importă din CSV'),
                     subtitle: Text('Chrome, iCloud, Bitwarden, LastPass'),
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'compare',
+                  child: ListTile(
+                    leading: Icon(Icons.compare_arrows),
+                    title: Text('Compară cu Google'),
+                    subtitle: Text('Ce lipsește din Notițe (export CSV)'),
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'exportGoogle',
+                  child: ListTile(
+                    leading: Icon(Icons.file_upload_outlined),
+                    title: Text('Exportă pentru Google'),
+                    subtitle: Text('Fișier CSV pentru Importă parolele'),
                   ),
                 ),
               ],

@@ -119,7 +119,7 @@ void main() {
         ..password = 'secret2',
     ];
     final r = secretsFromCsv(chrome, existing: existing, create: _new);
-    expect(r.source, 'Chrome');
+    expect(r.source, 'Google (Chrome)');
     expect(r.items.length, 1);
     expect(r.skipped, 2);
     expect(r.items.first.title, 'eMAG');

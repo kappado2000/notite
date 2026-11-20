@@ -59,7 +59,7 @@ String csvSourceName(List<String> header) {
     return 'Parole iCloud';
   }
   if (h.contains('name') && h.contains('url') && h.contains('password')) {
-    return 'Chrome';
+    return 'Google (Chrome)';
   }
   return 'CSV';
 }
