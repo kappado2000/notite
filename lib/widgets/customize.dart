@@ -16,6 +16,7 @@ class ToolDef {
 /// Cardurile de sus de pe Acasă.
 const homeCardDefs = <ToolDef>[
   ToolDef('list', Icons.checklist, 'Listă'),
+  ToolDef('auth', Icons.pin_outlined, 'Autentificator'),
   ToolDef('note', Icons.edit_outlined, 'Notiță'),
   ToolDef('scan', Icons.document_scanner_outlined, 'Scanează'),
   ToolDef('pinned', Icons.push_pin_outlined, 'Fixate'),
@@ -23,7 +24,7 @@ const homeCardDefs = <ToolDef>[
   ToolDef('bon', Icons.receipt_long_outlined, 'Bon'),
   ToolDef('reminders', Icons.alarm, 'Mementouri'),
 ];
-const homeCardDefaults = ['list', 'note', 'scan', 'qr', 'bon'];
+const homeCardDefaults = ['list', 'auth', 'scan', 'qr', 'bon'];
 
 /// Uneltele notiței (bara de deasupra tastaturii și meniul „+”).
 const editorToolDefs = <ToolDef>[

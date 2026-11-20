@@ -43,7 +43,10 @@ class Totp {
   String code([DateTime? at]) {
     final t = (at ?? DateTime.now()).millisecondsSinceEpoch ~/ 1000;
     final counter = t ~/ period;
-    final msg = ByteData(8)..setUint64(0, counter);
+    // două jumătăți de 32 de biți: setUint64 nu merge pe web (dart2js)
+    final msg = ByteData(8)
+      ..setUint32(0, counter ~/ 0x100000000)
+      ..setUint32(4, counter % 0x100000000);
     final hash = switch (algorithm) {
       'SHA256' => sha256,
       'SHA512' => sha512,

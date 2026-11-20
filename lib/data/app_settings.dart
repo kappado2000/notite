@@ -16,8 +16,21 @@ class AppSettings extends ChangeNotifier {
 
   /// O listă personalizată (carduri Acasă, unelte, șabloane): id-urile
   /// alese, în ordinea aleasă; null = cea implicită.
-  List<String>? customList(String key) =>
-      (_box.get('custom_$key') as List?)?.cast<String>();
+  List<String>? customList(String key) {
+    final ids = (_box.get('custom_$key') as List?)?.cast<String>();
+    // o singură dată: cardul „Notiță” de pe Acasă (dublat de butonul din
+    // dreapta-jos) devine „Autentificator”
+    if (key == 'homeCards' && ids != null && _box.get('homeAuthSwap') != true) {
+      _box.put('homeAuthSwap', true);
+      if (ids.contains('note') && !ids.contains('auth')) {
+        final swapped = [for (final i in ids) i == 'note' ? 'auth' : i];
+        _box.put('custom_$key', swapped);
+        return swapped;
+      }
+    }
+    return ids;
+  }
+
   void setCustomList(String key, List<String>? ids) {
     if (ids == null) {
       _box.delete('custom_$key');

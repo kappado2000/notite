@@ -18,6 +18,7 @@ import '../services/on_device_ai.dart';
 import 'ask_notes_screen.dart';
 import 'note_editor_screen.dart';
 import 'notes_tab.dart';
+import 'secrets/secrets_screen.dart';
 import 'qr_scan_screen.dart';
 import 'receipt_split_screen.dart';
 import 'shell.dart';
@@ -391,6 +392,7 @@ class _QuickActions extends StatelessWidget {
   VoidCallback? _action(BuildContext context, String id) => switch (id) {
     'list' => () => createAndOpenNote(context, checklist: true),
     'note' => () => createAndOpenNote(context),
+    'auth' => () => openSecrets(context, authenticator: true),
     'scan' => ScanService.scanSupported ? () => _scan(context) : null,
     'pinned' => () => shell.openNotes(const PinnedView()),
     'qr' => () async {

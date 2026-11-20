@@ -30,6 +30,7 @@ import 'pin_setup.dart';
 import 'secret_detail_screen.dart';
 import 'secret_edit_screen.dart';
 import 'secrets_trash_screen.dart';
+import 'authenticator_screen.dart';
 import 'password_compare_screen.dart';
 import '../../services/google_compare.dart';
 import '../../services/file_opener.dart';
@@ -39,17 +40,22 @@ import '../../services/two_factor_sites.dart';
 
 const secretsRouteName = 'parole';
 
-Future<void> openSecrets(BuildContext context) => Navigator.of(context).push(
-  MaterialPageRoute(
-    settings: const RouteSettings(name: secretsRouteName),
-    builder: (_) => const SecretsScreen(),
-  ),
-);
+/// [authenticator]: după deblocare se deschide direct „Autentificator”
+/// (butonul de pe Acasă).
+Future<void> openSecrets(BuildContext context, {bool authenticator = false}) =>
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: secretsRouteName),
+        builder: (_) => SecretsScreen(openAuthenticator: authenticator),
+      ),
+    );
 
 /// Secțiunea „Parole”. Are deblocare proprie, cerută la fiecare intrare
 /// și din nou dacă aplicația trece în fundal.
 class SecretsScreen extends StatefulWidget {
-  const SecretsScreen({super.key});
+  const SecretsScreen({super.key, this.openAuthenticator = false});
+
+  final bool openAuthenticator;
 
   @override
   State<SecretsScreen> createState() => _SecretsScreenState();
@@ -58,6 +64,7 @@ class SecretsScreen extends StatefulWidget {
 class _SecretsScreenState extends State<SecretsScreen>
     with WidgetsBindingObserver {
   bool _unlocked = false;
+  bool _authOpened = false;
   bool _busy = false;
   bool _bioAvailable = false;
   String _bioLabel = 'amprentă';
@@ -612,6 +619,17 @@ class _SecretsScreenState extends State<SecretsScreen>
   Widget build(BuildContext context) {
     // Tocmai deblocat (sau setarea s-a schimbat): pornește numărătoarea.
     if (_unlocked && _idle?.isActive != true) _activity();
+    if (_unlocked && widget.openAuthenticator && !_authOpened) {
+      _authOpened = true;
+      // unirea dublurilor rămâne pentru următoarea intrare în Parole
+      _mergeChecked = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const AuthenticatorScreen()));
+      });
+    }
     if (_unlocked && !_mergeChecked) {
       _mergeChecked = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _autoMerge());
@@ -644,6 +662,14 @@ class _SecretsScreenState extends State<SecretsScreen>
                 final s = context.read<AppSettings>();
                 s.secretsHeaderHidden = !s.secretsHeaderHidden;
               },
+            ),
+          if (_unlocked)
+            IconButton(
+              tooltip: 'Autentificator (coduri 2FA)',
+              icon: const Icon(Icons.pin_outlined),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AuthenticatorScreen()),
+              ),
             ),
           if (_unlocked)
             IconButton(
