@@ -432,7 +432,10 @@ const HEALTH_TIP = {
         id: it.dataset.use,
         remember: !!it.dataset.remember,
       });
-      if (cred) fill(cred.username, cred.password, target);
+      if (cred) {
+        fill(cred.username, cred.password, target);
+        armAutoOtp();
+      }
       hideMenu();
       return;
     }
@@ -469,14 +472,94 @@ const HEALTH_TIP = {
       return;
     }
     const cred = await send({ type: 'fill', id: it.dataset.id });
-    if (cred) fill(cred.username, cred.password, menuFor);
+    if (cred) {
+      fill(cred.username, cred.password, menuFor);
+      armAutoOtp();
+    }
     hideMenu();
   });
+
+  // ------------------------------------------- cod 2FA pus automat
+  // După ce ai completat parola din Notițe, pe pagina de cod (același site,
+  // aceeași filă, câteva minute) codul se pune singur. Butonul de trimitere
+  // îl apeși tu. Extensia decide dacă e voie; aici doar găsim câmpul.
+
+  const autoTried = new WeakSet();
+  let autoBusy = false;
+  let autoUntil = Date.now() + 3 * 60 * 1000;
+
+  const usable = (el) =>
+    el instanceof HTMLInputElement && visible(el) && !el.disabled && !el.readOnly && !el.value;
+
+  /// Căsuțe separate pentru cifre (6 sau 8 câmpuri de câte un caracter).
+  function splitOtp() {
+    const boxes = [...document.querySelectorAll('input')].filter(
+      (el) => el.maxLength === 1 && /^(text|tel|number|)$/.test(el.type) && usable(el),
+    );
+    if (boxes.length < 6) return null;
+    let box = boxes[0].parentElement;
+    for (let up = 0; box && up < 4; up++, box = box.parentElement) {
+      const group = boxes.filter((b) => box.contains(b));
+      if (group.length === 6 || group.length === 8) {
+        const hint =
+          group.some((b) => b.autocomplete === 'one-time-code' || b.inputMode === 'numeric') ||
+          /cod|code|verif|2fa|autentific|authenticat/i.test((box.innerText || '').slice(0, 500) + document.title);
+        return hint ? group : null;
+      }
+    }
+    return null;
+  }
+
+  function otpTargets(focused) {
+    if (focused && isOtpField(focused) && usable(focused)) return [focused];
+    const one = [...document.querySelectorAll('input')].find((el) => isOtpField(el) && usable(el));
+    return one ? [one] : splitOtp();
+  }
+
+  /// true dacă a pus codul (atunci nu mai arătăm meniul).
+  async function autoOtp(focused = null) {
+    if (autoBusy || Date.now() > autoUntil) return false;
+    const targets = otpTargets(focused);
+    if (!targets || targets.some((t) => autoTried.has(t))) return false;
+    targets.forEach((t) => autoTried.add(t));
+    autoBusy = true;
+    try {
+      const r = await send({ type: 'autoTotp' });
+      if (!r?.code || !targets.every((t) => t.isConnected && !t.value)) return false;
+      if (targets.length === 1) setValue(targets[0], r.code);
+      else [...r.code].forEach((c, i) => targets[i] && setValue(targets[i], c));
+      autoUntil = 0; // o singură dată pe pagină
+      hideMenu();
+      showToast({ result: 'otpFilled', username: r.username });
+      return true;
+    } finally {
+      autoBusy = false;
+    }
+  }
+
+  // câmpul de cod apare adesea după logare, fără reîncărcarea paginii
+  let autoTimer = 0;
+  const autoObs = new MutationObserver(() => {
+    if (Date.now() > autoUntil) return autoObs.disconnect();
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => autoOtp(), 400);
+  });
+  autoObs.observe(document.documentElement, { childList: true, subtree: true });
+  setTimeout(() => autoOtp(), 600);
+  /// După „Completează”: pagina de cod poate veni în aceeași pagină.
+  function armAutoOtp() {
+    autoUntil = Date.now() + 3 * 60 * 1000;
+    try {
+      autoObs.observe(document.documentElement, { childList: true, subtree: true });
+    } catch {}
+  }
 
   function maybeShow(el) {
     if (!(el instanceof HTMLInputElement)) return;
     if (isOtpField(el)) {
-      showOtpMenu(el);
+      autoOtp(el).then((done) => {
+        if (!done) showOtpMenu(el);
+      });
       return;
     }
     const isPw = isPasswordField(el);
@@ -577,6 +660,9 @@ const HEALTH_TIP = {
     } else if (info.result === 'generatedKept') {
       html = `🔑 Parola generată e ținută minte în Notițe (${info.count > 1 ? `la cele ${info.count} conturi` : 'la contul'} <b>${esc(info.site)}</b>). După ce o salvezi pe site, confirm-o din iconița Notițe („Folosește-o”) sau din aplicație.
         <div class="row"><button class="pri" data-a="ok">OK</button></div>`;
+    } else if (info.result === 'otpFilled') {
+      html = `🔑 Codul 2FA din Notițe${who} a fost completat. Apasă tu butonul de confirmare de pe site.
+        <div class="row"><button class="pri" data-a="ok">OK</button></div>`;
     } else if (info.result === 'locked') {
       html = `🔒 Notițe e blocat. Parola pentru <b>${esc(info.site)}</b>${who} va fi salvată când îl deblochezi din iconița extensiei.
         <div class="row"><button class="pri" data-a="ok">OK</button></div>`;
@@ -605,7 +691,10 @@ const HEALTH_TIP = {
   });
 
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.type === 'doFill') fill(msg.username, msg.password);
+    if (msg?.type === 'doFill') {
+      fill(msg.username, msg.password);
+      armAutoOtp();
+    }
   });
 
   // mesajul rămas de la pagina anterioară (logarea a navigat)

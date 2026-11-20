@@ -389,6 +389,15 @@ async function choose(url, id) {
   await S.set({ chosen });
 }
 
+/// Codul 2FA se completează singur doar după ce ai pus parola din Notițe
+/// pe ACELAȘI site, în ACEEAȘI filă, în ultimele câteva minute.
+const AUTO_TOTP_MS = 5 * 60 * 1000;
+
+async function markFilled(tabId, url, id) {
+  if (tabId == null) return;
+  await S.set({ [`filled_${tabId}`]: { id, base: baseDomain(url), at: Date.now() } });
+}
+
 async function chosenFor(url) {
   const { chosen = {} } = await getS('chosen');
   const c = chosen[hostOf(url)];
@@ -965,6 +974,7 @@ async function handle(msg, sender) {
       }
       await touch();
       await choose(tab.url, i.id);
+      await markFilled(tab.id, tab.url, i.id);
       await chrome.tabs.sendMessage(
         tab.id,
         { type: 'doFill', username: i.username, password: i.password },
@@ -1034,6 +1044,34 @@ async function handle(msg, sender) {
       if (out.length) await touch();
       return { locked: false, items: out };
     }
+    case 'autoTotp': {
+      // codul 2FA pus singur pe pagină: doar după o parolă completată din
+      // Notițe în aceeași filă, pe același site, prin HTTPS, de curând;
+      // contul folosit (sau singurul cont cu 2FA al site-ului). O singură
+      // dată: altfel rămâne meniul obișnuit.
+      if (tabId == null || !frameOk(sender, tabUrl) || !pageAllowed(tabUrl)) return null;
+      const k = `filled_${tabId}`;
+      const { [k]: f } = await S.get(k);
+      if (!f || Date.now() - f.at > AUTO_TOTP_MS || f.base !== baseDomain(tabUrl)) return null;
+      const st = await status();
+      if (!st.unlocked) return null;
+      const all = (await items()) ?? [];
+      const has = (i) => !!(i.totp || '').trim();
+      const used = all.find((i) => i.id === f.id && has(i));
+      const site = all.filter((i) => has(i) && matches(i, tabUrl));
+      const pick = used ?? (site.length === 1 ? site[0] : null);
+      if (!pick) return null;
+      let r = await totpCode(pick.totp);
+      // codul e pe terminate: îl dăm pe următorul, să nu expire până trimiți
+      if (r && r.remaining < 4) {
+        await new Promise((ok) => setTimeout(ok, r.remaining * 1000 + 300));
+        r = await totpCode(pick.totp);
+      }
+      if (!r) return null;
+      await S.remove(k);
+      await touch();
+      return { code: r.code, username: pick.username || pick.title };
+    }
     case 'fill': {
       // parola merge DOAR spre site-ul ei, prin HTTPS, cadrul principal
       if (!frameOk(sender, tabUrl) || !pageAllowed(tabUrl)) return null;
@@ -1042,6 +1080,7 @@ async function handle(msg, sender) {
       if (!i || !matches(i, tabUrl)) return null;
       await touch();
       await choose(tabUrl, i.id);
+      await markFilled(tabId, tabUrl, i.id);
       return { username: i.username, password: i.password };
     }
     case 'searchLogins': {
@@ -1101,6 +1140,7 @@ async function handle(msg, sender) {
       }
       await touch();
       await choose(tabUrl, i.id);
+      await markFilled(tabId, tabUrl, i.id);
       return { username: i.username, password: i.password };
     }
     case 'generatedInPopup': {
@@ -1178,7 +1218,7 @@ chrome.alarms.onAlarm.addListener(async (a) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   recent.delete(tabId);
   usernameHint.delete(tabId);
-  S.remove(`toast_${tabId}`);
+  S.remove([`toast_${tabId}`, `filled_${tabId}`]);
 });
 
 chrome.runtime.onStartup.addListener(updateBadge);
