@@ -17,15 +17,23 @@ class AppSettings extends ChangeNotifier {
   /// O listă personalizată (carduri Acasă, unelte, șabloane): id-urile
   /// alese, în ordinea aleasă; null = cea implicită.
   List<String>? customList(String key) {
-    final ids = (_box.get('custom_$key') as List?)?.cast<String>();
+    var ids = (_box.get('custom_$key') as List?)?.cast<String>();
+    if (key != 'homeCards' || ids == null) return ids;
     // o singură dată: cardul „Notiță” de pe Acasă (dublat de butonul din
-    // dreapta-jos) devine „Autentificator”
-    if (key == 'homeCards' && ids != null && _box.get('homeAuthSwap') != true) {
+    // dreapta-jos) devine „Auth”
+    if (_box.get('homeAuthSwap') != true) {
       _box.put('homeAuthSwap', true);
       if (ids.contains('note') && !ids.contains('auth')) {
-        final swapped = [for (final i in ids) i == 'note' ? 'auth' : i];
-        _box.put('custom_$key', swapped);
-        return swapped;
+        ids = [for (final i in ids) i == 'note' ? 'auth' : i];
+        _box.put('custom_$key', ids);
+      }
+    }
+    // o singură dată: „Auth” primul în rând (apoi ordinea e a ta)
+    if (_box.get('homeAuthFirst') != true) {
+      _box.put('homeAuthFirst', true);
+      if (ids.contains('auth') && ids.first != 'auth') {
+        ids = ['auth', ...ids.where((i) => i != 'auth')];
+        _box.put('custom_$key', ids);
       }
     }
     return ids;

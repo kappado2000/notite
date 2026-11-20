@@ -30,7 +30,7 @@ const homeCardDefs = <ToolDef>[
   ToolDef('bon', Icons.receipt_long_outlined, 'Bon'),
   ToolDef('reminders', Icons.alarm, 'Mementouri'),
 ];
-const homeCardDefaults = ['list', 'auth', 'scan', 'qr', 'bon'];
+const homeCardDefaults = ['auth', 'list', 'scan', 'qr', 'bon'];
 
 /// Uneltele notiței (bara de deasupra tastaturii și meniul „+”).
 const editorToolDefs = <ToolDef>[
