@@ -230,15 +230,37 @@ List<List<SecretItem>> duplicateGroups(Iterable<SecretItem> items) {
     final parts = k.split('|');
     if (parts[1].isNotEmpty) named.putIfAbsent(parts[0], () => []).add(k);
   }
+  // Doar intrările salvate automat (titlu = numele site-ului); una pusă de
+  // mână, cu nume propriu („Apple Adi”), rămâne separată.
   for (final k in by.keys.toList()) {
     final parts = k.split('|');
     if (parts[1].isNotEmpty || parts[0].isEmpty) continue;
     final owners = named[parts[0]];
-    if (owners != null && owners.length == 1) {
-      by[owners.single]!.addAll(by.remove(k)!);
-    }
+    if (owners == null || owners.length != 1) continue;
+    final group = by[k]!;
+    final auto = group.where((i) => !hasOwnTitle(i)).toList();
+    if (auto.isEmpty) continue;
+    by[owners.single]!.addAll(auto);
+    group.removeWhere(auto.contains);
+    if (group.isEmpty) by.remove(k);
   }
   return by.values.where((g) => g.length > 1).toList();
+}
+
+/// Titlul a fost dat de om (nu e doar numele site-ului / adresa, cum îl
+/// pun salvarea automată și importurile).
+bool hasOwnTitle(SecretItem i) {
+  String fold(String s) => s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  final t = fold(i.title);
+  if (t.isEmpty) return false;
+  final host = hostOf(i.url).split(':').first;
+  final labels = {
+    siteBase(i),
+    fold(host),
+    fold(host.replaceFirst(RegExp(r'^www\.'), '')),
+    for (final l in host.split('.')) l,
+  }.map(fold);
+  return !labels.contains(t);
 }
 
 /// Unește un grup de dubluri în intrarea cea mai completă; întoarce
@@ -262,6 +284,15 @@ List<List<SecretItem>> duplicateGroups(Iterable<SecretItem> items) {
       return r != 0 ? r : a.createdAt.compareTo(b.createdAt);
     });
   final keep = sorted.first.copy();
+  // numele: cel dat de om cel mai recent („Apple Adi”), nu cel automat;
+  // celelalte nume proprii rămân scrise în notițe
+  final named = [...group.where(hasOwnTitle)]
+    ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  if (named.isNotEmpty) keep.title = named.first.title;
+  final others = {
+    for (final o in named)
+      if (o.title.trim() != keep.title.trim()) o.title.trim(),
+  };
   for (final o in sorted.skip(1)) {
     keep.favorite = keep.favorite || o.favorite;
     if (keep.username.trim().isEmpty) keep.username = o.username;
@@ -282,6 +313,14 @@ List<List<SecretItem>> duplicateGroups(Iterable<SecretItem> items) {
       if (!keep.passwordHistory.any((k) => k.password == p.password)) {
         keep.passwordHistory.add(p);
       }
+    }
+  }
+  if (others.isNotEmpty) {
+    final line = 'Alte denumiri: ${others.join(', ')}';
+    if (!keep.notes.contains(line)) {
+      keep.notes = keep.notes.trim().isEmpty
+          ? line
+          : '${keep.notes.trim()}\n\n$line';
     }
   }
   // parola valabilă = cea schimbată cel mai recent; celelalte → istoric

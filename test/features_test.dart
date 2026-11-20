@@ -264,6 +264,36 @@ void main() {
       final pdf = store.allSecrets.where((i) => siteBase(i) == 'pdf24').single;
       expect((pdf.username, pdf.password), ('ion@test.ro', 'v2'));
 
+      // o intrare pusă de mână cu nume propriu, fără utilizator, NU se
+      // topește în contul site-ului
+      final a1 = login(
+        'Apple',
+        'https://appleid.apple.com',
+        'x@exemplu.ro',
+        'a1',
+      );
+      final a2 = login('Apple Adi', 'https://www.icloud.com', '', 'a2');
+      final a3 = login('Apple Adi', '', '', 'a3');
+      await store.addSecrets([a1, a2, a3]);
+      expect(await store.mergeDuplicateSecrets(), 0);
+      expect(hasOwnTitle(a2), isTrue);
+      expect(hasOwnTitle(a1), isFalse); // „Apple” = numele site-ului
+      // același cont (același utilizator) se unește, dar numele dat de om
+      // cel mai recent rămâne
+      final m1 = login(
+        'mail.exemplu.ro',
+        'https://mail.exemplu.ro',
+        'ion',
+        'm1',
+      );
+      final m2 = login('Mailul meu', 'https://exemplu.ro', 'ion', 'm2');
+      await store.addSecrets([m1, m2]);
+      expect(await store.mergeDuplicateSecrets(), 1);
+      final m = store.allSecrets
+          .where((i) => siteBase(i) == 'exemplu' && i.username == 'ion')
+          .single;
+      expect(m.title, 'Mailul meu');
+
       // routerul (rețeaua de acasă) nu se numără, deși parola e slabă
       expect(isLocalAccount(router), isTrue);
       final report = PasswordReport.of(store.allSecrets);
