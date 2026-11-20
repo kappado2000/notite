@@ -1028,6 +1028,52 @@ class _SecretsScreenState extends State<SecretsScreen>
                                           _category = null;
                                         }),
                                       ),
+                                    // rândul de avertizări, în același format
+                                    if (report.problems > 0)
+                                      _alertTile(
+                                        icon: Icons.health_and_safety_outlined,
+                                        label: 'Risc',
+                                        count: report.accounts,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .error,
+                                        tooltip: 'Conturi de reparat: slabe, repetate, vechi',
+                                        onTap: () => Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const PasswordFixScreen(),
+                                          ),
+                                        ),
+                                      ),
+                                    if (soon.isNotEmpty &&
+                                        _type == null &&
+                                        _query.isEmpty)
+                                      _alertTile(
+                                        icon: Icons.event_busy_outlined,
+                                        label: 'Expiră',
+                                        count: soon.length,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .secondary,
+                                        tooltip: 'Expiră curând',
+                                        onTap: () => _showExpiring(soon),
+                                      ),
+                                    if (noTfa.isNotEmpty)
+                                      _alertTile(
+                                        icon: Icons.shield_outlined,
+                                        label: '2FA',
+                                        count: noTfa.length,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .tertiary,
+                                        tooltip: 'Conturi fără 2FA, deși site-ul îl permite',
+                                        onTap: () => Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const TwoFactorScreen(),
+                                          ),
+                                        ),
+                                      ),
                                   ],
                                 );
                               },
@@ -1060,83 +1106,6 @@ class _SecretsScreenState extends State<SecretsScreen>
                                     builder: (_) => const PasswordFixScreen(),
                                   ),
                                 ),
-                              ),
-                            ),
-                          if (report.problems > 0 ||
-                              noTfa.isNotEmpty ||
-                              (soon.isNotEmpty &&
-                                  _type == null &&
-                                  _query.isEmpty))
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (report.problems > 0)
-                                    Expanded(
-                                      child: _AlertCard(
-                                        icon: Icons.health_and_safety_outlined,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .errorContainer,
-                                        border: Theme.of(context)
-                                            .colorScheme
-                                            .error,
-                                        title:
-                                            '${report.accounts} '
-                                            '${report.accounts == 1 ? 'cont de reparat' : 'conturi de reparat'}',
-                                        subtitle: 'Slabe, repetate, vechi',
-                                        onTap: () => Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                const PasswordFixScreen(),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  if (soon.isNotEmpty &&
-                                      _type == null &&
-                                      _query.isEmpty)
-                                    Expanded(
-                                      child: _AlertCard(
-                                        icon: Icons.event_busy_outlined,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .secondaryContainer,
-                                        border: Theme.of(context)
-                                            .colorScheme
-                                            .secondary,
-                                        title: '${soon.length} expiră curând',
-                                        subtitle: [
-                                          '${soon.first.displayTitle} · '
-                                              '${formatShortDate(soon.first.expiresOn!)}',
-                                          if (soon.length > 1)
-                                            '+${soon.length - 1}',
-                                        ].join(' '),
-                                        onTap: () => _showExpiring(soon),
-                                      ),
-                                    ),
-                                  if (noTfa.isNotEmpty)
-                                    Expanded(
-                                      child: _AlertCard(
-                                        icon: Icons.shield_outlined,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .tertiaryContainer,
-                                        border: Theme.of(context)
-                                            .colorScheme
-                                            .tertiary,
-                                        title: '${noTfa.length} fără 2FA',
-                                        subtitle: 'Site-ul îl permite',
-                                        onTap: () => Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                const TwoFactorScreen(),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
                               ),
                             ),
                         ],
@@ -1464,6 +1433,7 @@ class _SecretsScreenState extends State<SecretsScreen>
   /// Numele scurt din grila de sus (încape pe un rând).
   static String _short(SecretType t) => switch (t) {
     SecretType.bank => 'Bancă',
+    SecretType.subscription => 'Abonat',
     _ => _plural(t),
   };
 
@@ -1529,6 +1499,73 @@ class _SecretsScreenState extends State<SecretsScreen>
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Avertizare (Risc, Expiră, 2FA) în formatul pătratelor de tipuri:
+  /// iconiță și număr, dedesubt numele; în culoarea avertizării.
+  Widget _alertTile({
+    required IconData icon,
+    required String label,
+    required int count,
+    required Color color,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final bg = Color.alphaBlend(
+      color.withValues(alpha: 0.12),
+      scheme.surfaceContainerLowest,
+    );
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: bg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: color.withValues(alpha: 0.55)),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 20, color: color),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$count',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1618,72 +1655,6 @@ class SecretTile extends StatelessWidget {
                 ),
               ),
             ),
-      ),
-    );
-  }
-}
-
-/// Card mic de avertizare (conturi de reparat / expiră curând); două încap
-/// pe un rând.
-class _AlertCard extends StatelessWidget {
-  const _AlertCard({
-    required this.icon,
-    required this.color,
-    required this.border,
-    required this.title,
-    required this.subtitle,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final Color color;
-  final Color border;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      color: color,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: border.withValues(alpha: 0.55)),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 14, 10, 14),
-          child: Row(
-            children: [
-              Icon(icon),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.titleSmall,
-                    ),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              if (onTap != null) const Icon(Icons.chevron_right, size: 20),
-            ],
-          ),
-        ),
       ),
     );
   }
