@@ -594,6 +594,18 @@ function isLocalHost(h) {
   );
 }
 
+/// Cadrul care cere e pagina principală SAU un cadru încastrat de pe
+/// ACELAȘI site cu adresa din bară (ex. formularul Apple de pe
+/// idmsa.apple.com în developer.apple.com). Cadrele altor site-uri (reclame,
+/// pagini străine) nu primesc nimic.
+function frameOk(sender, tabUrl) {
+  if (sender.frameId === 0) return true;
+  const url = sender.url || '';
+  if (!/^https:/.test(url) || !tabUrl) return false;
+  const a = baseDomain(url);
+  return !!a && a === baseDomain(tabUrl);
+}
+
 function pageAllowed(url) {
   try {
     const u = new URL(url);
@@ -979,7 +991,7 @@ async function handle(msg, sender) {
 
     // ---- paginile web (content.js)
     case 'pageLogins': {
-      if (!tabUrl || sender.frameId !== 0) return { locked: true, items: [] };
+      if (!tabUrl || !frameOk(sender, tabUrl)) return null;
       const st = await status();
       if (!st.unlocked) return { locked: true, loggedIn: st.loggedIn, items: [] };
       const all = (await items()) ?? [];
@@ -995,7 +1007,7 @@ async function handle(msg, sender) {
     }
     case 'pageTotp': {
       // codul 2FA doar pentru site-ul lui, prin HTTPS, cadrul principal
-      if (sender.frameId !== 0 || !pageAllowed(tabUrl)) return null;
+      if (!frameOk(sender, tabUrl) || !pageAllowed(tabUrl)) return null;
       const st = await status();
       if (!st.unlocked) return { locked: true, loggedIn: st.loggedIn, items: [] };
       const all = (await items()) ?? [];
@@ -1010,7 +1022,7 @@ async function handle(msg, sender) {
     }
     case 'fill': {
       // parola merge DOAR spre site-ul ei, prin HTTPS, cadrul principal
-      if (sender.frameId !== 0 || !pageAllowed(tabUrl)) return null;
+      if (!frameOk(sender, tabUrl) || !pageAllowed(tabUrl)) return null;
       const all = await items();
       const i = all?.find((x) => x.id === msg.id);
       if (!i || !matches(i, tabUrl)) return null;
@@ -1026,7 +1038,7 @@ async function handle(msg, sender) {
       return serial(() => rememberGenerated(msg.url, '', msg.password));
     }
     case 'generated':
-      if (!tabUrl || sender.frameId !== 0 || !msg.password) return null;
+      if (!tabUrl || !frameOk(sender, tabUrl) || !msg.password) return null;
       return serial(() =>
         rememberGenerated(tabUrl, msg.username || '', msg.password),
       );
@@ -1036,7 +1048,7 @@ async function handle(msg, sender) {
       }
       return null;
     case 'captured': {
-      if (!tabUrl || sender.frameId !== 0 || !msg.password) return null;
+      if (!tabUrl || !frameOk(sender, tabUrl) || !msg.password) return null;
       // pe rând: clicul pe buton și trimiterea formularului sosesc deodată
       return serial(() => captured(msg, tabUrl, tabId));
     }

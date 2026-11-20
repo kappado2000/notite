@@ -27,3 +27,11 @@ test('parola merge doar spre site-ul ei', () => {
 test('titlu', () => {
   assert.equal(siteTitle('https://www.emag.ro/x'), 'Emag');
 });
+
+test('Apple ID @icloud.com pe apple.com (și nimic altceva)', () => {
+  const icloud = { url: 'https://www.icloud.com', title: 'iCloud' };
+  assert.equal(matches(icloud, 'https://idmsa.apple.com/IDMSWebAuth/signin'), true);
+  assert.equal(matches({ url: 'appleid.apple.com' }, 'https://www.icloud.com'), true);
+  assert.equal(matches(icloud, 'https://apple.com.exemplu.ro/login'), false);
+  assert.equal(matches(icloud, 'https://icloud-com.ro/login'), false);
+});

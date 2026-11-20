@@ -3,7 +3,23 @@
 // parola folosită. Nu păstrează nimic: parolele vin de la extensie doar
 // la cerere, pentru site-ul curent.
 (() => {
-  if (window.top !== window || window.__notiteExt) return;
+  if (window.__notiteExt) return;
+  // Cadre încastrate: doar cele de pe același site cu pagina (ex.
+  // formularul Apple de pe idmsa.apple.com); reclamele și paginile străine
+  // sunt ignorate (extensia verifică oricum din nou).
+  const isTop = window.top === window;
+  if (!isTop) {
+    const site = (h) => h.split('.').slice(-2).join('.');
+    const anc = location.ancestorOrigins;
+    const topOrigin = anc && anc.length ? anc[anc.length - 1] : '';
+    let topHost = '';
+    try {
+      topHost = new URL(topOrigin).hostname;
+    } catch {
+      return;
+    }
+    if (location.protocol !== 'https:' || site(topHost) !== site(location.hostname)) return;
+  }
   window.__notiteExt = true;
 
   const send = (msg) =>
@@ -438,7 +454,7 @@ const HEALTH_TIP = {
       showToast(info);
       // afișat deja aici: nu-l mai repetăm pe pagina următoare dacă nu
       // s-a navigat
-      if (info) setTimeout(() => send({ type: 'takeToast' }), 4000);
+      if (info && isTop) setTimeout(() => send({ type: 'takeToast' }), 4000);
     });
   }
 
@@ -518,5 +534,5 @@ const HEALTH_TIP = {
   });
 
   // mesajul rămas de la pagina anterioară (logarea a navigat)
-  send({ type: 'takeToast' }).then(showToast);
+  if (isTop) send({ type: 'takeToast' }).then(showToast);
 })();

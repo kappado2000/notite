@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Notițe – Parole",
   "short_name": "Notițe",
-  "version": "2.1.3",
+  "version": "2.1.4",
   "description": "Salvează automat parolele în seiful criptat Notițe și le completează pe site-urile lor.",
   "icons": {
     "16": "icons/16.png",
@@ -34,7 +34,7 @@
       "matches": ["https://*/*", "http://*/*"],
       "js": ["content.js"],
       "run_at": "document_idle",
-      "all_frames": false
+      "all_frames": true
     }
   ],
   "content_security_policy": {

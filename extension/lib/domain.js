@@ -36,10 +36,24 @@ export function siteTitle(url) {
 
 /// Intrarea se potrivește cu pagina? După adresă; dacă intrarea nu are
 /// adresă, după titlu (ex. titlul „eMAG” pe emag.ro).
+// Același cont pe mai multe domenii ale aceleiași firme (Apple ID cu
+// adresă @icloud.com se folosește pe apple.com și invers).
+const SAME_ACCOUNT = {
+  'icloud.com': 'apple.com',
+  'me.com': 'apple.com',
+  'appleid.com': 'apple.com',
+  'gmail.com': 'google.com',
+};
+
+function accountSite(url) {
+  const b = baseDomain(url);
+  return SAME_ACCOUNT[b] ?? b;
+}
+
 export function matches(item, pageUrl) {
-  const page = baseDomain(pageUrl);
+  const page = accountSite(pageUrl);
   if (!page) return false;
-  if (item.url) return baseDomain(item.url) === page;
+  if (item.url) return accountSite(item.url) === page;
   const t = (item.title || '').toLowerCase().replace(/\s+/g, '');
   const name = page.split('.')[0];
   return t.length >= 3 && (t === name || t === page);
