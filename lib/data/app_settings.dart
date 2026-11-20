@@ -116,6 +116,33 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Ordinea conturilor în Autentificator: 'alpha' (A–Z), 'recent'
+  /// (codul copiat cel mai de curând primul) sau 'manual' (trase de tine).
+  String get authOrder => (_box.get('authOrder') as String?) ?? 'alpha';
+  set authOrder(String v) {
+    _box.put('authOrder', v);
+    notifyListeners();
+  }
+
+  /// Ordinea manuală: id-urile conturilor, de sus în jos.
+  List<String> get authManual =>
+      ((_box.get('authManual') as List?) ?? const []).cast<String>();
+  set authManual(List<String> v) {
+    _box.put('authManual', v);
+    notifyListeners();
+  }
+
+  /// Când ai copiat ultima dată codul fiecărui cont (id → ms).
+  Map<String, int> get authUsed =>
+      ((_box.get('authUsed') as Map?) ?? const {}).cast<String, int>();
+  void markAuthUsed(String id) {
+    _box.put('authUsed', {
+      ...authUsed,
+      id: DateTime.now().millisecondsSinceEpoch,
+    });
+    if (authOrder == 'recent') notifyListeners();
+  }
+
   /// Ultimul email folosit la logare, precompletat data viitoare.
   String get lastEmail => (_box.get('lastEmail') as String?) ?? '';
   set lastEmail(String v) => _box.put('lastEmail', v);

@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/app_settings.dart';
 import '../../data/notes_store.dart';
 import '../../models/secret_item.dart';
 import '../../services/secret_helpers.dart';
@@ -151,17 +153,80 @@ class _AuthenticatorScreenState extends State<AuthenticatorScreen> {
   void _snack(String text) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
+  Future<void> _settings() => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) {
+      final s = ctx.watch<AppSettings>();
+      Widget opt(String v, IconData icon, String title, String sub) => ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: Text(sub),
+        trailing: s.authOrder == v
+            ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary)
+            : null,
+        onTap: () {
+          s.authOrder = v;
+          Navigator.pop(ctx);
+        },
+      );
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                'Ordinea conturilor',
+                style: Theme.of(ctx).textTheme.titleMedium,
+              ),
+            ),
+            opt(
+              'alpha',
+              Icons.sort_by_alpha,
+              'Alfabetic',
+              'După numele site-ului',
+            ),
+            opt(
+              'recent',
+              Icons.history,
+              'Folosite recent',
+              'Întâi cele al căror cod l-ai copiat ultima dată',
+            ),
+            opt(
+              'manual',
+              Icons.swap_vert,
+              'Manual',
+              'Ține apăsat pe un cont și trage-l unde vrei',
+            ),
+          ],
+        ),
+      );
+    },
+  );
+
   // ------------------------------------------------------------ ecran
 
   @override
   Widget build(BuildContext context) {
     final store = context.watch<NotesStore>();
+    final settings = context.watch<AppSettings>();
     final all = store.secrets.where((i) => i.totp.trim().isNotEmpty).length;
-    final items = _items(store);
+    final items = _sorted(_items(store), settings);
+    // tragerea merge doar în ordinea manuală și fără căutare (lista întreagă)
+    final drag = settings.authOrder == 'manual' && _query.trim().isEmpty;
+    Widget tile(SecretItem i) =>
+        _CodeTile(item: i, onCopied: () => settings.markAuthUsed(i.id));
     return Scaffold(
       appBar: AppBar(
         title: const Text('Autentificator'),
         actions: [
+          IconButton(
+            tooltip: 'Setări (ordinea conturilor)',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: _settings,
+          ),
           IconButton(
             tooltip: 'Adaugă cheie 2FA',
             icon: const Icon(Icons.add),
@@ -195,11 +260,26 @@ class _AuthenticatorScreenState extends State<AuthenticatorScreen> {
       ),
       body: items.isEmpty
           ? _Empty(searching: all > 0)
-          : ListView.separated(
+          : drag
+          ? ReorderableListView.builder(
+              padding: const EdgeInsets.only(bottom: 96),
+              buildDefaultDragHandles: false,
+              itemCount: items.length,
+              onReorderItem: (from, to) {
+                final ids = [for (final i in items) i.id];
+                ids.insert(to, ids.removeAt(from));
+                settings.authManual = ids;
+              },
+              itemBuilder: (_, n) => ReorderableDelayedDragStartListener(
+                key: ValueKey(items[n].id),
+                index: n,
+                child: tile(items[n]),
+              ),
+            )
+          : ListView.builder(
               padding: const EdgeInsets.only(bottom: 96),
               itemCount: items.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (_, n) => _CodeTile(item: items[n]),
+              itemBuilder: (_, n) => tile(items[n]),
             ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Scanează codul QR',
@@ -207,6 +287,24 @@ class _AuthenticatorScreenState extends State<AuthenticatorScreen> {
         child: const Icon(Icons.qr_code_scanner),
       ),
     );
+  }
+
+  /// Ordinea aleasă în Setări. La „Manual”, conturile noi vin la final.
+  List<SecretItem> _sorted(List<SecretItem> items, AppSettings s) {
+    int alpha(SecretItem a, SecretItem b) =>
+        a.displayTitle.toLowerCase().compareTo(b.displayTitle.toLowerCase());
+    final list = [...items]..sort(alpha);
+    switch (s.authOrder) {
+      case 'recent':
+        final used = s.authUsed;
+        list.sort((a, b) => (used[b.id] ?? 0).compareTo(used[a.id] ?? 0));
+      case 'manual':
+        final pos = {for (final (n, id) in s.authManual.indexed) id: n};
+        list.sort(
+          (a, b) => (pos[a.id] ?? 1 << 30).compareTo(pos[b.id] ?? 1 << 30),
+        );
+    }
+    return list;
   }
 }
 
@@ -232,11 +330,19 @@ class _Empty extends StatelessWidget {
   );
 }
 
-/// Un cont: emblema site-ului, numele, utilizatorul, codul mare și cercul
-/// de timp. Atingerea copiază codul.
+/// Un cont, ca în aplicațiile de autentificare: emblema mare în stânga;
+/// site-ul, dedesubt utilizatorul, apoi codul mare cu cercul de timp;
+/// săgeata spre cont în dreapta. Atingerea copiază codul.
 class _CodeTile extends StatelessWidget {
-  const _CodeTile({required this.item});
+  const _CodeTile({required this.item, required this.onCopied});
   final SecretItem item;
+  final VoidCallback onCopied;
+
+  /// Fontul sistemului, varianta pentru cifre mari (SF Pro Display pe
+  /// iPhone, Segoe UI pe Windows).
+  static String? get _displayFont => defaultTargetPlatform == TargetPlatform.iOS
+      ? 'CupertinoSystemDisplay'
+      : null;
 
   @override
   Widget build(BuildContext context) {
@@ -250,64 +356,101 @@ class _CodeTile extends StatelessWidget {
         ? '${code.substring(0, 3)} ${code.substring(3)}'
         : code;
     final ending = totp != null && left <= 5;
-    return ListTile(
-      contentPadding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
-      leading: SecretAvatar(item: item),
-      title: Text(
-        [
-          item.displayTitle,
-          if (item.username.isNotEmpty) item.username,
-        ].join(' · '),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14),
-      ),
-      subtitle: Text(
-        pretty,
-        style: TextStyle(
-          fontSize: code == null ? 15 : 30,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.w600,
-          letterSpacing: 2,
-          color: code == null
-              ? scheme.error
-              : ending
-              ? scheme.error
-              : scheme.primary,
-        ),
-      ),
+    final codeColor = code == null || ending ? scheme.error : scheme.primary;
+    return InkWell(
       onTap: code == null
           ? null
-          : () => copyValue(context, code, secret: true, what: 'Cod copiat'),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (totp != null)
-            SizedBox(
-              width: 30,
-              height: 30,
-              child: Stack(
-                alignment: Alignment.center,
+          : () {
+              copyValue(context, code, secret: true, what: 'Cod copiat');
+              onCopied();
+            },
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 20, 4, 18),
+        child: Row(
+          children: [
+            SecretAvatar(item: item, radius: 26),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircularProgressIndicator(
-                    value: left / totp.period,
-                    strokeWidth: 3,
-                    color: ending ? scheme.error : null,
+                  Text(
+                    item.displayTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 18, color: scheme.onSurface),
                   ),
-                  Text('$left', style: const TextStyle(fontSize: 11)),
+                  if (item.username.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      item.username,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text(
+                        pretty,
+                        style: TextStyle(
+                          fontFamily: _displayFont,
+                          fontFamilyFallback: const ['Segoe UI', 'Roboto'],
+                          fontSize: code == null ? 16 : 36,
+                          fontWeight: FontWeight.w400,
+                          height: 1.1,
+                          letterSpacing: 0.5,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          color: codeColor,
+                        ),
+                      ),
+                      if (totp != null) ...[
+                        const SizedBox(width: 10),
+                        SizedBox.square(
+                          dimension: 24,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              CircularProgressIndicator(
+                                value: left / totp.period,
+                                strokeWidth: 2,
+                                color: codeColor,
+                                backgroundColor: scheme.outlineVariant,
+                              ),
+                              Text(
+                                '$left',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: codeColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),
-          IconButton(
-            tooltip: 'Deschide contul',
-            icon: const Icon(Icons.chevron_right),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => SecretDetailScreen(id: item.id),
+            IconButton(
+              tooltip: 'Deschide contul',
+              icon: Icon(Icons.chevron_right, color: scheme.outline),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => SecretDetailScreen(id: item.id),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
