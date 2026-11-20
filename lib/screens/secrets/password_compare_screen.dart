@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../data/notes_store.dart';
 import '../../models/secret_item.dart';
 import '../../services/google_compare.dart';
+import 'secret_detail_screen.dart';
+import 'secret_widgets.dart';
 
 /// Rezultatul „Compară cu Google”: ce lipsește din Notițe (se adaugă doar
 /// ce bifezi), ce are altă parolă (rămâne cea din Notițe, dacă nu alegi
@@ -89,6 +91,71 @@ class _PasswordCompareScreenState extends State<PasswordCompareScreen> {
     setState(() => _usedOther.add(d.local.id));
   }
 
+  /// Ce conține intrarea din fișier (și, la parolă diferită, contul din
+  /// Notițe): site, utilizator, parolă (ascunsă, cu „Arată” / copiere),
+  /// notițe.
+  Future<void> _details(SecretItem i, {PasswordDiff? diff}) {
+    final src = widget.result.source;
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(i.displayTitle, style: Theme.of(ctx).textTheme.titleLarge),
+              const SizedBox(height: 4),
+              Text(
+                'Din $src',
+                style: TextStyle(color: Theme.of(ctx).colorScheme.primary),
+              ),
+              const SizedBox(height: 12),
+              _Field('Site', i.url),
+              _Field('Utilizator', i.username),
+              _Field('Parolă', i.password, secret: true),
+              if (i.notes.trim().isNotEmpty) _Field('Notițe', i.notes.trim()),
+              if (diff != null) ...[
+                const Divider(height: 32),
+                Text(
+                  'În Notițe',
+                  style: TextStyle(color: Theme.of(ctx).colorScheme.primary),
+                ),
+                const SizedBox(height: 8),
+                _Field('Site', diff.local.url),
+                _Field('Utilizator', diff.local.username),
+                _Field('Parolă', diff.local.password, secret: true),
+                if (diff.olderInNotite)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Parola din $src e una veche a acestui cont (o găsești '
+                      'în „Parole anterioare”).',
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => SecretDetailScreen(id: diff.local.id),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('Deschide contul din Notițe'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Numărul curent din listă (1, 2, 3…).
   Widget _num(int n) => SizedBox(
     width: 36,
@@ -150,17 +217,52 @@ class _PasswordCompareScreenState extends State<PasswordCompareScreen> {
             'Lipsesc din Notițe (${left.length})',
             sub: left.isEmpty
                 ? 'Toate conturile sunt și în Notițe.'
-                : 'Bifează ce vrei să adaugi.',
+                : 'Bifează ce vrei să adaugi. Atinge un rând ca să vezi '
+                      'ce conține.',
           ),
-          for (final (n, i) in left.indexed)
-            CheckboxListTile(
-              secondary: _num(n),
-              value: _pick.contains(i.id),
-              onChanged: (v) => setState(
-                () => v == true ? _pick.add(i.id) : _pick.remove(i.id),
+          if (left.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: picked == left.length
+                        ? null
+                        : () => setState(
+                            () => _pick.addAll(left.map((i) => i.id)),
+                          ),
+                    icon: const Icon(Icons.check_box_outlined),
+                    label: const Text('Bifează toate'),
+                  ),
+                  TextButton.icon(
+                    onPressed: picked == 0
+                        ? null
+                        : () => setState(
+                            () => _pick.removeAll(left.map((i) => i.id)),
+                          ),
+                    icon: const Icon(Icons.check_box_outline_blank),
+                    label: const Text('Debifează toate'),
+                  ),
+                  const Spacer(),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Text('$picked bifate'),
+                  ),
+                ],
               ),
+            ),
+          for (final (n, i) in left.indexed)
+            ListTile(
+              leading: _num(n),
               title: Text(i.displayTitle),
               subtitle: Text(_sub(i)),
+              onTap: () => _details(i),
+              trailing: Checkbox(
+                value: _pick.contains(i.id),
+                onChanged: (v) => setState(
+                  () => v == true ? _pick.add(i.id) : _pick.remove(i.id),
+                ),
+              ),
             ),
           if (r.different.isNotEmpty) ...[
             _header(
@@ -186,6 +288,7 @@ class _PasswordCompareScreenState extends State<PasswordCompareScreen> {
                   ].join('\n'),
                 ),
                 isThreeLine: _sub(d.local).isNotEmpty,
+                onTap: () => _details(d.other, diff: d),
                 trailing: d.olderInNotite || _usedOther.contains(d.local.id)
                     ? null
                     : TextButton(
@@ -204,6 +307,67 @@ class _PasswordCompareScreenState extends State<PasswordCompareScreen> {
               label: Text(
                 picked == 1 ? 'Adaugă 1 cont' : 'Adaugă $picked conturi',
               ),
+            ),
+    );
+  }
+}
+
+/// Un câmp în fișa de detalii: valoarea, cu copiere; parola ascunsă până
+/// apeși „Arată”.
+class _Field extends StatefulWidget {
+  const _Field(this.label, this.value, {this.secret = false});
+
+  final String label;
+  final String value;
+  final bool secret;
+
+  @override
+  State<_Field> createState() => _FieldState();
+}
+
+class _FieldState extends State<_Field> {
+  bool _shown = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final v = widget.value;
+    final hidden = widget.secret && !_shown;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      title: Text(widget.label),
+      subtitle: SelectableText(
+        v.isEmpty ? '—' : (hidden ? '•' * 10 : v),
+        style: const TextStyle(fontSize: 15),
+      ),
+      trailing: v.isEmpty
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.secret)
+                  IconButton(
+                    tooltip: _shown ? 'Ascunde' : 'Arată',
+                    icon: Icon(
+                      _shown
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                    onPressed: () => setState(() => _shown = !_shown),
+                  ),
+                IconButton(
+                  tooltip: 'Copiază',
+                  icon: const Icon(Icons.copy_outlined),
+                  onPressed: () => copyValue(
+                    context,
+                    v,
+                    secret: widget.secret,
+                    what: widget.secret
+                        ? '${widget.label} copiată'
+                        : '${widget.label} copiat',
+                  ),
+                ),
+              ],
             ),
     );
   }
