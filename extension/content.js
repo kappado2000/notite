@@ -328,7 +328,7 @@
   /// lista lungă se derulează în interiorul panoului.
   /// Meniul își ia înălțimea după conținut (toate conturile site-ului, la
   /// vedere). Întâi în fața căsuței (stânga) sau în dreapta ei, la aceeași
-  /// înălțime; fără loc în lateral: sub căsuță, deasupra sau pe toată
+  /// înălțime; fără loc în lateral: deasupra căsuței, sub ea sau pe toată
   /// înălțimea ecranului. Derulare doar dacă nici așa nu încape.
   function place(field) {
     // în pagină ÎNAINTE de măsurare (altfel înălțimea iese 0 și meniul
@@ -366,13 +366,15 @@
     menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - width - 8))}px`;
     const below = innerHeight - rect.bottom - gap - 8;
     const above = rect.top - gap - 8;
-    if (need <= below) {
-      menu.style.top = `${rect.bottom + gap}px`;
-      menu.style.maxHeight = `${below}px`;
-    } else if (need <= above) {
+    // fără loc în lateral: întâi DEASUPRA căsuței — meniul de parole al
+    // browserului se pune de regulă dedesubt și l-ar acoperi pe al nostru
+    if (need <= above) {
       menu.style.top = '';
       menu.style.bottom = `${innerHeight - rect.top + gap}px`;
       menu.style.maxHeight = `${above}px`;
+    } else if (need <= below) {
+      menu.style.top = `${rect.bottom + gap}px`;
+      menu.style.maxHeight = `${below}px`;
     } else {
       // pe tot ecranul: centrat pe verticală, cât e nevoie
       const h = Math.min(need, innerHeight - 16);
