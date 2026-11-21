@@ -9,7 +9,7 @@
   --error: #BA3B2E;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #141712;
     --card: #1E221C;
     --text: #E6E8E1;
@@ -17,9 +17,17 @@
     --accent: #8FCFAE;
     --accent-soft: #235740;
     --border: #363D33;
-    --error: #F2A598;
-  }
+    --error: #F2A598;}
 }
+:root[data-theme="dark"] {
+    --bg: #141712;
+    --card: #1E221C;
+    --text: #E6E8E1;
+    --muted: #B4BBAE;
+    --accent: #8FCFAE;
+    --accent-soft: #235740;
+    --border: #363D33;
+    --error: #F2A598;}
 * { box-sizing: border-box; }
 body {
   width: 540px;
@@ -46,7 +54,8 @@ input[type=email], input[type=password], input[type=search], #code {
 input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; }
 .pri { background: var(--accent); color: #fff; padding: 9px; font-weight: 600; }
-@media (prefers-color-scheme: dark) { .pri { color: #0B3322; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pri { color: #0B3322; } }
+:root[data-theme="dark"] .pri { color: #0B3322; }
 .sec { background: var(--accent-soft); color: var(--text); padding: 6px 10px; font-weight: 600; }
 .link { background: none; color: var(--accent); padding: 8px 0 0; }
 .icon { background: none; font-size: 16px; padding: 4px; }
@@ -129,3 +138,6 @@ button.danger { background: #D93025 !important; color: #fff !important; }
 .grp .gcount { font-size: 12px; color: var(--muted); background: var(--bg); border-radius: 999px; padding: 1px 8px; }
 .grp .garrow { width: 14px; color: var(--muted); }
 .gbody .it { padding-left: 40px; }
+
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }

@@ -249,17 +249,39 @@
       .row { display:flex; gap:8px; justify-content:flex-end; margin-top: 10px; }
       button { border: 0; border-radius: 9px; padding: 7px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
       .pri { background: #3F8F6B; color: #fff; } .sec { background: #EEF1EC; color: #22261F; }
-      @media (prefers-color-scheme: dark) {
-        .menu, .toast { background: #1E221C; color: #E6E8E1; border-color: #4b5a50; }
-        .item:hover, .item:focus { background: #2b3a31; } .s, .note { color: #B4BBAE; }
-        .q { border-color: #4b5a50; } .sep { border-color: #3a4237; }
-        .sec { background: #30362D; color: #E6E8E1; } .toast b { color: #8FCFAE; }
-      }
+      :host(.dark) .menu, :host(.dark) .toast { background: #1E221C; color: #E6E8E1; border-color: #4b5a50; }
+      :host(.dark) .item:hover, :host(.dark) .item:focus { background: #2b3a31; }
+      :host(.dark) .s, :host(.dark) .note { color: #B4BBAE; }
+      :host(.dark) .q { border-color: #4b5a50; } :host(.dark) .sep { border-color: #3a4237; }
+      :host(.dark) .sec { background: #30362D; color: #E6E8E1; } :host(.dark) .toast b { color: #8FCFAE; }
+      :host(.dark) .fav { background: #2b3a31; color: #8FCFAE; }
     </style>
     <div class="menu" hidden></div>
     <div class="toast" hidden></div>`;
   const menu = shadow.querySelector('.menu');
   const toastEl = shadow.querySelector('.toast');
+
+  // tema aleasă în Setările extensiei: automată (ca sistemul), luminoasă,
+  // închisă
+  const darkMq = matchMedia('(prefers-color-scheme: dark)');
+  let theme = 'auto';
+  const applyTheme = () =>
+    host.classList.toggle('dark', theme === 'dark' || (theme === 'auto' && darkMq.matches));
+  applyTheme();
+  darkMq.addEventListener?.('change', applyTheme);
+  try {
+    chrome.storage.local.get('theme', (r) => {
+      void chrome.runtime.lastError;
+      theme = r?.theme || 'auto';
+      applyTheme();
+    });
+    chrome.storage.onChanged.addListener((ch, area) => {
+      if (area === 'local' && ch.theme) {
+        theme = ch.theme.newValue || 'auto';
+        applyTheme();
+      }
+    });
+  } catch {}
   const attach = () => {
     if (!host.isConnected) document.documentElement.appendChild(host);
   };

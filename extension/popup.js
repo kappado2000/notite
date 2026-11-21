@@ -720,6 +720,18 @@ for (const id of ['logoutBtn', 'logoutBtn2']) {
   });
 }
 
+// tema: ținută minte în extensie, aplicată imediat aici și pe pagini
+function setTheme(t) {
+  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
+  $('theme').value = t || 'auto';
+}
+chrome.storage.local.get('theme').then((r) => setTheme(r.theme)).catch(() => {});
+$('theme').addEventListener('change', (e) => {
+  setTheme(e.target.value);
+  chrome.storage.local.set({ theme: e.target.value }).catch(() => {});
+});
+
 $('autoSave').addEventListener('change', (e) =>
   send({ type: 'setAutoSave', value: e.target.checked }),
 );
