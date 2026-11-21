@@ -143,6 +143,21 @@ class AppSettings extends ChangeNotifier {
     if (authOrder == 'recent') notifyListeners();
   }
 
+  /// Ultimul export al codurilor de rezervă (amprenta listei și când), ca
+  /// să știi când trebuie printată din nou foaia.
+  String get recoveryExportHash =>
+      (_box.get('recoveryExportHash') as String?) ?? '';
+  DateTime? get recoveryExportAt {
+    final ms = _box.get('recoveryExportAt') as int?;
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
+  void markRecoveryExport(String hash) {
+    _box.put('recoveryExportHash', hash);
+    _box.put('recoveryExportAt', DateTime.now().millisecondsSinceEpoch);
+    notifyListeners();
+  }
+
   /// Ultimul email folosit la logare, precompletat data viitoare.
   String get lastEmail => (_box.get('lastEmail') as String?) ?? '';
   set lastEmail(String v) => _box.put('lastEmail', v);

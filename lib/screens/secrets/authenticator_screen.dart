@@ -10,6 +10,7 @@ import '../../models/secret_item.dart';
 import '../../services/secret_helpers.dart';
 import '../../services/totp.dart';
 import '../qr_scan_screen.dart';
+import 'recovery_codes_screen.dart';
 import 'secret_detail_screen.dart';
 import 'secret_edit_screen.dart';
 import 'secret_widgets.dart';
@@ -222,6 +223,13 @@ class _AuthenticatorScreenState extends State<AuthenticatorScreen> {
       appBar: AppBar(
         title: const Text('Autentificator'),
         actions: [
+          IconButton(
+            tooltip: 'Coduri de rezervă (toate conturile)',
+            icon: const Icon(Icons.password),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const RecoveryCodesScreen()),
+            ),
+          ),
           IconButton(
             tooltip: 'Setări (ordinea conturilor)',
             icon: const Icon(Icons.settings_outlined),

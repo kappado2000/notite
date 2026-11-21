@@ -43,6 +43,7 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
       'username': _i.username,
       'password': _i.password,
       'totp': _i.totp,
+      'recoveryCodes': _i.recoveryCodes,
       'cardHolder': _i.cardHolder,
       'cardNumber': _i.cardNumber,
       'cardExpiry': _i.cardExpiry,
@@ -153,6 +154,7 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
       ..username = _v('username')
       ..password = _c['password']!.text
       ..totp = _v('totp')
+      ..recoveryCodes = _v('recoveryCodes')
       ..cardHolder = _v('cardHolder')
       ..cardNumber = _v('cardNumber')
       ..cardExpiry = _v('cardExpiry')
@@ -765,6 +767,13 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
           ),
         ),
       _totpField(),
+      _text(
+        'recoveryCodes',
+        'Coduri de rezervă 2FA (opțional)',
+        icon: Icons.password,
+        maxLines: 6,
+        hint: 'Codurile date de site la activarea 2FA, câte unul pe rând',
+      ),
       _dropdown<String>('Categorie', Icons.folder_outlined, _category, [
         ('', 'Automat (${autoLoginCategory(_i).label})'),
         for (final c in LoginCategory.values) (c.name, c.label),

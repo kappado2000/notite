@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'file_opener_stub.dart'
     if (dart.library.io) 'file_opener_io.dart'
+    if (dart.library.js_interop) 'file_opener_web.dart'
     as impl;
 
 class FileOpener {

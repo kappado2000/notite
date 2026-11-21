@@ -11,6 +11,9 @@ import '../models/note.dart';
 import '../utils/format.dart';
 import '../widgets/attachment_image_embed.dart';
 
+/// Tema PDF cu diacritice, pentru alte exporturi (ex. codurile de rezervă).
+Future<pw.ThemeData> pdfTheme() => _pdfTheme();
+
 /// Fonturile Noto Sans (cu diacritice românești) pentru PDF.
 Future<pw.ThemeData> _pdfTheme() async {
   Future<pw.Font> font(String v) async =>

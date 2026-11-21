@@ -228,6 +228,8 @@ class SecretDetailScreen extends StatelessWidget {
             ],
           ],
           if (item.totp.isNotEmpty) _TotpField(secret: item.totp),
+          if (item.recoveryCodes.trim().isNotEmpty)
+            _RecoveryField(codes: item.recoveryCodes.trim()),
           if (item.type == SecretType.wifi && item.username.isNotEmpty)
             Padding(
               padding: const EdgeInsets.all(16),
@@ -594,6 +596,59 @@ class _TotpFieldState extends State<_TotpField> {
             tooltip: 'Copiază codul',
             icon: const Icon(Icons.copy),
             onPressed: copy,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Codurile de rezervă 2FA: ascunse până apeși „Arată”; copiere.
+class _RecoveryField extends StatefulWidget {
+  const _RecoveryField({required this.codes});
+  final String codes;
+
+  @override
+  State<_RecoveryField> createState() => _RecoveryFieldState();
+}
+
+class _RecoveryFieldState extends State<_RecoveryField> {
+  bool _shown = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = widget.codes.split('\n').where((l) => l.trim().isNotEmpty).length;
+    return ListTile(
+      leading: const Icon(Icons.password),
+      title: Text(
+        'Coduri de rezervă 2FA ($n)',
+        style: Theme.of(context).textTheme.labelMedium,
+      ),
+      subtitle: SelectableText(
+        _shown ? widget.codes : '•••• •••• (ascunse)',
+        style: const TextStyle(fontFamily: 'monospace', fontSize: 15),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: _shown ? 'Ascunde' : 'Arată',
+            icon: Icon(
+              _shown
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+            ),
+            onPressed: () => setState(() => _shown = !_shown),
+          ),
+          IconButton(
+            tooltip: 'Copiază codurile',
+            icon: const Icon(Icons.copy),
+            onPressed: () => copyValue(
+              context,
+              widget.codes,
+              secret: true,
+              what: 'Coduri copiate',
+            ),
           ),
         ],
       ),

@@ -357,16 +357,20 @@ async function editRow(row, i) {
   field('Utilizator / email', 'username', d.username);
   const pw = field('Parolă', 'password', d.password);
   field('Site', 'url', d.url);
-  // notițele contului (ex. codurile de rezervă 2FA), ca în aplicație
-  const nl = document.createElement('label');
-  nl.textContent = 'Notițe (ex. coduri de rezervă 2FA)';
-  const notes = document.createElement('textarea');
-  notes.name = 'notes';
-  notes.value = d.notes ?? '';
-  notes.rows = Math.min(10, Math.max(3, notes.value.split('\n').length + 1));
-  notes.spellcheck = false;
-  nl.append(notes);
-  form.append(nl);
+  // câmpuri pe mai multe rânduri, ca în aplicație
+  const area = (label, name, value) => {
+    const l = document.createElement('label');
+    l.textContent = label;
+    const t = document.createElement('textarea');
+    t.name = name;
+    t.value = value ?? '';
+    t.rows = Math.min(10, Math.max(3, t.value.split('\n').length + 1));
+    t.spellcheck = false;
+    l.append(t);
+    form.append(l);
+  };
+  area('Coduri de rezervă 2FA (câte unul pe rând)', 'recoveryCodes', d.recoveryCodes);
+  area('Notițe', 'notes', d.notes);
   const bar = document.createElement('div');
   bar.className = 'row';
   const gen = document.createElement('button');
@@ -397,6 +401,7 @@ async function editRow(row, i) {
       password: f.get('password'),
       url: f.get('url'),
       notes: f.get('notes'),
+      recoveryCodes: f.get('recoveryCodes'),
     });
     if (r?.error) return say(r.error, true);
     say(

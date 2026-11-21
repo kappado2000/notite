@@ -126,6 +126,7 @@ class SecretItem {
     this.username = '',
     this.password = '',
     this.totp = '',
+    this.recoveryCodes = '',
     this.cardHolder = '',
     this.cardNumber = '',
     this.cardExpiry = '',
@@ -186,6 +187,9 @@ class SecretItem {
 
   /// Cheia secretă 2FA (Base32) sau un link `otpauth://`.
   String totp;
+
+  /// Codurile de rezervă / recuperare 2FA date de site (câte unul pe rând).
+  String recoveryCodes;
 
   // Card bancar.
   String cardHolder;
@@ -359,6 +363,7 @@ class SecretItem {
     'username': username,
     'password': password,
     'totp': totp,
+    if (recoveryCodes.isNotEmpty) 'recoveryCodes': recoveryCodes,
     'cardHolder': cardHolder,
     'cardNumber': cardNumber,
     'cardExpiry': cardExpiry,
@@ -421,6 +426,7 @@ class SecretItem {
       username: s('username'),
       password: s('password'),
       totp: s('totp'),
+      recoveryCodes: s('recoveryCodes'),
       cardHolder: s('cardHolder'),
       cardNumber: s('cardNumber'),
       cardExpiry: s('cardExpiry'),
