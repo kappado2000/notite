@@ -1,6 +1,8 @@
 // Fereastra extensiei. Nu păstrează parole: le cere de la fundal doar
 // când le copiezi sau completezi.
 
+import { baseDomain } from './lib/domain.js';
+
 const $ = (id) => document.getElementById(id);
 
 const send = (msg) =>
@@ -104,8 +106,110 @@ function render() {
     list.innerHTML = `<div class="empty">${all.length ? 'Niciun rezultat' : 'Nicio parolă salvată încă.'}</div>`;
     return;
   }
-  list.replaceChildren(
-    ...shown.map((i) => {
+  list.replaceChildren(...groupRows(shown, !!q));
+}
+
+/// Ordinea conturilor aceluiași site: numerele de telefon, apoi adresele
+/// de email, apoi restul; fiecare alfabetic.
+function userKind(u) {
+  const v = (u || '').trim();
+  if (/^\+?[\d\s().-]{7,}$/.test(v)) return 0;
+  if (v.includes('@')) return 1;
+  return 2;
+}
+const byUser = (a, b) =>
+  userKind(a.username) - userKind(b.username) ||
+  (a.username || a.title).localeCompare(b.username || b.title, 'ro');
+
+/// Iconița site-ului (din memoria browserului, fără cereri spre alte
+/// servere); fără site sau fără iconiță: inițiala, pe un cerc.
+function favicon(url, label) {
+  const box = document.createElement('span');
+  box.className = 'fav';
+  const letter = () => {
+    box.textContent = (label || '?').trim().charAt(0).toUpperCase() || '?';
+    box.classList.add('letter');
+  };
+  const site = siteUrl(url);
+  if (!site) {
+    letter();
+    return box;
+  }
+  const img = document.createElement('img');
+  img.alt = '';
+  img.src = chrome.runtime.getURL(
+    `/_favicon/?pageUrl=${encodeURIComponent(site.origin)}&size=32`,
+  );
+  img.addEventListener('error', () => {
+    img.remove();
+    letter();
+  });
+  box.append(img);
+  return box;
+}
+
+/// Conturile grupate pe site (ca în managerele de parole): un site cu un
+/// singur cont = un rând; cu mai multe = un grup care se deschide.
+function groupRows(shown, searching) {
+  const groups = new Map();
+  for (const i of shown) {
+    const key = baseDomain(i.url) || i.title.toLowerCase();
+    if (!groups.has(key)) groups.set(key, { key, items: [] });
+    groups.get(key).items.push(i);
+  }
+  const list = [...groups.values()];
+  list.sort(
+    (a, b) =>
+      Number(b.items.some((i) => i.match)) - Number(a.items.some((i) => i.match)) ||
+      a.key.localeCompare(b.key, 'ro'),
+  );
+  const out = [];
+  for (const g of list) {
+    if (g.items.length === 1) {
+      out.push(makeRow(g.items[0]));
+      continue;
+    }
+    g.items.sort(byUser);
+    const first = g.items.find((i) => i.url) ?? g.items[0];
+    const head = document.createElement('div');
+    head.className = `grp${g.items.some((i) => i.match) ? ' match' : ''}`;
+    head.tabIndex = 0;
+    const name = document.createElement('span');
+    name.className = 'gname';
+    name.textContent = baseDomain(first.url) || first.title;
+    const count = document.createElement('span');
+    count.className = 'gcount';
+    count.textContent = `${g.items.length}`;
+    const arrow = document.createElement('span');
+    arrow.className = 'garrow';
+    head.append(favicon(first.url, name.textContent), name, count, arrow);
+    const body = document.createElement('div');
+    body.className = 'gbody';
+    body.append(...g.items.map((i) => makeRow(i, true)));
+    const open = searching || openGroups.has(g.key) || g.items.some((i) => i.match);
+    const set = (on) => {
+      body.hidden = !on;
+      head.classList.toggle('open', on);
+      arrow.textContent = on ? '▾' : '▸';
+      if (on) openGroups.add(g.key);
+      else openGroups.delete(g.key);
+    };
+    set(open);
+    const toggle = () => set(body.hidden);
+    head.addEventListener('click', toggle);
+    head.addEventListener('keydown', (e) => e.key === 'Enter' && toggle());
+    out.push(head, body);
+  }
+  return out;
+}
+
+/// Grupurile deschise rămân deschise când lista se reface.
+const openGroups = new Set();
+
+/// Un cont. În grup: utilizatorul e rândul principal, numele dedesubt.
+function makeRow(i, inGroup = false) {
+  const subText = inGroup ? i.title : i.username || i.url;
+  {
       const row = document.createElement('div');
       row.className = `it${i.match ? ' match' : ''}`;
       const txt = document.createElement('div');
@@ -118,10 +222,11 @@ function render() {
         dot.title = HEALTH_TIP[i.health];
         t.append(dot);
       }
-      t.append(document.createTextNode(i.title));
+      t.append(document.createTextNode(inGroup ? i.username || i.title : i.title));
       const s = document.createElement('div');
       s.className = 's';
-      s.textContent = i.username || i.url;
+      s.textContent = subText;
+      if (!inGroup) row.append(favicon(i.url, i.title));
       txt.append(t, s);
       // clic pe nume / email → deschide site-ul într-o filă nouă
       const site = siteUrl(i.url);
@@ -163,7 +268,7 @@ function render() {
           s.textContent = v;
           s.classList.add('pw');
           s.hideTimer = setTimeout(() => {
-            s.textContent = i.username || i.url;
+            s.textContent = subText;
             s.classList.remove('pw');
           }, 10000);
         });
@@ -218,8 +323,7 @@ function render() {
       note.append(text, bar);
       wrap.append(row, note);
       return wrap;
-    }),
-  );
+  }
 }
 
 /// Editare pe loc: nume, utilizator, parolă, site.

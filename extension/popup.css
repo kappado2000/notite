@@ -22,7 +22,7 @@
 }
 * { box-sizing: border-box; }
 body {
-  width: 360px;
+  width: 540px;
   margin: 0;
   padding: 12px 14px 14px;
   background: var(--bg);
@@ -52,7 +52,7 @@ button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; }
 .icon { background: none; font-size: 16px; padding: 4px; }
 #list {
   margin-top: 8px;
-  max-height: 280px;
+  max-height: 380px;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -116,3 +116,16 @@ button.danger { background: #D93025 !important; color: #fff !important; }
 .share .warn { color: #D93025; font-size: 12px; }
 .share .row { flex-wrap: wrap; }
 .dot.ignored { background: #9AA0A6; }
+
+/* iconița site-ului și grupurile pe site */
+.fav { flex: none; width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; }
+.fav img { width: 20px; height: 20px; }
+.fav.letter { background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 12px; border-radius: 50%; }
+.grp { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-top: 1px solid var(--border); cursor: pointer; font-weight: 600; }
+.grp:first-child { border-top: 0; }
+.grp:hover, .grp:focus { background: var(--accent-soft); outline: none; }
+.grp.match { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.grp .gname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grp .gcount { font-size: 12px; color: var(--muted); background: var(--bg); border-radius: 999px; padding: 1px 8px; }
+.grp .garrow { width: 14px; color: var(--muted); }
+.gbody .it { padding-left: 40px; }

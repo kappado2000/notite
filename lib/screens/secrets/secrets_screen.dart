@@ -1354,15 +1354,7 @@ class _SecretsScreenState extends State<SecretsScreen>
               ),
             ),
           if (!byCategory)
-            for (final i in sorted) ...[
-              Divider(
-                height: 1,
-                indent: 16,
-                endIndent: 16,
-                color: accent.withValues(alpha: 0.15),
-              ),
-              tint.themed(context, _swipe(i, SecretTile(item: i, plain: true))),
-            ]
+            ..._siteRows(sorted, tint, accent)
           else if (_query.trim().isEmpty && _category == null)
             // întâi subcategoriile (Email, Rețele sociale, Bănci…), cu câte
             // conturi are fiecare; atingerea deschide subcategoria
@@ -1455,24 +1447,115 @@ class _SecretsScreenState extends State<SecretsScreen>
                       ],
                     ),
                   ),
-                  for (final (n, i) in group.indexed) ...[
-                    if (n > 0)
-                      Divider(
-                        height: 1,
-                        indent: 16,
-                        endIndent: 16,
-                        color: accent.withValues(alpha: 0.15),
-                      ),
-                    tint.themed(
-                      context,
-                      _swipe(i, SecretTile(item: i, plain: true)),
-                    ),
-                  ],
+                  ..._siteRows(group, tint, accent, firstDivider: false),
                 ],
           ],
         ],
       ),
     );
+  }
+
+  /// Site-urile deschise în listă (grupurile cu mai multe conturi).
+  final Set<String> _openSites = {};
+
+  /// Ordinea conturilor aceluiași site: telefoanele, apoi adresele de
+  /// email, apoi restul; fiecare alfabetic.
+  static int _userKind(String u) {
+    final v = u.trim();
+    if (RegExp(r'^\+?[\d\s().-]{7,}$').hasMatch(v)) return 0;
+    if (v.contains('@')) return 1;
+    return 2;
+  }
+
+  /// Numele afișat al site-ului: „facebook.com”, „yahoo.com”; fără adresă,
+  /// numele contului.
+  static String _siteLabel(SecretItem i) {
+    final h = hostOf(i.url).split(':').first;
+    if (h.isEmpty) return siteOf(i)?.domain ?? i.displayTitle;
+    final p = h.split('.');
+    if (p.length <= 2) return h;
+    final two = p.sublist(p.length - 2).join('.');
+    // „co.uk”, „com.ro”: încă o etichetă
+    return RegExp(r'^(co|com|org|net|gov|ac)\.[a-z]{2}$').hasMatch(two)
+        ? p.sublist(p.length - 3).join('.')
+        : two;
+  }
+
+  /// Conturile grupate pe site, ca în managerele de parole: un site cu un
+  /// singur cont = un rând; cu mai multe = un rând cu iconița site-ului și
+  /// câte conturi are, care se deschide cu toate conturile lui.
+  List<Widget> _siteRows(
+    List<SecretItem> items,
+    GroupTint tint,
+    Color accent, {
+    bool firstDivider = true,
+  }) {
+    final groups = <String, List<SecretItem>>{};
+    for (final i in items) {
+      final k = i.type == SecretType.login ? siteBase(i) : '';
+      groups.putIfAbsent(k.isEmpty ? 'id:${i.id}' : k, () => []).add(i);
+    }
+    final searching = _query.trim().isNotEmpty;
+    final out = <Widget>[];
+    Widget divider({double indent = 16}) => Divider(
+      height: 1,
+      indent: indent,
+      endIndent: 16,
+      color: accent.withValues(alpha: 0.15),
+    );
+    Widget tile(SecretItem i) =>
+        tint.themed(context, _swipe(i, SecretTile(item: i, plain: true)));
+    for (final MapEntry(key: k, value: g) in groups.entries) {
+      if (out.isNotEmpty || firstDivider) out.add(divider());
+      if (g.length == 1) {
+        out.add(tile(g.first));
+        continue;
+      }
+      g.sort(
+        (a, b) => _userKind(a.username).compareTo(_userKind(b.username)) != 0
+            ? _userKind(a.username).compareTo(_userKind(b.username))
+            : NotesStore.foldText(
+                a.username.isEmpty ? a.displayTitle : a.username,
+              ).compareTo(
+                NotesStore.foldText(
+                  b.username.isEmpty ? b.displayTitle : b.username,
+                ),
+              ),
+      );
+      final first = g.firstWhere(
+        (i) => i.url.isNotEmpty,
+        orElse: () => g.first,
+      );
+      final open = searching || _openSites.contains(k);
+      out.add(
+        tint.themed(
+          context,
+          ListTile(
+            leading: SecretAvatar(item: first),
+            title: Text(
+              _siteLabel(first),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text('${g.length} conturi'),
+            trailing: Icon(
+              open ? Icons.expand_less : Icons.expand_more,
+              color: accent,
+            ),
+            onTap: () =>
+                setState(() => open ? _openSites.remove(k) : _openSites.add(k)),
+          ),
+        ),
+      );
+      if (!open) continue;
+      for (final i in g) {
+        out.add(divider(indent: 40));
+        out.add(
+          Padding(padding: const EdgeInsets.only(left: 24), child: tile(i)),
+        );
+      }
+    }
+    return out;
   }
 
   /// „59,99 RON + 10 EUR” (sumele pe monede, înmulțite cu [factor]).

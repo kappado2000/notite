@@ -219,7 +219,7 @@
     <style>
       :host { all: initial; }
       * { box-sizing: border-box; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-      .menu { position: fixed; min-width: 260px; max-width: 340px; background: #fff; color: #22261F;
+      .menu { position: fixed; min-width: 300px; max-width: 420px; background: #fff; color: #22261F;
         border: 1px solid #b9c7bd; border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18);
         padding: 6px; font-size: 14px; overflow-y: auto; overscroll-behavior: contain; }
       .head { position: sticky; top: -6px; background: inherit; z-index: 1;
@@ -231,6 +231,13 @@
       .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:1px; }
       .dot.red { background:#D93025; } .dot.yellow { background:#E8A200; } .dot.green { background:#2E9E5B; } .dot.ignored { background:#9AA0A6; } .s { font-size: 12px; color: #5E6559; }
       .note { padding: 8px 10px; font-size: 13px; color: #5E6559; }
+      .item.acc { flex-direction: row; align-items: center; gap: 10px; }
+      .acc .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+      .acc .t, .acc .s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .acc .dot { margin: 0 2px 0 6px; flex: none; }
+      .fav { flex: none; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center;
+        justify-content: center; overflow: hidden; background: #E7F2EC; color: #3F8F6B; font-weight: 700; font-size: 12px; }
+      .fav img { width: 20px; height: 20px; }
       .q { width: 100%; margin: 2px 0 6px; padding: 8px 10px; border: 1px solid #b9c7bd; border-radius: 9px;
         font-size: 14px; background: transparent; color: inherit; outline: none; }
       .q:focus { border-color: #3F8F6B; }
@@ -319,6 +326,18 @@ const HEALTH_TIP = {
 
   let lastGenerated = '';
 
+  /// Iconița paginii (cea din fila browserului), pentru meniul de conturi.
+  function pageIcon() {
+    const link = document.querySelector(
+      'link[rel~="icon"][href], link[rel="shortcut icon"][href], link[rel="apple-touch-icon"][href]',
+    );
+    try {
+      return new URL(link?.href || '/favicon.ico', location.href).href;
+    } catch {
+      return '';
+    }
+  }
+
   async function showMenu(field) {
     const pw = isPasswordField(field) ? field : passwordFields()[0];
     const signup = pw ? isSignup(pw) : false;
@@ -333,9 +352,19 @@ const HEALTH_TIP = {
       // nu afișăm nimic — un avertisment care stă pe ecran doar încurcă
       if (!r.secure) return hideMenu();
       {
-        for (const i of r.items) {
+        // iconița site-ului în față, utilizatorul, numele contului dedesubt,
+        // starea parolei la final; telefoanele, apoi adresele de email
+        const kind = (u) =>
+          /^\+?[\d\s().-]{7,}$/.test((u || '').trim()) ? 0 : (u || '').includes('@') ? 1 : 2;
+        const sorted = [...r.items].sort(
+          (a, b) =>
+            kind(a.username) - kind(b.username) ||
+            (a.username || a.title).localeCompare(b.username || b.title, 'ro'),
+        );
+        const icon = pageIcon();
+        for (const i of sorted) {
           parts.push(
-            `<div class="item" tabindex="0" data-id="${esc(i.id)}"><span class="t">${i.health ? `<span class="dot ${esc(i.health)}" title="${esc(HEALTH_TIP[i.health] ?? '')}"></span>` : ''}${esc(i.username || i.title)}</span><span class="s">${esc(i.title)}</span></div>`,
+            `<div class="item acc" tabindex="0" data-id="${esc(i.id)}"><span class="fav" data-l="${esc((i.title || '?').charAt(0).toUpperCase())}">${icon ? `<img src="${esc(icon)}" alt="">` : esc((i.title || '?').charAt(0).toUpperCase())}</span><span class="txt"><span class="t">${esc(i.username || i.title)}</span><span class="s">${esc(i.title)}</span></span>${i.health ? `<span class="dot ${esc(i.health)}" title="${esc(HEALTH_TIP[i.health] ?? '')}"></span>` : ''}</div>`,
           );
         }
       }
@@ -359,6 +388,13 @@ const HEALTH_TIP = {
     }
     if (!parts.length) return hideMenu();
     menu.innerHTML = `<div class="head">🔑 Notițe</div>${parts.join('')}`;
+    // iconița care nu se încarcă: inițiala contului
+    for (const img of menu.querySelectorAll('.fav img')) {
+      img.addEventListener('error', () => {
+        const box = img.parentElement;
+        box.textContent = box.dataset.l || '?';
+      });
+    }
     place(field);
     attach();
     menu.hidden = false;

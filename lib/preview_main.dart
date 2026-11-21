@@ -153,6 +153,11 @@ Future<void> _seedDemo(NotesStore store) async {
     ..password = 'K7#pQ2!vX9mL4@tR'
     ..url = 'mail.google.com'
     ..totp = 'JBSWY3DPEHPK3PXP';
+  final gmail2 = store.newSecret(SecretType.login)
+    ..title = 'Gmail serviciu'
+    ..username = '0711000111'
+    ..password = 'Munte-Soare-2026!'
+    ..url = 'https://accounts.google.com';
   final bank = store.newSecret(SecretType.login)
     ..title = 'Banca'
     ..url = 'https://www.example.com/login'
@@ -200,6 +205,7 @@ Future<void> _seedDemo(NotesStore store) async {
     ..notes = '1234 5678\n2345 6789\n3456 7890';
   for (final s in [
     gmail,
+    gmail2,
     bank,
     wifi,
     card,
