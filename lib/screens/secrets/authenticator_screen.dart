@@ -8,6 +8,7 @@ import '../../data/app_settings.dart';
 import '../../data/notes_store.dart';
 import '../../models/secret_item.dart';
 import '../../services/secret_helpers.dart';
+import '../../services/site_icons.dart';
 import '../../services/totp.dart';
 import '../qr_scan_screen.dart';
 import 'recovery_codes_screen.dart';
@@ -312,10 +313,9 @@ class _AuthenticatorScreenState extends State<AuthenticatorScreen> {
                 child: tile(items[n]),
               ),
             )
-          : ListView.builder(
+          : ListView(
               padding: const EdgeInsets.only(bottom: 96),
-              itemCount: items.length,
-              itemBuilder: (_, n) => tile(items[n]),
+              children: _grouped(items, tile),
             ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Scanează codul QR',
@@ -323,6 +323,90 @@ class _AuthenticatorScreenState extends State<AuthenticatorScreen> {
         child: const Icon(Icons.qr_code_scanner),
       ),
     );
+  }
+
+  /// Grupurile deschise (site-urile cu mai multe conturi).
+  final Set<String> _openSites = {};
+
+  /// Site-urile cu mai multe conturi (Yahoo, Facebook…) = un rând cu
+  /// iconița, numele și câte conturi; atins, se deschide cu codurile lor.
+  /// Ordinea grupurilor = ordinea primului lor cont (alfabetic / recent).
+  List<Widget> _grouped(
+    List<SecretItem> items,
+    Widget Function(SecretItem) tile,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    final groups = <String, List<SecretItem>>{};
+    for (final i in items) {
+      final k = SiteIcons.domainOf(i) ?? 'id:${i.id}';
+      groups.putIfAbsent(k, () => []).add(i);
+    }
+    final searching = _query.trim().isNotEmpty;
+    final out = <Widget>[];
+    for (final MapEntry(key: k, value: g) in groups.entries) {
+      if (g.length == 1) {
+        out.add(tile(g.first));
+        continue;
+      }
+      final open = searching || _openSites.contains(k);
+      out.add(
+        InkWell(
+          onTap: () =>
+              setState(() => open ? _openSites.remove(k) : _openSites.add(k)),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            child: Row(
+              children: [
+                SecretAvatar(item: g.first, radius: 22),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    k,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${g.length}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  open ? Icons.expand_less : Icons.expand_more,
+                  color: scheme.outline,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (!open) continue;
+      for (final i in g) {
+        out.add(
+          Padding(padding: const EdgeInsets.only(left: 20), child: tile(i)),
+        );
+      }
+    }
+    return out;
   }
 
   /// Ordinea aleasă în Setări. La „Manual”, conturile noi vin la final.
@@ -404,10 +488,10 @@ class _CodeTile extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
         ),
-        padding: const EdgeInsets.fromLTRB(16, 20, 4, 18),
+        padding: const EdgeInsets.fromLTRB(16, 10, 4, 10),
         child: Row(
           children: [
-            SecretAvatar(item: item, radius: 26),
+            SecretAvatar(item: item, radius: 22),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -417,7 +501,7 @@ class _CodeTile extends StatelessWidget {
                     item.displayTitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 18, color: scheme.onSurface),
+                    style: TextStyle(fontSize: 16, color: scheme.onSurface),
                   ),
                   if (item.username.isNotEmpty) ...[
                     const SizedBox(height: 2),
@@ -431,7 +515,7 @@ class _CodeTile extends StatelessWidget {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 4),
                   Row(
                     children: [
                       Text(
@@ -439,7 +523,7 @@ class _CodeTile extends StatelessWidget {
                         style: TextStyle(
                           fontFamily: _displayFont,
                           fontFamilyFallback: const ['Segoe UI', 'Roboto'],
-                          fontSize: code == null ? 16 : 36,
+                          fontSize: code == null ? 15 : 28,
                           fontWeight: FontWeight.w400,
                           height: 1.1,
                           letterSpacing: 0.5,

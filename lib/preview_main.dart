@@ -157,7 +157,8 @@ Future<void> _seedDemo(NotesStore store) async {
     ..title = 'Gmail serviciu'
     ..username = '0711000111'
     ..password = 'Munte-Soare-2026!'
-    ..url = 'https://accounts.google.com';
+    ..url = 'https://accounts.google.com'
+    ..totp = 'JBSWY3DPEHPK3PXQ';
   final bank = store.newSecret(SecretType.login)
     ..title = 'Banca'
     ..url = 'https://www.example.com/login'
