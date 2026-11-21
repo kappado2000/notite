@@ -357,6 +357,16 @@ async function editRow(row, i) {
   field('Utilizator / email', 'username', d.username);
   const pw = field('Parolă', 'password', d.password);
   field('Site', 'url', d.url);
+  // notițele contului (ex. codurile de rezervă 2FA), ca în aplicație
+  const nl = document.createElement('label');
+  nl.textContent = 'Notițe (ex. coduri de rezervă 2FA)';
+  const notes = document.createElement('textarea');
+  notes.name = 'notes';
+  notes.value = d.notes ?? '';
+  notes.rows = Math.min(10, Math.max(3, notes.value.split('\n').length + 1));
+  notes.spellcheck = false;
+  nl.append(notes);
+  form.append(nl);
   const bar = document.createElement('div');
   bar.className = 'row';
   const gen = document.createElement('button');
@@ -386,6 +396,7 @@ async function editRow(row, i) {
       username: f.get('username'),
       password: f.get('password'),
       url: f.get('url'),
+      notes: f.get('notes'),
     });
     if (r?.error) return say(r.error, true);
     say(

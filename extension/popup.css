@@ -61,7 +61,7 @@ button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; }
 .icon { background: none; font-size: 16px; padding: 4px; }
 #list {
   margin-top: 8px;
-  max-height: 380px;
+  max-height: 470px;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -143,3 +143,5 @@ button.danger { background: #D93025 !important; color: #fff !important; }
 :root[data-theme="light"] { color-scheme: light; }
 
 .it button img.authicon { width: 17px; height: 17px; vertical-align: -3px; }
+
+form.edit textarea { padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; font-size: 13px; resize: vertical; min-height: 60px; font-family: ui-monospace, Consolas, monospace; }

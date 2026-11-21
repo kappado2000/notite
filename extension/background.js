@@ -874,6 +874,7 @@ async function handle(msg, sender) {
         username: i.username || '',
         password: i.password || '',
         url: i.url || '',
+        notes: i.notes || '',
       };
     }
     case 'updateItem': {
@@ -891,6 +892,8 @@ async function handle(msg, sender) {
         title: String(msg.title ?? '').trim(),
         username: String(msg.username ?? '').trim(),
         url: String(msg.url ?? '').trim(),
+        // notițele (ex. codurile de rezervă 2FA): doar dacă au fost trimise
+        ...(typeof msg.notes === 'string' ? { notes: msg.notes.trim() } : {}),
         password,
         updatedAt: now,
         ...(changed
