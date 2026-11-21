@@ -311,19 +311,39 @@
 
   /// Sub câmp (sau deasupra, dacă jos nu e loc), cât încape pe ecran;
   /// lista lungă se derulează în interiorul panoului.
+  /// Meniul își ia înălțimea după conținut (toate conturile site-ului, la
+  /// vedere): sub căsuță dacă încape, altfel deasupra, altfel pe toată
+  /// înălțimea ecranului (peste căsuță); derulare doar dacă nici așa nu
+  /// încape.
   function place(field) {
     const rect = field.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - 350))}px`;
-    const below = innerHeight - rect.bottom - 14;
-    const above = rect.top - 14;
-    if (below >= 220 || below >= above) {
-      menu.style.top = `${rect.bottom + 6}px`;
-      menu.style.bottom = '';
-      menu.style.maxHeight = `${Math.max(140, below)}px`;
-    } else {
+    const wasHidden = menu.hidden;
+    // măsurăm înălțimea naturală, nevăzut
+    menu.style.visibility = 'hidden';
+    menu.hidden = false;
+    menu.style.maxHeight = 'none';
+    menu.style.top = '0px';
+    menu.style.bottom = '';
+    const need = menu.scrollHeight + 2;
+    const width = menu.offsetWidth;
+    menu.hidden = wasHidden;
+    menu.style.visibility = '';
+    menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - width - 8))}px`;
+    const gap = 6;
+    const below = innerHeight - rect.bottom - gap - 8;
+    const above = rect.top - gap - 8;
+    if (need <= below) {
+      menu.style.top = `${rect.bottom + gap}px`;
+      menu.style.maxHeight = `${below}px`;
+    } else if (need <= above) {
       menu.style.top = '';
-      menu.style.bottom = `${innerHeight - rect.top + 6}px`;
-      menu.style.maxHeight = `${Math.max(140, above)}px`;
+      menu.style.bottom = `${innerHeight - rect.top + gap}px`;
+      menu.style.maxHeight = `${above}px`;
+    } else {
+      // pe tot ecranul: centrat pe verticală, cât e nevoie
+      const h = Math.min(need, innerHeight - 16);
+      menu.style.top = `${Math.max(8, (innerHeight - h) / 2)}px`;
+      menu.style.maxHeight = `${innerHeight - 16}px`;
     }
   }
 
