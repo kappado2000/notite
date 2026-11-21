@@ -237,6 +237,8 @@
       .item.acc { flex-direction: row; align-items: center; gap: 10px; }
       .acc .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
       .acc .t, .acc .s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .acc .t { font-weight: 700; font-size: 15px; }
+      .acc .s { font-weight: 400; font-size: 12px; }
       .acc .dot { margin: 0 2px 0 6px; flex: none; }
       .acc .tfa { flex: none; margin-left: 6px; display: inline-flex; }
       svg.auth { vertical-align: -3px; flex: none; }
@@ -443,7 +445,7 @@ const HEALTH_TIP = {
         const icon = pageIcon();
         for (const i of sorted) {
           parts.push(
-            `<div class="item acc" tabindex="0" data-id="${esc(i.id)}"><span class="fav" data-l="${esc((i.title || '?').charAt(0).toUpperCase())}">${icon ? `<img src="${esc(icon)}" alt="">` : esc((i.title || '?').charAt(0).toUpperCase())}</span><span class="txt"><span class="t">${esc(i.username || i.title)}</span><span class="s">${esc(i.title)}</span></span>${i.hasTotp ? `<span class="tfa" title="Are 2FA în Notițe: codul se completează după parolă">${AUTH_SVG}</span>` : ''}${i.health ? `<span class="dot ${esc(i.health)}" title="${esc(HEALTH_TIP[i.health] ?? '')}"></span>` : ''}</div>`,
+            `<div class="item acc" tabindex="0" data-id="${esc(i.id)}"><span class="fav" data-l="${esc((i.title || '?').charAt(0).toUpperCase())}">${icon ? `<img src="${esc(icon)}" alt="">` : esc((i.title || '?').charAt(0).toUpperCase())}</span><span class="txt"><span class="t">${esc(i.title || i.username)}</span>${i.username && i.title ? `<span class="s">${esc(i.username)}</span>` : ''}</span>${i.hasTotp ? `<span class="tfa" title="Are 2FA în Notițe: codul se completează după parolă">${AUTH_SVG}</span>` : ''}${i.health ? `<span class="dot ${esc(i.health)}" title="${esc(HEALTH_TIP[i.health] ?? '')}"></span>` : ''}</div>`,
           );
         }
       }

@@ -208,7 +208,7 @@ const openGroups = new Set();
 
 /// Un cont. În grup: utilizatorul e rândul principal, numele dedesubt.
 function makeRow(i, inGroup = false) {
-  const subText = inGroup ? i.title : i.username || i.url;
+  const subText = i.username || i.url;
   {
       const row = document.createElement('div');
       row.className = `it${i.match ? ' match' : ''}`;
@@ -222,7 +222,7 @@ function makeRow(i, inGroup = false) {
         dot.title = HEALTH_TIP[i.health];
         t.append(dot);
       }
-      t.append(document.createTextNode(inGroup ? i.username || i.title : i.title));
+      t.append(document.createTextNode(i.title));
       const s = document.createElement('div');
       s.className = 's';
       s.textContent = subText;
