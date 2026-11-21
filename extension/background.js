@@ -520,14 +520,31 @@ async function freshPending() {
   return keep;
 }
 
+/// Conturile la care [password] e parola generată încă neconfirmată (ex.
+/// pagina de schimbare a parolei nu arată emailul): parola trimisă e a lor,
+/// NU un cont nou.
+async function pendingOwners(password) {
+  if (!password) return [];
+  const all = (await items()) ?? [];
+  return all.filter((i) => i.type === 'login' && i.pendingPassword === password);
+}
+
 /// Salvează (sau actualizează) o parolă folosită pe [url].
-/// → { result: 'new'|'updated'|'same', id, undo }
+/// → { result: 'new'|'updated'|'same'|'generatedKept', id, undo }
 async function saveCredential(url, username, password) {
   const key = await dataKey();
   if (!key) return null;
   const session = await authSession();
   const user = (username || '').trim();
-  const existing = await existingLogin(url, user, { change: !user });
+  let existing = await existingLogin(url, user, { change: !user });
+  if (!existing) {
+    const owners = await pendingOwners(password);
+    if (owners.length === 1) existing = owners[0];
+    // mai multe conturi posibile: nu ghicim și nu facem cont nou
+    else if (owners.length > 1) {
+      return { result: 'generatedKept', count: owners.length };
+    }
+  }
   if (existing) {
     if (existing.password === password) {
       return { result: 'same', id: existing.id };
@@ -551,6 +568,12 @@ async function saveCredential(url, username, password) {
       ].slice(0, 10),
     };
     await writeItem(key, session, updated);
+    // aceeași parolă generată ținută minte și la alte conturi: o scoatem
+    for (const o of await pendingOwners(password)) {
+      if (o.id !== updated.id) {
+        await writeItem(key, session, { ...o, pendingPassword: '', updatedAt: now });
+      }
+    }
     return { result: 'updated', id: updated.id, undo: { restore: before } };
   }
   const m = newLogin(url, user, password);
@@ -772,13 +795,23 @@ async function captured(msg, tabUrl, tabId) {
     let reply;
     // Cont existent cu altă parolă: poate fi o parolă greșită tastată la
     // logare, deci NU o schimbăm singuri — întrebăm.
-    const old = st.unlocked
+    let old = st.unlocked
       ? await existingLogin(tabUrl, username, { change: !!msg.change })
       : null;
+    // parola generată de Notițe pentru un cont (pagina de schimbare nu
+    // arată emailul): e a acelui cont, nu un cont nou
+    let owners = [];
+    if (st.unlocked && !old) {
+      owners = await pendingOwners(msg.password);
+      if (owners.length === 1) old = owners[0];
+    }
     if (old && !username) username = old.username || '';
     const changed = !!old && old.password !== msg.password;
     if (!st.loggedIn) {
       reply = { result: 'loggedOut' };
+    } else if (owners.length > 1) {
+      // mai multe conturi au parola generată: o confirmi la cel corect
+      reply = { result: 'generatedKept', count: owners.length };
     } else if (old && !changed) {
       reply = { result: 'same', id: old.id };
     } else if (!st.unlocked || !st.autoSave || changed) {
