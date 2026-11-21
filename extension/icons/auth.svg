@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Iconița „Auth” din aplicație: lacăt în formă de scut, cu un om -->
+  <defs>
+    <linearGradient id="authg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2C644B"/>
+      <stop offset="0.5" stop-color="#3F8F6B"/>
+      <stop offset="1" stop-color="#62B791"/>
+    </linearGradient>
+    <clipPath id="authc">
+      <path d="M50 34 C70 34 86 36 88 40 C92 62 80 86 50 98 C20 86 8 62 12 40 C14 36 30 34 50 34 Z"/>
+    </clipPath>
+  </defs>
+  <path d="M28 42 V30 A22 20 0 0 1 72 30 V42" fill="none" stroke="#2C644B" stroke-width="11"/>
+  <path d="M50 34 C70 34 86 36 88 40 C92 62 80 86 50 98 C20 86 8 62 12 40 C14 36 30 34 50 34 Z" fill="url(#authg)"/>
+  <g clip-path="url(#authc)" fill="#9BD1B6">
+    <circle cx="50" cy="55" r="11"/>
+    <ellipse cx="50" cy="92" rx="26" ry="19"/>
+  </g>
+</svg>

@@ -274,7 +274,13 @@ function makeRow(i, inGroup = false) {
         });
       }
       if (i.hasTotp) {
-        btn('🔢', 'Copiază codul 2FA', () => copy(i.id, 'totp'));
+        btn('', 'Copiază codul 2FA', () => copy(i.id, 'totp'));
+        // iconița 2FA din aplicație
+        const img = document.createElement('img');
+        img.src = 'icons/auth.svg';
+        img.alt = '2FA';
+        img.className = 'authicon';
+        row.lastElementChild.append(img);
       }
       if (i.username || i.hasPassword) {
         btn('📤', 'Trimite (WhatsApp, email, SMS)', () => shareRow(row, i));

@@ -14,6 +14,7 @@ import '../../widgets/pickers.dart';
 import 'secret_edit_screen.dart';
 import 'share_credentials.dart';
 import 'secret_widgets.dart';
+import '../../widgets/auth_icon.dart';
 
 /// Un câmp afișat: etichetă, valoare, dacă e secret, ce se copiază.
 typedef _F = ({String label, String value, bool secret, String? copy});
@@ -560,6 +561,7 @@ class _TotpFieldState extends State<_TotpField> {
     void copy() => copyValue(context, code, secret: true, what: 'Cod copiat');
     return ListTile(
       onTap: copy,
+      leading: const AuthIcon(size: 28),
       title: Text('Cod 2FA', style: Theme.of(context).textTheme.labelMedium),
       subtitle: Text(
         pretty,

@@ -17,6 +17,7 @@ import '../../utils/format.dart';
 import '../qr_scan_screen.dart';
 import 'password_generator_sheet.dart';
 import 'secret_widgets.dart';
+import '../../widgets/auth_icon.dart';
 
 /// Adăugare / editare pentru o intrare din „Parole”. Lucrează pe o copie;
 /// nimic nu se salvează până la „Salvează”.
@@ -478,6 +479,7 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
     String key,
     String label, {
     IconData? icon,
+    Widget? iconWidget,
     TextInputType? keyboard,
     String? Function(String?)? validator,
     bool obscure = false,
@@ -501,7 +503,7 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: icon == null ? null : Icon(icon),
+        prefixIcon: iconWidget ?? (icon == null ? null : Icon(icon)),
         suffixIcon: suffix,
         border: const OutlineInputBorder(),
       ),
@@ -630,7 +632,10 @@ class _SecretEditScreenState extends State<SecretEditScreen> {
   Widget _totpField() => _text(
     'totp',
     'Cheie 2FA (opțional)',
-    icon: Icons.verified_user_outlined,
+    iconWidget: const Padding(
+      padding: EdgeInsets.all(12),
+      child: AuthIcon(size: 22),
+    ),
     hint: 'Scanează codul QR de pe site sau scrie cheia',
     suffix: IconButton(
       tooltip: 'Scanează codul QR 2FA',

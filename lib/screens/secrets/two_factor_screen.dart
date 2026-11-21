@@ -7,6 +7,7 @@ import '../../models/secret_item.dart';
 import '../../services/secret_helpers.dart';
 import '../../services/two_factor_sites.dart';
 import 'secret_edit_screen.dart';
+import '../../widgets/auth_icon.dart';
 
 /// „Activează 2FA aici”: conturile de pe site-uri care permit verificarea
 /// în doi pași cu cod din aplicație, la care nu ai salvat încă cheia.
@@ -95,7 +96,7 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               ListTile(
-                                leading: const Icon(Icons.shield_outlined),
+                                leading: const AuthIcon(),
                                 title: Text(i.displayTitle),
                                 subtitle: Text(
                                   [

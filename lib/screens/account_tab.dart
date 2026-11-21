@@ -20,6 +20,7 @@ import 'backup_screen.dart';
 import 'shell.dart';
 import '../widgets/mfa.dart';
 import '../services/ios_autofill.dart';
+import '../widgets/auth_icon.dart';
 
 /// Contul, securitatea și aspectul aplicației.
 class AccountTab extends StatefulWidget {
@@ -361,7 +362,7 @@ class _AccountTabState extends State<AccountTab> {
                   onTap: _managePin,
                 ),
                 ListTile(
-                  leading: const Icon(Icons.verified_user_outlined),
+                  leading: const AuthIcon(),
                   title: const Text('Verificare în doi pași'),
                   subtitle: const Text(
                     'Cod din aplicația de autentificare la conectare',

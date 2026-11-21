@@ -995,7 +995,11 @@ class _SecretsScreenState extends State<SecretsScreen>
                                 final alerts = [
                                   if (report.problems > 0)
                                     (
-                                      icon: Icons.health_and_safety_outlined,
+                                      icon: Icon(
+                                        Icons.health_and_safety_outlined,
+                                        size: 20,
+                                        color: scheme.error,
+                                      ),
                                       count: report.accounts,
                                       color: scheme.error,
                                       labels: const [
@@ -1015,7 +1019,11 @@ class _SecretsScreenState extends State<SecretsScreen>
                                       _type == null &&
                                       _query.isEmpty)
                                     (
-                                      icon: Icons.event_busy_outlined,
+                                      icon: Icon(
+                                        Icons.event_busy_outlined,
+                                        size: 20,
+                                        color: scheme.secondary,
+                                      ),
                                       count: soon.length,
                                       color: scheme.secondary,
                                       labels: [
@@ -1034,7 +1042,10 @@ class _SecretsScreenState extends State<SecretsScreen>
                                     ),
                                   if (noTfa.isNotEmpty)
                                     (
-                                      icon: Icons.shield_outlined,
+                                      icon: AuthIcon(
+                                        size: 20,
+                                        color: scheme.tertiary,
+                                      ),
                                       count: noTfa.length,
                                       color: scheme.tertiary,
                                       labels: const [
@@ -1642,7 +1653,7 @@ class _SecretsScreenState extends State<SecretsScreen>
   /// Avertizare (Risc, Expiră, 2FA) în formatul pătratelor de tipuri:
   /// iconiță și număr, dedesubt numele; în culoarea avertizării.
   Widget _alertTile({
-    required IconData icon,
+    required Widget icon,
     required String label,
     required int count,
     required Color color,
@@ -1674,7 +1685,7 @@ class _SecretsScreenState extends State<SecretsScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon, size: 20, color: color),
+                    icon,
                     const SizedBox(width: 4),
                     Text(
                       '$count',

@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/auth_service.dart';
+import 'auth_icon.dart';
 
 /// Cere codul de 6 cifre din aplicația de autentificare. `null` = renunțat.
 Future<String?> askMfaCode(BuildContext context, String? error) {
@@ -20,7 +21,7 @@ Future<String?> askMfaCode(BuildContext context, String? error) {
       }
 
       return AlertDialog(
-        icon: const Icon(Icons.verified_user_outlined),
+        icon: const AuthIcon(size: 28),
         title: const Text('Cod de verificare'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -267,7 +268,7 @@ class _MfaScreenState extends State<MfaScreen> {
               if (_enabled == null)
                 const Center(child: CircularProgressIndicator())
               else if (_enabled!) ...[
-                Icon(Icons.verified_user, size: 56, color: scheme.primary),
+                const AuthIcon(size: 56),
                 const SizedBox(height: 12),
                 Text(
                   'Activă',
@@ -288,7 +289,7 @@ class _MfaScreenState extends State<MfaScreen> {
                   label: const Text('Oprește verificarea în doi pași'),
                 ),
               ] else if (_secret == null) ...[
-                Icon(Icons.shield_outlined, size: 56, color: scheme.primary),
+                const AuthIcon(size: 56),
                 const SizedBox(height: 12),
                 Text(
                   'Protejează contul cu un al doilea pas',

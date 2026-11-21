@@ -22,6 +22,9 @@
   }
   window.__notiteExt = true;
 
+  /// Iconița 2FA din aplicație (lacăt-scut cu un om), aceeași peste tot.
+  const AUTH_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="16" height="16" class="auth"> <defs> <linearGradient id="authg" x1="0" y1="0" x2="0" y2="1"> <stop offset="0" stop-color="#2C644B"/> <stop offset="0.5" stop-color="#3F8F6B"/> <stop offset="1" stop-color="#62B791"/> </linearGradient> <clipPath id="authc"> <path d="M50 34 C70 34 86 36 88 40 C92 62 80 86 50 98 C20 86 8 62 12 40 C14 36 30 34 50 34 Z"/> </clipPath> </defs> <path d="M28 42 V30 A22 20 0 0 1 72 30 V42" fill="none" stroke="#2C644B" stroke-width="11"/> <path d="M50 34 C70 34 86 36 88 40 C92 62 80 86 50 98 C20 86 8 62 12 40 C14 36 30 34 50 34 Z" fill="url(#authg)"/> <g clip-path="url(#authc)" fill="#9BD1B6"> <circle cx="50" cy="55" r="11"/> <ellipse cx="50" cy="92" rx="26" ry="19"/> </g> </svg>';
+
   const send = (msg) =>
     new Promise((resolve) => {
       try {
@@ -126,7 +129,7 @@
     const r = await send({ type: 'pageTotp' });
     if (!r || r.locked || !r.items.length) return;
     menu.innerHTML =
-      '<div class="head">🔑 Notițe · cod 2FA</div>' +
+      `<div class="head">${AUTH_SVG} Notițe · cod 2FA</div>` +
       r.items
         .map(
           (i) =>
@@ -219,7 +222,7 @@
     <style>
       :host { all: initial; }
       * { box-sizing: border-box; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-      .menu { position: fixed; min-width: 300px; max-width: 420px; background: #fff; color: #22261F;
+      .menu { position: fixed; min-width: 320px; max-width: 470px; background: #fff; color: #22261F;
         border: 1px solid #b9c7bd; border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18);
         padding: 6px; font-size: 14px; overflow-y: auto; overscroll-behavior: contain; }
       .head { position: sticky; top: -6px; background: inherit; z-index: 1;
@@ -235,6 +238,12 @@
       .acc .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
       .acc .t, .acc .s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .acc .dot { margin: 0 2px 0 6px; flex: none; }
+      .acc .tfa { flex: none; margin-left: 6px; display: inline-flex; }
+      svg.auth { vertical-align: -3px; flex: none; }
+      .acc .tfa svg.auth { width: 18px; height: 18px; }
+      .acc .t.n { font-weight: 500; }
+      .fav.srch { background: transparent; font-size: 15px; }
+      :host(.dark) .fav.srch { background: transparent; }
       .fav { flex: none; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center;
         justify-content: center; overflow: hidden; background: #E7F2EC; color: #3F8F6B; font-weight: 700; font-size: 12px; }
       .fav img { width: 20px; height: 20px; }
@@ -386,12 +395,14 @@ const HEALTH_TIP = {
         const icon = pageIcon();
         for (const i of sorted) {
           parts.push(
-            `<div class="item acc" tabindex="0" data-id="${esc(i.id)}"><span class="fav" data-l="${esc((i.title || '?').charAt(0).toUpperCase())}">${icon ? `<img src="${esc(icon)}" alt="">` : esc((i.title || '?').charAt(0).toUpperCase())}</span><span class="txt"><span class="t">${esc(i.username || i.title)}</span><span class="s">${esc(i.title)}</span></span>${i.health ? `<span class="dot ${esc(i.health)}" title="${esc(HEALTH_TIP[i.health] ?? '')}"></span>` : ''}</div>`,
+            `<div class="item acc" tabindex="0" data-id="${esc(i.id)}"><span class="fav" data-l="${esc((i.title || '?').charAt(0).toUpperCase())}">${icon ? `<img src="${esc(icon)}" alt="">` : esc((i.title || '?').charAt(0).toUpperCase())}</span><span class="txt"><span class="t">${esc(i.username || i.title)}</span><span class="s">${esc(i.title)}</span></span>${i.hasTotp ? `<span class="tfa" title="Are 2FA în Notițe: codul se completează după parolă">${AUTH_SVG}</span>` : ''}${i.health ? `<span class="dot ${esc(i.health)}" title="${esc(HEALTH_TIP[i.health] ?? '')}"></span>` : ''}</div>`,
           );
         }
       }
       parts.push(
-        `${r.items.length ? '<div class="sep"></div>' : ''}<div class="item" tabindex="0" data-search="1"><span class="t">🔍 Alt cont din Notițe…</span><span class="s">Caută printre toate conturile tale</span></div>`,
+        // în listă, ca un rând obișnuit (ca la Google): iconița în locul
+        // emblemei site-ului, textul de aceeași mărime
+        `<div class="item acc" tabindex="0" data-search="1" title="Caută printre toate conturile tale din Notițe"><span class="fav srch">🔍</span><span class="txt"><span class="t n">Caută alt cont</span></span></div>`,
       );
       // o parolă generată e deja în câmpuri: NU mai oferim alta (ar înlocui-o
       // pe cea pe care poate site-ul a acceptat-o deja)
@@ -719,7 +730,7 @@ const HEALTH_TIP = {
       html = `🔑 Parola generată e ținută minte în Notițe (${info.count > 1 ? `la cele ${info.count} conturi` : 'la contul'} <b>${esc(info.site)}</b>). După ce o salvezi pe site, confirm-o din iconița Notițe („Folosește-o”) sau din aplicație.
         <div class="row"><button class="pri" data-a="ok">OK</button></div>`;
     } else if (info.result === 'otpFilled') {
-      html = `🔑 Codul 2FA din Notițe${who} a fost completat. Apasă tu butonul de confirmare de pe site.
+      html = `${AUTH_SVG} Codul 2FA din Notițe${who} a fost completat. Apasă tu butonul de confirmare de pe site.
         <div class="row"><button class="pri" data-a="ok">OK</button></div>`;
     } else if (info.result === 'locked') {
       html = `🔒 Notițe e blocat. Parola pentru <b>${esc(info.site)}</b>${who} va fi salvată când îl deblochezi din iconița extensiei.

@@ -141,3 +141,5 @@ button.danger { background: #D93025 !important; color: #fff !important; }
 
 :root[data-theme="dark"] { color-scheme: dark; }
 :root[data-theme="light"] { color-scheme: light; }
+
+.it button img.authicon { width: 17px; height: 17px; vertical-align: -3px; }
