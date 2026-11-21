@@ -78,8 +78,8 @@ function renderFilters() {
   };
   // „Detalii”: motivele sub conturi doar când vrei (ținut minte)
   const details = document.createElement('button');
-  details.className = `chip${showWhy ? ' on' : ''}`;
-  details.textContent = 'ℹ️ Detalii';
+  details.className = `chip details${showWhy ? ' on' : ''}`;
+  details.textContent = 'ⓘ Detalii';
   details.title = showWhy
     ? 'Ascunde motivele de sub conturi'
     : 'Arată de ce e o parolă compromisă, slabă sau refolosită';
