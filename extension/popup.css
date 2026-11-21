@@ -159,3 +159,6 @@ form.edit textarea { padding: 7px 9px; border: 1px solid var(--border); border-r
 .chip.details.on { background: var(--accent); color: #fff; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chip.details.on { color: #0B3322; } }
 :root[data-theme="dark"] .chip.details.on { color: #0B3322; }
+
+.section { padding: 8px 12px 6px; font-size: 12px; font-weight: 700; color: var(--muted); border-top: 1px solid var(--border); background: var(--bg); text-transform: uppercase; letter-spacing: .3px; }
+.section:first-child { border-top: 0; }

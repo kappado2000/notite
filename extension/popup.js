@@ -114,25 +114,41 @@ function render() {
   const list = $('list');
   // „https://”, „www.” nu contează la căutare (altfel „tp” = orice site);
   // întâi titlurile care încep cu textul căutat, apoi restul
-  const plain = (i) =>
-    `${i.title} ${i.username} ${i.url}`.toLowerCase().replace(/https?:\/\/|www\./g, ' ');
+  // după titlu și site; utilizatorul / emailul doar dacă nimic nu se
+  // potrivește după titlu și site (ex. „simipop”)
+  const bySite = (i) =>
+    `${i.title} ${i.url}`.toLowerCase().replace(/https?:\/\/|www\./g, ' ');
+  const byUser = (i) => (i.username || '').toLowerCase();
   const rank = (i) => {
     const t = i.title.toLowerCase();
+    // site-ul însuși (yahoo.com la „yahoo”), nu doar emailuri @yahoo
+    const site = baseDomain(i.url).toLowerCase();
+    if (site.startsWith(q)) return 0;
     if (t.startsWith(q)) return 0;
     if (t.split(/[^a-z0-9ăâîșț]+/).some((w) => w.startsWith(q))) return 1;
     if (t.includes(q)) return 2;
     if ((i.username || '').toLowerCase().includes(q)) return 3;
     return 4;
   };
-  const shown = all.filter(
-    (i) => (!healthFilter || i.health === healthFilter) && (!q || plain(i).includes(q)),
-  );
+  const pool = all.filter((i) => !healthFilter || i.health === healthFilter);
+  const shown = q ? pool.filter((i) => bySite(i).includes(q)) : pool;
+  // abia după: cele găsite doar după utilizator / email, separat, dedesubt
+  const byMail = q
+    ? pool.filter((i) => !bySite(i).includes(q) && byUser(i).includes(q))
+    : [];
   if (q) shown.sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title, 'ro'));
-  if (!shown.length) {
+  if (!shown.length && !byMail.length) {
     list.innerHTML = `<div class="empty">${all.length ? 'Niciun rezultat' : 'Nicio parolă salvată încă.'}</div>`;
     return;
   }
-  list.replaceChildren(...groupRows(shown, !!q));
+  const rows = groupRows(shown, !!q, q ? rank : null);
+  if (byMail.length) {
+    const sep = document.createElement('div');
+    sep.className = 'section';
+    sep.textContent = `Găsite după utilizator / email (${byMail.length})`;
+    rows.push(sep, ...groupRows(byMail, true, null));
+  }
+  list.replaceChildren(...rows);
 }
 
 /// Ordinea conturilor aceluiași site: numerele de telefon, apoi adresele
@@ -176,7 +192,7 @@ function favicon(url, label) {
 
 /// Conturile grupate pe site (ca în managerele de parole): un site cu un
 /// singur cont = un rând; cu mai multe = un grup care se deschide.
-function groupRows(shown, searching) {
+function groupRows(shown, searching, rank = null) {
   const groups = new Map();
   for (const i of shown) {
     const key = baseDomain(i.url) || i.title.toLowerCase();
@@ -184,8 +200,13 @@ function groupRows(shown, searching) {
     groups.get(key).items.push(i);
   }
   const list = [...groups.values()];
+  // la căutare: întâi site-urile care se potrivesc cel mai bine (yahoo.com
+  // la „yahoo”), apoi cele găsite doar după email; altfel site-ul deschis
+  // primul, restul alfabetic
+  const best = (g) => (rank ? Math.min(...g.items.map(rank)) : 0);
   list.sort(
     (a, b) =>
+      best(a) - best(b) ||
       Number(b.items.some((i) => i.match)) - Number(a.items.some((i) => i.match)) ||
       a.key.localeCompare(b.key, 'ro'),
   );
