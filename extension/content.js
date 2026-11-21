@@ -9,7 +9,12 @@
   // sunt ignorate (extensia verifică oricum din nou).
   const isTop = window.top === window;
   if (!isTop) {
-    const site = (h) => h.split('.').slice(-2).join('.');
+    // același cont pe domenii înrudite (formularul Apple din icloud.com)
+    const ALIAS = { 'icloud.com': 'apple.com', 'me.com': 'apple.com', 'appleid.com': 'apple.com' };
+    const site = (h) => {
+      const b = h.split('.').slice(-2).join('.');
+      return ALIAS[b] ?? b;
+    };
     const anc = location.ancestorOrigins;
     const topOrigin = anc && anc.length ? anc[anc.length - 1] : '';
     let topHost = '';

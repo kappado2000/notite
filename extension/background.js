@@ -24,7 +24,7 @@ import {
   uuid,
 } from './lib/crypto.js';
 import * as fb from './lib/firebase.js';
-import { matches, siteTitle, hostOf, baseDomain } from './lib/domain.js';
+import { matches, siteTitle, hostOf, baseDomain, accountSite } from './lib/domain.js';
 import { totpCode } from './lib/totp.js';
 import { healthOf, sha1Hex, pwned, isWeak } from './lib/health.js';
 
@@ -642,7 +642,9 @@ function frameOk(sender, tabUrl) {
   const url = sender.url || '';
   if (!/^https:/.test(url) || !tabUrl) return false;
   const a = baseDomain(url);
-  return !!a && a === baseDomain(tabUrl);
+  // același cont pe domenii înrudite: formularul Apple (idmsa.apple.com)
+  // încastrat în icloud.com
+  return !!a && (a === baseDomain(tabUrl) || accountSite(url) === accountSite(tabUrl));
 }
 
 function pageAllowed(url) {

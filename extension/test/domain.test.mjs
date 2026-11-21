@@ -1,7 +1,7 @@
 // node --test extension/test  — potrivirea site-urilor (cine primește parola)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { baseDomain, matches, siteTitle } from '../lib/domain.js';
+import { baseDomain, matches, siteTitle, accountSite } from '../lib/domain.js';
 
 test('domeniul de bază', () => {
   assert.equal(baseDomain('https://www.emag.ro/login'), 'emag.ro');
@@ -49,4 +49,9 @@ test('alte site-uri ale contului', () => {
   assert.ok(matches(i, 'https://afm.ro/login'));
   assert.ok(matches(i, 'https://afmb2cprod.b2clogin.com/login'));
   assert.ok(!matches(i, 'https://alta.b2clogin.com/login'));
+});
+
+test('formularul Apple încastrat în icloud.com = același cont', () => {
+  assert.equal(accountSite('https://www.icloud.com/'), accountSite('https://idmsa.apple.com/appleauth'));
+  assert.notEqual(accountSite('https://ads.exemplu.com/'), accountSite('https://www.icloud.com/'));
 });

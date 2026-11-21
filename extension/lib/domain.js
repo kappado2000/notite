@@ -58,7 +58,7 @@ const SAME_ACCOUNT = {
   'gmail.com': 'google.com',
 };
 
-function accountSite(url) {
+export function accountSite(url) {
   const b = baseDomain(url);
   return SAME_ACCOUNT[b] ?? b;
 }
