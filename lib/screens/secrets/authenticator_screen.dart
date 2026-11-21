@@ -217,8 +217,36 @@ class _AuthenticatorScreenState extends State<AuthenticatorScreen> {
     final items = _sorted(_items(store), settings);
     // tragerea merge doar în ordinea manuală și fără căutare (lista întreagă)
     final drag = settings.authOrder == 'manual' && _query.trim().isEmpty;
-    Widget tile(SecretItem i) =>
-        _CodeTile(item: i, onCopied: () => settings.markAuthUsed(i.id));
+    // tras cu degetul de la dreapta la stânga: scoate DOAR 2FA (cu
+    // confirmare); contul și parola rămân
+    Widget tile(SecretItem i) => Dismissible(
+      key: ValueKey('auth-${i.id}'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        color: Theme.of(context).colorScheme.errorContainer,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Scoate 2FA',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onErrorContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.link_off,
+              color: Theme.of(context).colorScheme.onErrorContainer,
+            ),
+          ],
+        ),
+      ),
+      confirmDismiss: (_) => removeTwoFactor(context, i),
+      child: _CodeTile(item: i, onCopied: () => settings.markAuthUsed(i.id)),
+    );
     return Scaffold(
       appBar: AppBar(
         title: const Text('Autentificator'),
@@ -448,14 +476,54 @@ class _CodeTile extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              tooltip: 'Deschide contul',
-              icon: Icon(Icons.chevron_right, color: scheme.outline),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => SecretDetailScreen(id: item.id),
+            // meniul contului: aici se scoate DOAR 2FA, contul rămâne
+            PopupMenuButton<String>(
+              tooltip: 'Mai multe',
+              icon: Icon(Icons.more_vert, color: scheme.outline),
+              onSelected: (v) async {
+                if (v == 'open') {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => SecretDetailScreen(id: item.id),
+                    ),
+                  );
+                } else if (v == 'copy' && code != null) {
+                  await copyValue(
+                    context,
+                    code,
+                    secret: true,
+                    what: 'Cod copiat',
+                  );
+                  onCopied();
+                } else if (v == 'remove2fa') {
+                  await removeTwoFactor(context, item);
+                }
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'open',
+                  child: ListTile(
+                    leading: Icon(Icons.open_in_new),
+                    title: Text('Deschide contul'),
+                  ),
                 ),
-              ),
+                if (code != null)
+                  const PopupMenuItem(
+                    value: 'copy',
+                    child: ListTile(
+                      leading: Icon(Icons.copy),
+                      title: Text('Copiază codul'),
+                    ),
+                  ),
+                const PopupMenuItem(
+                  value: 'remove2fa',
+                  child: ListTile(
+                    leading: Icon(Icons.link_off),
+                    title: Text('Scoate 2FA de la acest cont'),
+                    subtitle: Text('Contul și parola rămân'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

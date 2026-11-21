@@ -97,6 +97,42 @@ class SecretAvatar extends StatelessWidget {
 
 /// Copiere cu mesaj. Datele secrete (parole, CVV, PIN, CNP) se șterg din
 /// clipboard după 30 s; restul rămân, ca să poată fi lipite oricând.
+/// Scoate DOAR cheia 2FA a contului (contul, parola și codurile de rezervă
+/// rămân), cu confirmare și „Anulează”.
+Future<bool> removeTwoFactor(BuildContext context, SecretItem item) async {
+  final store = context.read<NotesStore>();
+  final messenger = ScaffoldMessenger.of(context);
+  final ok = await confirm(
+    context,
+    'Scoți cheia 2FA de la „${item.displayTitle}”'
+    '${item.username.isEmpty ? '' : ' (${item.username})'}?\n\n'
+    'Contul, parola și codurile de rezervă RĂMÂN în Notițe; dispare doar '
+    'codul de 6 cifre din Autentificator.\n\n'
+    'Dacă 2FA e încă pornit pe site, fără cheie nu vei mai avea codul: '
+    'oprește-l întâi pe site (sau pune acolo o cheie nouă).',
+    action: 'Scoate 2FA',
+  );
+  if (!ok) return false;
+  final current = store.secret(item.id);
+  if (current == null) return false;
+  final key = current.totp;
+  await store.saveSecret(current.copy()..totp = '');
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text('Cheia 2FA a fost scoasă de la „${item.displayTitle}”.'),
+      duration: const Duration(seconds: 8),
+      action: SnackBarAction(
+        label: 'Anulează',
+        onPressed: () async {
+          final again = store.secret(item.id);
+          if (again != null) await store.saveSecret(again.copy()..totp = key);
+        },
+      ),
+    ),
+  );
+  return true;
+}
+
 Future<void> copyValue(
   BuildContext context,
   String value, {

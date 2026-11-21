@@ -157,30 +157,50 @@ class SecretDetailScreen extends StatelessWidget {
                 );
                 return;
               }
+              if (v == 'remove2fa') {
+                await removeTwoFactor(context, item);
+                return;
+              }
               if (v != 'delete') return;
               final nav = Navigator.of(context);
               if (await confirm(
                 context,
-                'Ștergi „${item.displayTitle}”? Merge în coș (Parole → ⋮ → '
-                'Coș), de unde îl poți recupera 30 de zile.',
+                'Ștergi TOT contul „${item.displayTitle}”'
+                '${item.username.isEmpty ? '' : ' (${item.username})'}?\n\n'
+                'Se șterg utilizatorul, parola'
+                '${item.totp.isNotEmpty ? ', cheia 2FA' : ''}'
+                '${item.recoveryCodes.isNotEmpty ? ', codurile de rezervă' : ''}'
+                ' și notițele lui. Merge în coș (Parole → ⋮ → Coș), de unde '
+                'îl poți recupera 30 de zile.'
+                '${item.totp.isNotEmpty ? '\n\nVrei doar să scoți 2FA? Alege „Scoate doar 2FA” din meniu.' : ''}',
+                action: 'Șterge contul',
               )) {
                 await store.deleteSecret(item);
                 nav.pop();
               }
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
+            itemBuilder: (_) => [
+              const PopupMenuItem(
                 value: 'copyAll',
                 child: ListTile(
                   leading: Icon(Icons.copy_all_outlined),
                   title: Text('Copiază toate datele'),
                 ),
               ),
-              PopupMenuItem(
+              if (item.totp.isNotEmpty)
+                const PopupMenuItem(
+                  value: 'remove2fa',
+                  child: ListTile(
+                    leading: Icon(Icons.link_off),
+                    title: Text('Scoate doar 2FA'),
+                    subtitle: Text('Contul și parola rămân'),
+                  ),
+                ),
+              const PopupMenuItem(
                 value: 'delete',
                 child: ListTile(
                   leading: Icon(Icons.delete_outline),
-                  title: Text('Șterge'),
+                  title: Text('Șterge tot contul'),
                 ),
               ),
             ],
