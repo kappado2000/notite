@@ -126,6 +126,7 @@
   }
 
   async function showOtpMenu(field) {
+    if (sentCodeField(field)) return;
     const r = await send({ type: 'pageTotp' });
     if (!r || r.locked || !r.items.length) return;
     menu.innerHTML =
@@ -636,10 +637,27 @@ const HEALTH_TIP = {
   }
 
   /// true dacă a pus codul (atunci nu mai arătăm meniul).
+  /// Căsuța cere un cod trimis pe email / SMS / WhatsApp, nu codul din
+  /// aplicația de autentificare: acolo nu punem și nu propunem cod 2FA.
+  function sentCodeField(el) {
+    const box =
+      el.closest('form,[role="dialog"],dialog') ??
+      el.parentElement?.parentElement?.parentElement ??
+      document.body;
+    const text = `${(box.innerText || '').slice(0, 2000)} ${el.placeholder || ''} ${el.getAttribute('aria-label') || ''}`.toLowerCase();
+    if (/aplica[țt]i[ae] de autentificare|authenticat(or|ion) app|google authenticator/.test(text)) {
+      return false;
+    }
+    return /am trimis|(ți|ti)-am trimis|trimis (un |prin |pe |la )|e-?mail|\bsms\b|whatsapp|mesaj text|we sent|sent (a |you |to )|text message|check your (email|phone)/.test(
+      text,
+    );
+  }
+
   async function autoOtp(focused = null) {
     if (autoBusy || Date.now() > autoUntil) return false;
     const targets = otpTargets(focused);
     if (!targets || targets.some((t) => autoTried.has(t))) return false;
+    if (sentCodeField(targets[0])) return false;
     targets.forEach((t) => autoTried.add(t));
     autoBusy = true;
     try {

@@ -1058,8 +1058,8 @@ async function handle(msg, sender) {
       const all = (await items()) ?? [];
       const has = (i) => !!(i.totp || '').trim();
       const used = all.find((i) => i.id === f.id && has(i));
-      const site = all.filter((i) => has(i) && matches(i, tabUrl));
-      const pick = used ?? (site.length === 1 ? site[0] : null);
+      // DOAR contul completat: dacă el n-are 2FA, nu punem codul altui cont
+      const pick = used;
       if (!pick) return null;
       let r = await totpCode(pick.totp);
       // codul e pe terminate: îl dăm pe următorul, să nu expire până trimiți
