@@ -316,6 +316,9 @@
   /// înălțimea ecranului (peste căsuță); derulare doar dacă nici așa nu
   /// încape.
   function place(field) {
+    // în pagină ÎNAINTE de măsurare (altfel înălțimea iese 0 și meniul
+    // rămâne mic, cu derulare); unele site-uri îl scot din pagină
+    attach();
     const rect = field.getBoundingClientRect();
     const wasHidden = menu.hidden;
     // măsurăm înălțimea naturală, nevăzut
