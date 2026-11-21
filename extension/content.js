@@ -312,9 +312,9 @@
   /// Sub câmp (sau deasupra, dacă jos nu e loc), cât încape pe ecran;
   /// lista lungă se derulează în interiorul panoului.
   /// Meniul își ia înălțimea după conținut (toate conturile site-ului, la
-  /// vedere): sub căsuță dacă încape, altfel deasupra, altfel pe toată
-  /// înălțimea ecranului (peste căsuță); derulare doar dacă nici așa nu
-  /// încape.
+  /// vedere). Întâi în fața căsuței (stânga) sau în dreapta ei, la aceeași
+  /// înălțime; fără loc în lateral: sub căsuță, deasupra sau pe toată
+  /// înălțimea ecranului. Derulare doar dacă nici așa nu încape.
   function place(field) {
     // în pagină ÎNAINTE de măsurare (altfel înălțimea iese 0 și meniul
     // rămâne mic, cu derulare); unele site-uri îl scot din pagină
@@ -331,8 +331,24 @@
     const width = menu.offsetWidth;
     menu.hidden = wasHidden;
     menu.style.visibility = '';
-    menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - width - 8))}px`;
     const gap = 6;
+    // în fața căsuței (stânga), altfel în dreapta: meniul de parole al
+    // browserului (Chrome) apare sub / deasupra căsuței și l-ar acoperi
+    const side =
+      rect.left - gap - 8 >= width
+        ? rect.left - gap - width
+        : innerWidth - rect.right - gap - 8 >= width
+          ? rect.right + gap
+          : null;
+    if (side != null) {
+      const h = Math.min(need, innerHeight - 16);
+      menu.style.left = `${side}px`;
+      menu.style.bottom = '';
+      menu.style.top = `${Math.max(8, Math.min(rect.top, innerHeight - 8 - h))}px`;
+      menu.style.maxHeight = `${innerHeight - 16}px`;
+      return;
+    }
+    menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - width - 8))}px`;
     const below = innerHeight - rect.bottom - gap - 8;
     const above = rect.top - gap - 8;
     if (need <= below) {
