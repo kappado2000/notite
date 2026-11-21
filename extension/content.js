@@ -242,6 +242,15 @@
       svg.auth { vertical-align: -3px; flex: none; }
       .acc .tfa svg.auth { width: 18px; height: 18px; }
       .acc .t.n { font-weight: 500; }
+      /* „Caută alt cont”: ca la Google — sub o linie, scris mic și subțire,
+         fix jos în meniu (se vede întreg și când lista se derulează) */
+      .item.foot { position: sticky; bottom: -6px; background: inherit; border-radius: 0 0 8px 8px;
+        border-top: 1px solid #e3e8e1; margin: 4px -6px -6px; padding: 10px 16px; }
+      .item.foot .t.n { font-weight: 400; font-size: 13px; }
+      .item.foot .fav.srch { width: 20px; height: 20px; font-size: 13px; }
+      .item.foot:hover, .item.foot:focus { background: #E7F2EC; }
+      :host(.dark) .item.foot { border-top-color: #3a4237; }
+      :host(.dark) .item.foot:hover, :host(.dark) .item.foot:focus { background: #2b3a31; }
       .fav.srch { background: transparent; font-size: 15px; }
       :host(.dark) .fav.srch { background: transparent; }
       .fav { flex: none; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center;
@@ -402,7 +411,7 @@ const HEALTH_TIP = {
       parts.push(
         // în listă, ca un rând obișnuit (ca la Google): iconița în locul
         // emblemei site-ului, textul de aceeași mărime
-        `<div class="item acc" tabindex="0" data-search="1" title="Caută printre toate conturile tale din Notițe"><span class="fav srch">🔍</span><span class="txt"><span class="t n">Caută alt cont</span></span></div>`,
+        `<div class="item acc foot" tabindex="0" data-search="1" title="Caută printre toate conturile tale din Notițe"><span class="fav srch">🔍</span><span class="txt"><span class="t n">Caută alt cont</span></span></div>`,
       );
       // o parolă generată e deja în câmpuri: NU mai oferim alta (ar înlocui-o
       // pe cea pe care poate site-ul a acceptat-o deja)
