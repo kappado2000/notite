@@ -15,6 +15,8 @@ import '../../utils/format.dart';
 import '../../widgets/pickers.dart';
 import '../../widgets/tint_picker.dart';
 import '../image_viewer_screen.dart';
+import '../../services/site_icons.dart';
+import '../../widgets/site_icon.dart';
 
 /// Culoarea implicită a fiecărui tip (index în `GroupTint.all`).
 int defaultSecretTint(SecretType t) => switch (t) {
@@ -50,6 +52,17 @@ class SecretAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final letter = _letter(context);
+    if (item.type != SecretType.login && item.type != SecretType.subscription) {
+      return letter;
+    }
+    // iconița reală a site-ului; până se încarcă / dacă nu are: inițiala
+    final domain = SiteIcons.domainOf(item);
+    if (domain == null) return letter;
+    return SiteIcon(domain: domain, radius: radius, fallback: letter);
+  }
+
+  Widget _letter(BuildContext context) {
     final site =
         item.type == SecretType.login || item.type == SecretType.subscription
         ? siteOf(item)

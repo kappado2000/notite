@@ -46,6 +46,10 @@ class NotesStore extends ChangeNotifier {
   late Box<Map> _notebooksBox;
   late Box<Map> _attachmentsBox;
   late Box<Uint8List> _blobsBox;
+
+  /// Iconițele site-urilor (domeniu → imagine; listă goală = nu există),
+  /// criptate ca restul datelor: lista site-urilor nu stă în clar.
+  late Box<Uint8List> _iconsBox;
   late Box<Map> _secretsBox;
   late Box _settingsBox;
 
@@ -137,6 +141,14 @@ class NotesStore extends ChangeNotifier {
     _attachmentsBox = await open<Map>('attachments');
     _blobsBox = await open<Uint8List>('blobs');
     _secretsBox = await open<Map>('secrets');
+    _iconsBox = await open<Uint8List>('siteicons');
+  }
+
+  /// Iconița salvată a unui site (null = încă necerută; goală = nu are).
+  Uint8List? siteIcon(String domain) => _closed ? null : _iconsBox.get(domain);
+
+  Future<void> putSiteIcon(String domain, Uint8List bytes) async {
+    if (!_closed) await _iconsBox.put(domain, bytes);
   }
 
   /// Notițele create înainte de conturi (cutii fără uid) trec în primul
@@ -200,6 +212,7 @@ class NotesStore extends ChangeNotifier {
     await _attachmentsBox.close();
     await _blobsBox.close();
     await _secretsBox.close();
+    await _iconsBox.close();
   }
 
   /// Șterge de pe dispozitiv toate datele acestui cont.
@@ -215,6 +228,7 @@ class NotesStore extends ChangeNotifier {
       _attachmentsBox,
       _blobsBox,
       _secretsBox,
+      _iconsBox,
     ]) {
       await box.clear();
       await box.close();
