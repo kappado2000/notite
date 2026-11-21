@@ -145,13 +145,20 @@
 
   /// Înregistrare / schimbare de parolă (nu logare)?
   function isSignup(pw) {
-    if (pw.autocomplete === 'new-password') return true;
+    if (pw.autocomplete === 'new-password' || isNewPassword(pw)) return true;
     const scope = pw.form ?? document;
     if (passwordFields(scope).length >= 2) return true;
-    const text = (scope.innerText || '').slice(0, 3000).toLowerCase();
-    return /înregistr|inregistr|creează cont|creeaza cont|cont nou|sign ?up|register|create (an )?account|new password|parolă nouă|parola noua/.test(
-      text,
-    );
+    const re =
+      /înregistr|inregistr|creează cont|creeaza cont|cont nou|sign ?up|register|create (an )?account|new password|parol[ăa] nou[ăa]|nou[ăa] parol[ăa]|crea[țt]i o parol|creea?z[ăa] (o )?parol|alege[țt]?i? o parol|create (a )?password|choose (a )?password|change (your )?password/;
+    // textul din jurul căsuței: fereastra / secțiunea în care stă (pe unele
+    // site-uri, ex. Yahoo, căsuța nu e într-un formular)
+    let near = '';
+    for (let el = pw.parentElement, up = 0; el && up < 8; el = el.parentElement, up++) {
+      near = (el.innerText || '').slice(0, 1500);
+      if (near.length > 200 || el.matches('form,[role="dialog"],dialog')) break;
+    }
+    const text = `${near} ${(scope.innerText || '').slice(0, 3000)}`.toLowerCase();
+    return re.test(text);
   }
 
   function setValue(el, value) {
@@ -460,13 +467,15 @@ const HEALTH_TIP = {
       const already =
         lastGenerated &&
         passwordFields().some((p) => p.value === lastGenerated);
+      // pe paginile de parolă nouă: generatorul PRIMUL, deasupra conturilor
       if (signup && pw && already) {
-        parts.push(
+        parts.unshift(
           `<div class="note">✓ Parola generată e deja pusă în câmp și ținută minte în Notițe. Apasă „Salvează” pe site.</div>`,
         );
       } else if (signup && pw) {
-        parts.push(
+        parts.unshift(
           `<div class="item" tabindex="0" data-gen="1"><span class="t">🎲 Generează o parolă puternică</span><span class="s">O completez și o salvez în Notițe</span></div>`,
+          '<div class="sep"></div>',
         );
       }
     }
