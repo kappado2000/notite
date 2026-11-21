@@ -876,6 +876,7 @@ async function handle(msg, sender) {
         url: i.url || '',
         notes: i.notes || '',
         recoveryCodes: i.recoveryCodes || '',
+        totp: i.totp || '',
       };
     }
     case 'updateItem': {
@@ -898,6 +899,7 @@ async function handle(msg, sender) {
         ...(typeof msg.recoveryCodes === 'string'
           ? { recoveryCodes: msg.recoveryCodes.trim() }
           : {}),
+        ...(typeof msg.totp === 'string' ? { totp: msg.totp.trim() } : {}),
         password,
         updatedAt: now,
         ...(changed

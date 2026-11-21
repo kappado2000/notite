@@ -2,6 +2,7 @@
 // când le copiezi sau completezi.
 
 import { baseDomain } from './lib/domain.js';
+import { totpCode } from './lib/totp.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -357,6 +358,37 @@ async function editRow(row, i) {
   field('Utilizator / email', 'username', d.username);
   const pw = field('Parolă', 'password', d.password);
   field('Site', 'url', d.url);
+  // cheia 2FA, cu codul de acum dedesubt (se vede pe loc dacă e bună)
+  const tfa = field('Cheie 2FA (din codul QR / „Nu poți scana?”)', 'totp', d.totp ?? '');
+  tfa.className = 'mono';
+  const now = document.createElement('div');
+  now.className = 'tfanow';
+  tfa.parentElement.append(now);
+  const showCode = async () => {
+    const v = tfa.value.trim();
+    if (!v) {
+      now.textContent = '';
+      tfa.setCustomValidity('');
+      return;
+    }
+    const r = await totpCode(v);
+    if (r) {
+      now.textContent = `Cod acum: ${r.code.replace(/(\d{3})(?=\d)/g, '$1 ')} · încă ${r.remaining} s`;
+      now.classList.remove('bad');
+      tfa.setCustomValidity('');
+    } else {
+      now.textContent = 'Cheie 2FA invalidă (litere A–Z și cifre 2–7, sau link otpauth://).';
+      now.classList.add('bad');
+      tfa.setCustomValidity('Cheie 2FA invalidă');
+    }
+  };
+  // la fiecare secundă cât formularul e pe ecran; se oprește când dispare
+  const timer = setInterval(() => {
+    if (form.isConnected) showCode();
+    else if (form.dataset.live) clearInterval(timer);
+  }, 1000);
+  tfa.addEventListener('input', showCode);
+  showCode();
   // câmpuri pe mai multe rânduri, ca în aplicație
   const area = (label, name, value) => {
     const l = document.createElement('label');
@@ -402,6 +434,7 @@ async function editRow(row, i) {
       url: f.get('url'),
       notes: f.get('notes'),
       recoveryCodes: f.get('recoveryCodes'),
+      totp: f.get('totp'),
     });
     if (r?.error) return say(r.error, true);
     say(
@@ -413,6 +446,7 @@ async function editRow(row, i) {
   });
   editing = true;
   row.replaceWith(form);
+  form.dataset.live = '1';
   form.querySelector('input').focus();
 }
 
