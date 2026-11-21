@@ -220,7 +220,7 @@ function makeRow(i, inGroup = false) {
       if (i.health) {
         const dot = document.createElement('span');
         dot.className = `dot ${i.health}`;
-        dot.title = HEALTH_TIP[i.health];
+        dot.title = i.why || HEALTH_TIP[i.health];
         t.append(dot);
       }
       t.append(document.createTextNode(i.title));
@@ -229,6 +229,13 @@ function makeRow(i, inGroup = false) {
       s.textContent = subText;
       if (!inGroup) row.append(favicon(i.url, i.title));
       txt.append(t, s);
+      // cu filtrul 🟡 apăsat: motivul, la vedere (slabă / la ce conturi)
+      if (healthFilter === 'yellow' && i.why) {
+        const w = document.createElement('div');
+        w.className = 's why';
+        w.textContent = i.why;
+        txt.append(w);
+      }
       // clic pe nume / email → deschide site-ul într-o filă nouă
       const site = siteUrl(i.url);
       if (site) {

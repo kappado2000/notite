@@ -26,7 +26,7 @@ import {
 import * as fb from './lib/firebase.js';
 import { matches, siteTitle, hostOf, baseDomain } from './lib/domain.js';
 import { totpCode } from './lib/totp.js';
-import { healthOf, sha1Hex, pwned } from './lib/health.js';
+import { healthOf, sha1Hex, pwned, isWeak } from './lib/health.js';
 
 /// Blocare automată după atâtea minute fără folosire; 0 = niciodată
 /// (doar la închiderea browserului).
@@ -662,6 +662,31 @@ async function healthMap(list) {
   return out;
 }
 
+/// De ce e galbenă parola: slabă, sau la ce alte conturi e aceeași parolă
+/// (id → text, doar pentru cele galbene).
+function yellowWhy(list, hm) {
+  const byPw = new Map();
+  for (const i of list) {
+    if (!i.password) continue;
+    if (!byPw.has(i.password)) byPw.set(i.password, []);
+    byPw.get(i.password).push(i);
+  }
+  const out = new Map();
+  for (const i of list) {
+    if (hm.get(i.id) !== 'yellow') continue;
+    const others = (byPw.get(i.password) ?? []).filter((o) => o.id !== i.id);
+    const names = others
+      .slice(0, 4)
+      .map((o) => `${o.title || hostOf(o.url) || 'fără nume'}${o.username ? ` (${o.username})` : ''}`);
+    const more = others.length > 4 ? ` și încă ${others.length - 4}` : '';
+    const parts = [];
+    if (isWeak(i.password)) parts.push('Slabă: prea scurtă sau ușor de ghicit');
+    if (others.length) parts.push(`Aceeași parolă ca la: ${names.join(', ')}${more}`);
+    out.set(i.id, parts.join('. '));
+  }
+  return out;
+}
+
 /// Verifică (în fundal, câte 8) parolele încă neverificate. Rezultatele
 /// (doar amprente SHA-1 → da/nu) stau în memorie, ca și seiful.
 let checking = null;
@@ -853,8 +878,12 @@ async function handle(msg, sender) {
       await touch();
       checkBreaches(all);
       const hm = await healthMap(all);
+      const why = yellowWhy(all, hm);
       return all
-        .map((i) => publicItem(i, msg.url, hm.get(i.id)))
+        .map((i) => ({
+          ...publicItem(i, msg.url, hm.get(i.id)),
+          why: why.get(i.id) ?? '',
+        }))
         .sort(
           (a, b) =>
             Number(b.match) - Number(a.match) ||
