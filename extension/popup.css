@@ -152,3 +152,5 @@ form.edit textarea { padding: 7px 9px; border: 1px solid var(--border); border-r
 .it .s.why { white-space: normal; color: #B07800; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .it .s.why { color: #E8B84A; } }
 :root[data-theme="dark"] .it .s.why { color: #E8B84A; }
+
+.it .s.why.red { color: var(--error); }

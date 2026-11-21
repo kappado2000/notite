@@ -76,11 +76,36 @@ function renderFilters() {
     });
     return b;
   };
+  // „Detalii”: motivele sub conturi doar când vrei (ținut minte)
+  const details = document.createElement('button');
+  details.className = `chip${showWhy ? ' on' : ''}`;
+  details.textContent = 'ℹ️ Detalii';
+  details.title = showWhy
+    ? 'Ascunde motivele de sub conturi'
+    : 'Arată de ce e o parolă compromisă, slabă sau refolosită';
+  details.addEventListener('click', () => {
+    showWhy = !showWhy;
+    chrome.storage.local.set({ showWhy }).catch(() => {});
+    render();
+  });
   box.replaceChildren(
     ...(red ? [chip('red', `🔴 Compromise (${red})`)] : []),
     ...(yellow ? [chip('yellow', `🟡 Slabe / refolosite (${yellow})`)] : []),
+    ...(red || yellow ? [details] : []),
   );
 }
+
+/// Motivele (slabă / aceeași parolă ca la… / în scurgeri) sub conturi.
+let showWhy = false;
+chrome.storage.local
+  .get('showWhy')
+  .then((r) => {
+    if (r?.showWhy && !showWhy) {
+      showWhy = true;
+      if (all.length) render();
+    }
+  })
+  .catch(() => {});
 
 function render() {
   editing = false;
@@ -229,11 +254,17 @@ function makeRow(i, inGroup = false) {
       s.textContent = subText;
       if (!inGroup) row.append(favicon(i.url, i.title));
       txt.append(t, s);
-      // cu filtrul 🟡 apăsat: motivul, la vedere (slabă / la ce conturi)
-      if (healthFilter === 'yellow' && i.why) {
+      // „ℹ️ Detalii” apăsat: motivul, la vedere
+      const why =
+        i.health === 'red'
+          ? 'Apare în scurgeri de date publice: schimb-o cât mai repede'
+          : i.health === 'yellow'
+            ? i.why
+            : '';
+      if (showWhy && why) {
         const w = document.createElement('div');
-        w.className = 's why';
-        w.textContent = i.why;
+        w.className = `s why${i.health === 'red' ? ' red' : ''}`;
+        w.textContent = why;
         txt.append(w);
       }
       // clic pe nume / email → deschide site-ul într-o filă nouă
