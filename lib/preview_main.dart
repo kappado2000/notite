@@ -147,6 +147,38 @@ Future<void> _seedDemo(NotesStore store) async {
     tags: ['proiect'],
   );
 
+  // două bonuri împărțite (pentru „Totaluri bonuri”)
+  String day(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+  final today = DateTime.now();
+  final earlier = today.subtract(const Duration(days: 3));
+  await note(
+    first.id,
+    'Bon · Restaurant Exemplu · ${day(today)}',
+    [
+      t(
+        'Restaurant Exemplu · ${day(today)}\n'
+        'Eu: 45,50 lei\n  1 × Pizza — 35,00 lei\n  1 × Apă — 10,50 lei\n\n'
+        'Ana: 62,00 lei\n  2 × Paste — 62,00 lei\n\n'
+        'Total bon: 107,50 lei\n',
+      ),
+    ],
+    tags: ['bonuri'],
+  );
+  await note(
+    first.id,
+    'Bon · Cafenea · ${day(earlier)}',
+    [
+      t(
+        'Cafenea · ${day(earlier)}\n'
+        'Eu: 14,00 lei\n  1 × Cafea — 14,00 lei\n\n'
+        'Ion: 18,00 lei\n  1 × Ceai — 18,00 lei\n\n'
+        'Total bon: 32,00 lei\n',
+      ),
+    ],
+    tags: ['bonuri'],
+  );
+
   final gmail = store.newSecret(SecretType.login)
     ..title = 'Gmail'
     ..username = 'exemplu@gmail.com'

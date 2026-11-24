@@ -8,6 +8,7 @@ import '../widgets/note_actions.dart';
 import '../widgets/note_card.dart';
 import '../widgets/notebook_editor.dart';
 import '../widgets/pickers.dart';
+import 'receipt_totals_screen.dart';
 import 'shell.dart';
 
 /// Ce listă de notițe e afișată.
@@ -220,6 +221,12 @@ class _NotesTabState extends State<NotesTab> {
                     nbView!,
                     onDeleted: () => _select(const AllNotesView()),
                   );
+                case 'receiptTotals':
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ReceiptTotalsScreen(),
+                    ),
+                  );
                 case 'tag':
                   showTagMenu(
                     context,
@@ -296,6 +303,8 @@ class _NotesTabState extends State<NotesTab> {
                 ],
                 if (_view is TagView) ...[
                   const PopupMenuDivider(),
+                  if ((_view as TagView).tag == 'bonuri')
+                    item('receiptTotals', Icons.functions, 'Totaluri bonuri'),
                   item('tag', Icons.sell_outlined, 'Opțiuni etichetă'),
                 ],
                 if (_view is TrashView && store.trashedNotes.isNotEmpty) ...[

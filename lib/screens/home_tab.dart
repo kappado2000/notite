@@ -18,6 +18,7 @@ import '../services/on_device_ai.dart';
 import 'ask_notes_screen.dart';
 import 'note_editor_screen.dart';
 import 'notes_tab.dart';
+import 'receipt_totals_screen.dart';
 import 'secrets/secrets_screen.dart';
 import 'qr_scan_screen.dart';
 import 'receipt_split_screen.dart';
@@ -260,6 +261,15 @@ class _HomeTabState extends State<HomeTab> {
                     'Bonuri',
                     action: 'Toate',
                     onAction: () => shell.openNotes(const TagView('bonuri')),
+                    extra: TextButton.icon(
+                      icon: const Icon(Icons.functions, size: 18),
+                      label: const Text('Totaluri'),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ReceiptTotalsScreen(),
+                        ),
+                      ),
+                    ),
                   ),
                   SliverToBoxAdapter(
                     child: Card(
@@ -364,11 +374,14 @@ class _HomeTabState extends State<HomeTab> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header(this.title, {this.action, this.onAction});
+  const _Header(this.title, {this.action, this.onAction, this.extra});
 
   final String title;
   final String? action;
   final VoidCallback? onAction;
+
+  /// Un buton în plus, înaintea acțiunii (ex. „Σ Totaluri” la Bonuri).
+  final Widget? extra;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -378,6 +391,7 @@ class _Header extends StatelessWidget {
         Expanded(
           child: Text(title, style: Theme.of(context).textTheme.titleMedium),
         ),
+        ?extra,
         if (action != null)
           TextButton(onPressed: onAction, child: Text(action!)),
       ],
