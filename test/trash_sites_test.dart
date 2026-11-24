@@ -47,4 +47,18 @@ void main() {
     // același cont (același id) pe ambele site-uri
     expect(IosAutofill.loginsFor([back]).map((m) => m['id']).toSet(), {'b'});
   });
+
+  test('mutarea la alt tip (Cont → Wi-Fi → Cont) nu pierde nimic', () {
+    final i = _login('c', 'http://192.168.0.1', 'admin');
+    final wifi = SecretItem.fromMap({...i.toMap(), 'type': 'wifi'});
+    expect(wifi.type, SecretType.wifi);
+    expect(wifi.username, 'admin');
+    expect(wifi.password, 'exemplu-c');
+    expect(wifi.url, 'http://192.168.0.1');
+    final back = SecretItem.fromMap({
+      ...SecretItem.fromMap(wifi.toMap()).toMap(),
+      'type': 'login',
+    });
+    expect(back.toMap()..remove('type'), i.toMap()..remove('type'));
+  });
 }

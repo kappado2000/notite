@@ -22,6 +22,28 @@ typedef _F = ({String label, String value, bool secret, String? copy});
 _F _f(String label, String value, {bool secret = false, String? copy}) =>
     (label: label, value: value, secret: secret, copy: copy);
 
+/// Datele completate pe care tipul actual nu le arată (rămase după mutarea
+/// la alt tip): nu se pierd, apar separat în fișă.
+List<_F> _keptFields(SecretItem i, List<_F> shown) {
+  final seen = {for (final f in shown) f.value.trim()};
+  return [
+    for (final f in [
+      _f('Utilizator / email', i.username),
+      _f('Parolă', i.password, secret: true),
+      _f('Site / adresă', i.url),
+      _f('Titular card', i.cardHolder),
+      _f('Număr card', i.cardNumber, secret: true, copy: i.cardDigits),
+      _f('Titular cont', i.holder),
+      _f('Bancă', i.bankName),
+      _f('IBAN', i.iban),
+      _f('Nume', '${i.lastName} ${i.firstName}'.trim()),
+      _f('CNP', i.cnp, secret: true),
+      _f('Adresă', i.address),
+    ])
+      if (f.value.trim().isNotEmpty && !seen.contains(f.value.trim())) f,
+  ];
+}
+
 /// Câmpurile unei intrări, în ordinea afișării (doar cele completate).
 List<_F> _secretFields(SecretItem i) {
   String? date(DateTime? d) => d == null ? null : formatShortDate(d);
@@ -161,6 +183,53 @@ class SecretDetailScreen extends StatelessWidget {
                 await removeTwoFactor(context, item);
                 return;
               }
+              if (v == 'convert') {
+                final t = await showModalBottomSheet<SecretType>(
+                  context: context,
+                  showDragHandle: true,
+                  builder: (ctx) => SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                          child: Text(
+                            'Muți „${item.displayTitle}” la tipul:',
+                            style: Theme.of(ctx).textTheme.titleMedium,
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+                          child: Text(
+                            'Nimic nu se pierde: datele pe care tipul nou nu '
+                            'le arată rămân în fișă, la „Păstrate din tipul '
+                            'anterior”. Verifici în editare înainte să salvezi.',
+                          ),
+                        ),
+                        for (final t in SecretType.values)
+                          if (t != item.type)
+                            ListTile(
+                              leading: Icon(t.icon),
+                              title: Text(t.label),
+                              onTap: () => Navigator.pop(ctx, t),
+                            ),
+                      ],
+                    ),
+                  ),
+                );
+                if (t == null || !context.mounted) return;
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SecretEditScreen(
+                      item: SecretItem.fromMap({
+                        ...item.toMap(),
+                        'type': t.name,
+                      }),
+                    ),
+                  ),
+                );
+                return;
+              }
               if (v != 'delete') return;
               final nav = Navigator.of(context);
               if (await confirm(
@@ -185,6 +254,14 @@ class SecretDetailScreen extends StatelessWidget {
                 child: ListTile(
                   leading: Icon(Icons.copy_all_outlined),
                   title: Text('Copiază toate datele'),
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'convert',
+                child: ListTile(
+                  leading: Icon(Icons.swap_horiz),
+                  title: Text('Mută la alt tip…'),
+                  subtitle: Text('ex. Cont → Wi-Fi'),
                 ),
               ),
               if (item.totp.isNotEmpty)
@@ -246,6 +323,23 @@ class SecretDetailScreen extends StatelessWidget {
               ),
               _BreachCheckTile(password: item.password),
             ],
+          ],
+          // date păstrate după mutarea la alt tip (ex. adresa ruterului la
+          // un Wi-Fi): nu se pierd și se văd aici
+          if (_keptFields(item, fields) case final kept
+              when kept.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
+              child: Text(
+                'Păstrate din tipul anterior',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            for (final f in kept)
+              _Field(f.label, f.value, secret: f.secret, copyValue: f.copy),
           ],
           if (item.totp.isNotEmpty) _TotpField(secret: item.totp),
           if (item.recoveryCodes.trim().isNotEmpty)
