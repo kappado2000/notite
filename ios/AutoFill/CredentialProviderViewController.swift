@@ -544,11 +544,23 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     "co.uk", "com.ro", "org.ro", "info.ro", "com.au", "co.nz", "com.br", "com.tr",
   ]
 
+  /// Găzduiri comune: fiecare subdomeniu e ALT site (fotbal-montana.web.app
+  /// ≠ evidenta-vehicule.web.app). Aceeași listă ca în extensia de browser.
+  private static let shared: Set<String> = [
+    "b2clogin.com", "azurewebsites.net", "onmicrosoft.com", "cloudapp.net",
+    "github.io", "gitlab.io", "herokuapp.com", "web.app", "firebaseapp.com",
+    "appspot.com", "netlify.app", "vercel.app", "pages.dev", "workers.dev",
+    "blogspot.com", "wordpress.com", "wixsite.com", "myshopify.com",
+    "cloudfront.net", "amazonaws.com", "glitch.me", "onrender.com",
+    "fly.dev", "ngrok.io", "ngrok-free.app", "sharepoint.com",
+  ]
+
   static func base(_ host: String) -> String {
     let p = host.split(separator: ".").map(String.init)
     guard p.count > 2 else { return host }
     let last2 = p.suffix(2).joined(separator: ".")
-    return twoPart.contains(last2) ? p.suffix(3).joined(separator: ".") : last2
+    return twoPart.contains(last2) || shared.contains(last2)
+      ? p.suffix(3).joined(separator: ".") : last2
   }
 
   static func sameSite(_ a: String, _ b: String) -> Bool {
